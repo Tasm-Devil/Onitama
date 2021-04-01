@@ -67,8 +67,6 @@ init _ =
         , { kind = Pawn 2, pos = On ( 3, 4 ) }
         , { kind = Pawn 1, pos = On ( 4, 4 ) }
         ]
-        -- ToDo: Choose 5 Random cards
-        -- ToDo: Implement other cards
         ( dummyCard, dummyCard )
         ( dummyCard, dummyCard )
         dummyCard
