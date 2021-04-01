@@ -15,7 +15,7 @@ type alias Card =
 
 dummyCard : Card
 dummyCard =
-    { name = "Error", moves = [ ( 0, 1 ), ( 0, -1 ) ] }
+    { name = "Error", moves = [ ( 0, 1 ), ( 0, 2 ), ( 0, -1 ), ( 0, -2 ),( -2, 0 ), ( -1, 0 ), ( 1, 0 ), ( 2, 0 ) ] }
 
 
 allCards : List Card
