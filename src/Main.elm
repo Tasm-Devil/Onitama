@@ -10,6 +10,8 @@ import Global exposing (gridsize)
 import Html
 import Html.Attributes as HtmlA
 import List.Extra
+import Random
+import Random.List exposing (choices)
 import Svg
 import Svg.Attributes as SvgA
 
@@ -31,9 +33,22 @@ main =
 -- MODEL
 
 
+type alias Model =
+    { myColor : Color
+    , myFigures : List Figure
+    , opFigures : List Figure
+    , myCards : ( Card, Card )
+    , opCards : ( Card, Card )
+    , nextCard : Card
+    , prevPosition : Position
+    , chooseCard : Maybe ( Int, Int )
+    }
+
+
 type Msg
     = Clicked Position
     | ChoosedCard Card
+    | NewCards ( List Card, List Card )
 
 
 init : () -> ( Model, Cmd Msg )
@@ -54,29 +69,13 @@ init _ =
         ]
         -- ToDo: Choose 5 Random cards
         -- ToDo: Implement other cards
-        ( { name = "Frog", moves = [ ( 2, 0 ), ( 1, 1 ), ( -1, -1 ) ] }
-        , { name = "Mantis", moves = [ ( -1, 1 ), ( 1, 1 ), ( 0, -1 ) ] }
-        )
-        ( { name = "Rabbit", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, -1 ) ] }
-        , { name = "Boar", moves = [ ( -1, 0 ), ( 1, 0 ), ( 0, 1 ) ] }
-        )
-        { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ] }
+        ( dummyCard, dummyCard )
+        ( dummyCard, dummyCard )
+        dummyCard
         Out
         Nothing
-    , Cmd.none
+    , Random.generate NewCards (allCards |> choices 5)
     )
-
-
-type alias Model =
-    { myColor : Color
-    , myFigures : List Figure
-    , opFigures : List Figure
-    , myCards : ( Card, Card )
-    , opCards : ( Card, Card )
-    , nextCard : Card
-    , prevPosition : Position
-    , chooseCard : Maybe ( Int, Int )
-    }
 
 
 
@@ -86,6 +85,47 @@ type alias Model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        NewCards ( shuffledCards, _ ) ->
+            ( { model
+                | myCards =
+                    ( case List.head <| shuffledCards of
+                        Just c ->
+                            c
+
+                        Nothing ->
+                            dummyCard
+                    , case List.head <| List.drop 1 <| shuffledCards of
+                        Just c ->
+                            c
+
+                        Nothing ->
+                            dummyCard
+                    )
+                , opCards =
+                    ( case List.head <| List.drop 2 <| shuffledCards of
+                        Just c ->
+                            c
+
+                        Nothing ->
+                            dummyCard
+                    , case List.head <| List.drop 3 <| shuffledCards of
+                        Just c ->
+                            c
+
+                        Nothing ->
+                            dummyCard
+                    )
+                , nextCard =
+                    case List.head <| List.drop 4 <| shuffledCards of
+                        Just c ->
+                            c
+
+                        Nothing ->
+                            dummyCard
+              }
+            , Cmd.none
+            )
+
         ChoosedCard card ->
             let
                 position =

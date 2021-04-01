@@ -9,8 +9,10 @@
             "elm/browser": "1.0.2",
             "elm/core": "1.0.5",
             "elm/html": "1.0.0",
+            "elm/random": "1.0.0",
             "elm/svg": "1.0.1",
             "elm-community/list-extra": "8.3.0",
+            "elm-community/random-extra": "3.2.0",
             "savardd/elm-time-travel": "2.0.0"
         },
         "indirect": {
