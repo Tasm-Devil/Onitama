@@ -784,11 +784,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.as.aN === region.aC.aN)
+	if (region.au.aP === region.aE.aP)
 	{
-		return 'on line ' + region.as.aN;
+		return 'on line ' + region.au.aP;
 	}
-	return 'on lines ' + region.as.aN + ' through ' + region.aC.aN;
+	return 'on lines ' + region.au.aP + ' through ' + region.aE.aP;
 }
 
 
@@ -2704,9 +2704,9 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		w: func(record.w),
-		at: record.at,
-		an: record.an
+		y: func(record.y),
+		av: record.av,
+		ap: record.ap
 	}
 });
 
@@ -2974,11 +2974,11 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.w;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.at;
+		var message = !tag ? value : tag < 3 ? value.a : value.y;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.av;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.an) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.ap) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3968,7 +3968,7 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 		impl.bB,
 		impl.bz,
 		function(sendToApp, initialModel) {
-			var divertHrefToApp = impl.aq && impl.aq(sendToApp)
+			var divertHrefToApp = impl.as && impl.as(sendToApp)
 			var view = impl.bC;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
@@ -4043,7 +4043,7 @@ function _Browser_application(impl)
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
-		aq: function(sendToApp)
+		as: function(sendToApp)
 		{
 			key.a = sendToApp;
 			_Browser_window.addEventListener('popstate', key);
@@ -4060,7 +4060,7 @@ function _Browser_application(impl)
 					sendToApp(onUrlRequest(
 						(next
 							&& curr.a_ === next.a_
-							&& curr.aI === next.aI
+							&& curr.aK === next.aK
 							&& curr.aX.a === next.aX.a
 						)
 							? $elm$browser$Browser$Internal(next)
@@ -4237,7 +4237,7 @@ function _Browser_getViewport()
 			bc: _Browser_window.pageXOffset,
 			bd: _Browser_window.pageYOffset,
 			bb: _Browser_doc.documentElement.clientWidth,
-			aH: _Browser_doc.documentElement.clientHeight
+			aJ: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4248,7 +4248,7 @@ function _Browser_getScene()
 	var elem = _Browser_doc.documentElement;
 	return {
 		bb: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		aH: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		aJ: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4273,13 +4273,13 @@ function _Browser_getViewportOf(id)
 		return {
 			a4: {
 				bb: node.scrollWidth,
-				aH: node.scrollHeight
+				aJ: node.scrollHeight
 			},
 			ba: {
 				bc: node.scrollLeft,
 				bd: node.scrollTop,
 				bb: node.clientWidth,
-				aH: node.clientHeight
+				aJ: node.clientHeight
 			}
 		};
 	});
@@ -4314,13 +4314,13 @@ function _Browser_getElement(id)
 				bc: x,
 				bd: y,
 				bb: _Browser_doc.documentElement.clientWidth,
-				aH: _Browser_doc.documentElement.clientHeight
+				aJ: _Browser_doc.documentElement.clientHeight
 			},
 			bj: {
 				bc: x + rect.left,
 				bd: y + rect.top,
 				bb: rect.width,
-				aH: rect.height
+				aJ: rect.height
 			}
 		};
 	});
@@ -4354,6 +4354,89 @@ function _Browser_load(url)
 			_VirtualDom_doc.location.reload(false);
 		}
 	}));
+}
+
+
+
+var _Bitwise_and = F2(function(a, b)
+{
+	return a & b;
+});
+
+var _Bitwise_or = F2(function(a, b)
+{
+	return a | b;
+});
+
+var _Bitwise_xor = F2(function(a, b)
+{
+	return a ^ b;
+});
+
+function _Bitwise_complement(a)
+{
+	return ~a;
+};
+
+var _Bitwise_shiftLeftBy = F2(function(offset, a)
+{
+	return a << offset;
+});
+
+var _Bitwise_shiftRightBy = F2(function(offset, a)
+{
+	return a >> offset;
+});
+
+var _Bitwise_shiftRightZfBy = F2(function(offset, a)
+{
+	return a >>> offset;
+});
+
+
+
+function _Time_now(millisToPosix)
+{
+	return _Scheduler_binding(function(callback)
+	{
+		callback(_Scheduler_succeed(millisToPosix(Date.now())));
+	});
+}
+
+var _Time_setInterval = F2(function(interval, task)
+{
+	return _Scheduler_binding(function(callback)
+	{
+		var id = setInterval(function() { _Scheduler_rawSpawn(task); }, interval);
+		return function() { clearInterval(id); };
+	});
+});
+
+function _Time_here()
+{
+	return _Scheduler_binding(function(callback)
+	{
+		callback(_Scheduler_succeed(
+			A2($elm$time$Time$customZone, -(new Date().getTimezoneOffset()), _List_Nil)
+		));
+	});
+}
+
+
+function _Time_getZoneName()
+{
+	return _Scheduler_binding(function(callback)
+	{
+		try
+		{
+			var name = $elm$time$Time$Name(Intl.DateTimeFormat().resolvedOptions().timeZone);
+		}
+		catch (e)
+		{
+			var name = $elm$time$Time$Offset(new Date().getTimezoneOffset());
+		}
+		callback(_Scheduler_succeed(name));
+	});
 }
 var $elm$core$Basics$EQ = 1;
 var $elm$core$Basics$GT = 2;
@@ -4761,25 +4844,25 @@ var $elm$core$Array$treeFromBuilder = F2(
 	});
 var $elm$core$Array$builderToArray = F2(
 	function (reverseNodeList, builder) {
-		if (!builder.c) {
+		if (!builder.e) {
 			return A4(
 				$elm$core$Array$Array_elm_builtin,
-				$elm$core$Elm$JsArray$length(builder.e),
+				$elm$core$Elm$JsArray$length(builder.g),
 				$elm$core$Array$shiftStep,
 				$elm$core$Elm$JsArray$empty,
-				builder.e);
+				builder.g);
 		} else {
-			var treeLen = builder.c * $elm$core$Array$branchFactor;
+			var treeLen = builder.e * $elm$core$Array$branchFactor;
 			var depth = $elm$core$Basics$floor(
 				A2($elm$core$Basics$logBase, $elm$core$Array$branchFactor, treeLen - 1));
-			var correctNodeList = reverseNodeList ? $elm$core$List$reverse(builder.f) : builder.f;
-			var tree = A2($elm$core$Array$treeFromBuilder, correctNodeList, builder.c);
+			var correctNodeList = reverseNodeList ? $elm$core$List$reverse(builder.h) : builder.h;
+			var tree = A2($elm$core$Array$treeFromBuilder, correctNodeList, builder.e);
 			return A4(
 				$elm$core$Array$Array_elm_builtin,
-				$elm$core$Elm$JsArray$length(builder.e) + treeLen,
+				$elm$core$Elm$JsArray$length(builder.g) + treeLen,
 				A2($elm$core$Basics$max, 5, depth * $elm$core$Array$shiftStep),
 				tree,
-				builder.e);
+				builder.g);
 		}
 	});
 var $elm$core$Basics$idiv = _Basics_idiv;
@@ -4792,7 +4875,7 @@ var $elm$core$Array$initializeHelp = F5(
 				return A2(
 					$elm$core$Array$builderToArray,
 					false,
-					{f: nodeList, c: (len / $elm$core$Array$branchFactor) | 0, e: tail});
+					{h: nodeList, e: (len / $elm$core$Array$branchFactor) | 0, g: tail});
 			} else {
 				var leaf = $elm$core$Array$Leaf(
 					A3($elm$core$Elm$JsArray$initialize, $elm$core$Array$branchFactor, fromIndex, fn));
@@ -4859,7 +4942,7 @@ var $elm$url$Url$Http = 0;
 var $elm$url$Url$Https = 1;
 var $elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {aG: fragment, aI: host, aV: path, aX: port_, a_: protocol, a$: query};
+		return {aI: fragment, aK: host, aV: path, aX: port_, a_: protocol, a$: query};
 	});
 var $elm$core$String$contains = _String_contains;
 var $elm$core$String$length = _String_length;
@@ -5141,8 +5224,11 @@ var $elm$browser$Browser$document = _Browser_document;
 var $author$project$Figure$King = {$: 0};
 var $author$project$Main$Model = F8(
 	function (myColor, myFigures, opFigures, myCards, opCards, nextCard, prevPosition, chooseCard) {
-		return {M: chooseCard, a: myCards, R: myColor, x: myFigures, o: nextCard, Y: opCards, S: opFigures, n: prevPosition};
+		return {O: chooseCard, a: myCards, T: myColor, z: myFigures, p: nextCard, U: opCards, V: opFigures, q: prevPosition};
 	});
+var $author$project$Main$NewCards = function (a) {
+	return {$: 2, a: a};
+};
 var $author$project$Figure$On = function (a) {
 	return {$: 0, a: a};
 };
@@ -5154,8 +5240,560 @@ var $author$project$Figure$White = 0;
 var $elm$core$Basics$negate = function (n) {
 	return -n;
 };
-var $elm$core$Platform$Cmd$batch = _Platform_batch;
-var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+var $author$project$Card$allCards = _List_fromArray(
+	[
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(0, 2),
+				_Utils_Tuple2(0, -1)
+			]),
+		c: 'Tiger'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-2, 1),
+				_Utils_Tuple2(-1, -1),
+				_Utils_Tuple2(2, 1),
+				_Utils_Tuple2(1, -1)
+			]),
+		c: 'Dragon'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-2, 0),
+				_Utils_Tuple2(-1, 1),
+				_Utils_Tuple2(1, -1)
+			]),
+		c: 'Frog'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(2, 0),
+				_Utils_Tuple2(1, 1),
+				_Utils_Tuple2(-1, -1)
+			]),
+		c: 'Rabbit'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-2, 0),
+				_Utils_Tuple2(2, 0),
+				_Utils_Tuple2(0, 1)
+			]),
+		c: 'Crab'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 0),
+				_Utils_Tuple2(-1, 1),
+				_Utils_Tuple2(1, 0),
+				_Utils_Tuple2(1, 1)
+			]),
+		c: 'Elephant'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 0),
+				_Utils_Tuple2(-1, 1),
+				_Utils_Tuple2(1, 0),
+				_Utils_Tuple2(1, -1)
+			]),
+		c: 'Goose'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 0),
+				_Utils_Tuple2(-1, -1),
+				_Utils_Tuple2(1, 0),
+				_Utils_Tuple2(1, 1)
+			]),
+		c: 'Rooster'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 1),
+				_Utils_Tuple2(-1, -1),
+				_Utils_Tuple2(1, 1),
+				_Utils_Tuple2(1, -1)
+			]),
+		c: 'Monkey'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 1),
+				_Utils_Tuple2(1, 1),
+				_Utils_Tuple2(0, -1)
+			]),
+		c: 'Mantis'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 0),
+				_Utils_Tuple2(0, 1),
+				_Utils_Tuple2(0, -1)
+			]),
+		c: 'Horse'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(1, 0),
+				_Utils_Tuple2(0, 1),
+				_Utils_Tuple2(0, -1)
+			]),
+		c: 'Ox'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(0, 1),
+				_Utils_Tuple2(-1, -1),
+				_Utils_Tuple2(1, -1)
+			]),
+		c: 'Crane'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 0),
+				_Utils_Tuple2(1, 0),
+				_Utils_Tuple2(0, 1)
+			]),
+		c: 'Boar'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(-1, 1),
+				_Utils_Tuple2(-1, -1),
+				_Utils_Tuple2(1, 0)
+			]),
+		c: 'Eel'
+	},
+		{
+		b: _List_fromArray(
+			[
+				_Utils_Tuple2(1, 1),
+				_Utils_Tuple2(1, -1),
+				_Utils_Tuple2(-1, 0)
+			]),
+		c: 'Cobra'
+	}
+	]);
+var $elm$random$Random$Generator = $elm$core$Basics$identity;
+var $elm$random$Random$andThen = F2(
+	function (callback, _v0) {
+		var genA = _v0;
+		return function (seed) {
+			var _v1 = genA(seed);
+			var result = _v1.a;
+			var newSeed = _v1.b;
+			var _v2 = callback(result);
+			var genB = _v2;
+			return genB(newSeed);
+		};
+	});
+var $elm$core$List$append = F2(
+	function (xs, ys) {
+		if (!ys.b) {
+			return xs;
+		} else {
+			return A3($elm$core$List$foldr, $elm$core$List$cons, ys, xs);
+		}
+	});
+var $elm$random$Random$constant = function (value) {
+	return function (seed) {
+		return _Utils_Tuple2(value, seed);
+	};
+};
+var $elm$core$List$drop = F2(
+	function (n, list) {
+		drop:
+		while (true) {
+			if (n <= 0) {
+				return list;
+			} else {
+				if (!list.b) {
+					return list;
+				} else {
+					var x = list.a;
+					var xs = list.b;
+					var $temp$n = n - 1,
+						$temp$list = xs;
+					n = $temp$n;
+					list = $temp$list;
+					continue drop;
+				}
+			}
+		}
+	});
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
+var $elm_community$random_extra$Random$List$get = F2(
+	function (index, list) {
+		return $elm$core$List$head(
+			A2($elm$core$List$drop, index, list));
+	});
+var $elm$core$Bitwise$and = _Bitwise_and;
+var $elm$random$Random$Seed = F2(
+	function (a, b) {
+		return {$: 0, a: a, b: b};
+	});
+var $elm$core$Bitwise$shiftRightZfBy = _Bitwise_shiftRightZfBy;
+var $elm$random$Random$next = function (_v0) {
+	var state0 = _v0.a;
+	var incr = _v0.b;
+	return A2($elm$random$Random$Seed, ((state0 * 1664525) + incr) >>> 0, incr);
+};
+var $elm$core$Bitwise$xor = _Bitwise_xor;
+var $elm$random$Random$peel = function (_v0) {
+	var state = _v0.a;
+	var word = (state ^ (state >>> ((state >>> 28) + 4))) * 277803737;
+	return ((word >>> 22) ^ word) >>> 0;
+};
+var $elm$random$Random$int = F2(
+	function (a, b) {
+		return function (seed0) {
+			var _v0 = (_Utils_cmp(a, b) < 0) ? _Utils_Tuple2(a, b) : _Utils_Tuple2(b, a);
+			var lo = _v0.a;
+			var hi = _v0.b;
+			var range = (hi - lo) + 1;
+			if (!((range - 1) & range)) {
+				return _Utils_Tuple2(
+					(((range - 1) & $elm$random$Random$peel(seed0)) >>> 0) + lo,
+					$elm$random$Random$next(seed0));
+			} else {
+				var threshhold = (((-range) >>> 0) % range) >>> 0;
+				var accountForBias = function (seed) {
+					accountForBias:
+					while (true) {
+						var x = $elm$random$Random$peel(seed);
+						var seedN = $elm$random$Random$next(seed);
+						if (_Utils_cmp(x, threshhold) < 0) {
+							var $temp$seed = seedN;
+							seed = $temp$seed;
+							continue accountForBias;
+						} else {
+							return _Utils_Tuple2((x % range) + lo, seedN);
+						}
+					}
+				};
+				return accountForBias(seed0);
+			}
+		};
+	});
+var $elm$core$List$isEmpty = function (xs) {
+	if (!xs.b) {
+		return true;
+	} else {
+		return false;
+	}
+};
+var $elm$random$Random$map = F2(
+	function (func, _v0) {
+		var genA = _v0;
+		return function (seed0) {
+			var _v1 = genA(seed0);
+			var a = _v1.a;
+			var seed1 = _v1.b;
+			return _Utils_Tuple2(
+				func(a),
+				seed1);
+		};
+	});
+var $elm$core$List$takeReverse = F3(
+	function (n, list, kept) {
+		takeReverse:
+		while (true) {
+			if (n <= 0) {
+				return kept;
+			} else {
+				if (!list.b) {
+					return kept;
+				} else {
+					var x = list.a;
+					var xs = list.b;
+					var $temp$n = n - 1,
+						$temp$list = xs,
+						$temp$kept = A2($elm$core$List$cons, x, kept);
+					n = $temp$n;
+					list = $temp$list;
+					kept = $temp$kept;
+					continue takeReverse;
+				}
+			}
+		}
+	});
+var $elm$core$List$takeTailRec = F2(
+	function (n, list) {
+		return $elm$core$List$reverse(
+			A3($elm$core$List$takeReverse, n, list, _List_Nil));
+	});
+var $elm$core$List$takeFast = F3(
+	function (ctr, n, list) {
+		if (n <= 0) {
+			return _List_Nil;
+		} else {
+			var _v0 = _Utils_Tuple2(n, list);
+			_v0$1:
+			while (true) {
+				_v0$5:
+				while (true) {
+					if (!_v0.b.b) {
+						return list;
+					} else {
+						if (_v0.b.b.b) {
+							switch (_v0.a) {
+								case 1:
+									break _v0$1;
+								case 2:
+									var _v2 = _v0.b;
+									var x = _v2.a;
+									var _v3 = _v2.b;
+									var y = _v3.a;
+									return _List_fromArray(
+										[x, y]);
+								case 3:
+									if (_v0.b.b.b.b) {
+										var _v4 = _v0.b;
+										var x = _v4.a;
+										var _v5 = _v4.b;
+										var y = _v5.a;
+										var _v6 = _v5.b;
+										var z = _v6.a;
+										return _List_fromArray(
+											[x, y, z]);
+									} else {
+										break _v0$5;
+									}
+								default:
+									if (_v0.b.b.b.b && _v0.b.b.b.b.b) {
+										var _v7 = _v0.b;
+										var x = _v7.a;
+										var _v8 = _v7.b;
+										var y = _v8.a;
+										var _v9 = _v8.b;
+										var z = _v9.a;
+										var _v10 = _v9.b;
+										var w = _v10.a;
+										var tl = _v10.b;
+										return (ctr > 1000) ? A2(
+											$elm$core$List$cons,
+											x,
+											A2(
+												$elm$core$List$cons,
+												y,
+												A2(
+													$elm$core$List$cons,
+													z,
+													A2(
+														$elm$core$List$cons,
+														w,
+														A2($elm$core$List$takeTailRec, n - 4, tl))))) : A2(
+											$elm$core$List$cons,
+											x,
+											A2(
+												$elm$core$List$cons,
+												y,
+												A2(
+													$elm$core$List$cons,
+													z,
+													A2(
+														$elm$core$List$cons,
+														w,
+														A3($elm$core$List$takeFast, ctr + 1, n - 4, tl)))));
+									} else {
+										break _v0$5;
+									}
+							}
+						} else {
+							if (_v0.a === 1) {
+								break _v0$1;
+							} else {
+								break _v0$5;
+							}
+						}
+					}
+				}
+				return list;
+			}
+			var _v1 = _v0.b;
+			var x = _v1.a;
+			return _List_fromArray(
+				[x]);
+		}
+	});
+var $elm$core$List$take = F2(
+	function (n, list) {
+		return A3($elm$core$List$takeFast, 0, n, list);
+	});
+var $elm_community$random_extra$Random$List$choose = function (list) {
+	if ($elm$core$List$isEmpty(list)) {
+		return $elm$random$Random$constant(
+			_Utils_Tuple2($elm$core$Maybe$Nothing, list));
+	} else {
+		var lastIndex = $elm$core$List$length(list) - 1;
+		var gen = A2($elm$random$Random$int, 0, lastIndex);
+		var front = function (i) {
+			return A2($elm$core$List$take, i, list);
+		};
+		var back = function (i) {
+			return A2($elm$core$List$drop, i + 1, list);
+		};
+		return A2(
+			$elm$random$Random$map,
+			function (index) {
+				return _Utils_Tuple2(
+					A2($elm_community$random_extra$Random$List$get, index, list),
+					A2(
+						$elm$core$List$append,
+						front(index),
+						back(index)));
+			},
+			gen);
+	}
+};
+var $elm$random$Random$lazy = function (callback) {
+	return function (seed) {
+		var _v0 = callback(0);
+		var gen = _v0;
+		return gen(seed);
+	};
+};
+var $elm_community$random_extra$Random$List$choices = F2(
+	function (count, list) {
+		return (count < 1) ? $elm$random$Random$constant(
+			_Utils_Tuple2(_List_Nil, list)) : A2(
+			$elm$random$Random$andThen,
+			function (_v0) {
+				var choice = _v0.a;
+				var remaining = _v0.b;
+				var genRest = $elm$random$Random$lazy(
+					function (_v3) {
+						return A2($elm_community$random_extra$Random$List$choices, count - 1, remaining);
+					});
+				var addToChoices = F2(
+					function (elem, _v2) {
+						var chosen = _v2.a;
+						var unchosen = _v2.b;
+						return _Utils_Tuple2(
+							A2($elm$core$List$cons, elem, chosen),
+							unchosen);
+					});
+				if (choice.$ === 1) {
+					return $elm$random$Random$constant(
+						_Utils_Tuple2(_List_Nil, list));
+				} else {
+					var elem = choice.a;
+					return A2(
+						$elm$random$Random$map,
+						addToChoices(elem),
+						genRest);
+				}
+			},
+			$elm_community$random_extra$Random$List$choose(list));
+	});
+var $author$project$Card$dummyCard = {
+	b: _List_fromArray(
+		[
+			_Utils_Tuple2(0, 1),
+			_Utils_Tuple2(0, -1)
+		]),
+	c: 'Error'
+};
+var $elm$random$Random$Generate = $elm$core$Basics$identity;
+var $elm$random$Random$initialSeed = function (x) {
+	var _v0 = $elm$random$Random$next(
+		A2($elm$random$Random$Seed, 0, 1013904223));
+	var state1 = _v0.a;
+	var incr = _v0.b;
+	var state2 = (state1 + x) >>> 0;
+	return $elm$random$Random$next(
+		A2($elm$random$Random$Seed, state2, incr));
+};
+var $elm$time$Time$Name = function (a) {
+	return {$: 0, a: a};
+};
+var $elm$time$Time$Offset = function (a) {
+	return {$: 1, a: a};
+};
+var $elm$time$Time$Zone = F2(
+	function (a, b) {
+		return {$: 0, a: a, b: b};
+	});
+var $elm$time$Time$customZone = $elm$time$Time$Zone;
+var $elm$time$Time$Posix = $elm$core$Basics$identity;
+var $elm$time$Time$millisToPosix = $elm$core$Basics$identity;
+var $elm$time$Time$now = _Time_now($elm$time$Time$millisToPosix);
+var $elm$time$Time$posixToMillis = function (_v0) {
+	var millis = _v0;
+	return millis;
+};
+var $elm$random$Random$init = A2(
+	$elm$core$Task$andThen,
+	function (time) {
+		return $elm$core$Task$succeed(
+			$elm$random$Random$initialSeed(
+				$elm$time$Time$posixToMillis(time)));
+	},
+	$elm$time$Time$now);
+var $elm$random$Random$step = F2(
+	function (_v0, seed) {
+		var generator = _v0;
+		return generator(seed);
+	});
+var $elm$random$Random$onEffects = F3(
+	function (router, commands, seed) {
+		if (!commands.b) {
+			return $elm$core$Task$succeed(seed);
+		} else {
+			var generator = commands.a;
+			var rest = commands.b;
+			var _v1 = A2($elm$random$Random$step, generator, seed);
+			var value = _v1.a;
+			var newSeed = _v1.b;
+			return A2(
+				$elm$core$Task$andThen,
+				function (_v2) {
+					return A3($elm$random$Random$onEffects, router, rest, newSeed);
+				},
+				A2($elm$core$Platform$sendToApp, router, value));
+		}
+	});
+var $elm$random$Random$onSelfMsg = F3(
+	function (_v0, _v1, seed) {
+		return $elm$core$Task$succeed(seed);
+	});
+var $elm$random$Random$cmdMap = F2(
+	function (func, _v0) {
+		var generator = _v0;
+		return A2($elm$random$Random$map, func, generator);
+	});
+_Platform_effectManagers['Random'] = _Platform_createManager($elm$random$Random$init, $elm$random$Random$onEffects, $elm$random$Random$onSelfMsg, $elm$random$Random$cmdMap);
+var $elm$random$Random$command = _Platform_leaf('Random');
+var $elm$random$Random$generate = F2(
+	function (tagger, generator) {
+		return $elm$random$Random$command(
+			A2($elm$random$Random$map, tagger, generator));
+	});
 var $author$project$Main$init = function (_v0) {
 	return _Utils_Tuple2(
 		A8(
@@ -5164,108 +5802,68 @@ var $author$project$Main$init = function (_v0) {
 			_List_fromArray(
 				[
 					{
-					aL: $author$project$Figure$Pawn(1),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(1),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(0, 0))
 				},
 					{
-					aL: $author$project$Figure$Pawn(2),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(2),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(1, 0))
 				},
 					{
-					aL: $author$project$Figure$King,
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$King,
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(2, 0))
 				},
 					{
-					aL: $author$project$Figure$Pawn(3),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(3),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(3, 0))
 				},
 					{
-					aL: $author$project$Figure$Pawn(4),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(4),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(4, 0))
 				}
 				]),
 			_List_fromArray(
 				[
 					{
-					aL: $author$project$Figure$Pawn(4),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(4),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(0, 4))
 				},
 					{
-					aL: $author$project$Figure$Pawn(3),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(3),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(1, 4))
 				},
 					{
-					aL: $author$project$Figure$King,
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$King,
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(2, 4))
 				},
 					{
-					aL: $author$project$Figure$Pawn(2),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(2),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(3, 4))
 				},
 					{
-					aL: $author$project$Figure$Pawn(1),
-					ag: $author$project$Figure$On(
+					aN: $author$project$Figure$Pawn(1),
+					ai: $author$project$Figure$On(
 						_Utils_Tuple2(4, 4))
 				}
 				]),
-			_Utils_Tuple2(
-				{
-					aR: _List_fromArray(
-						[
-							_Utils_Tuple2(2, 0),
-							_Utils_Tuple2(1, 1),
-							_Utils_Tuple2(-1, -1)
-						]),
-					aT: 'Frog'
-				},
-				{
-					aR: _List_fromArray(
-						[
-							_Utils_Tuple2(-1, 1),
-							_Utils_Tuple2(1, 1),
-							_Utils_Tuple2(0, -1)
-						]),
-					aT: 'Mantis'
-				}),
-			_Utils_Tuple2(
-				{
-					aR: _List_fromArray(
-						[
-							_Utils_Tuple2(-2, 0),
-							_Utils_Tuple2(-1, 1),
-							_Utils_Tuple2(1, -1)
-						]),
-					aT: 'Rabbit'
-				},
-				{
-					aR: _List_fromArray(
-						[
-							_Utils_Tuple2(-1, 0),
-							_Utils_Tuple2(1, 0),
-							_Utils_Tuple2(0, 1)
-						]),
-					aT: 'Boar'
-				}),
-			{
-				aR: _List_fromArray(
-					[
-						_Utils_Tuple2(0, 2),
-						_Utils_Tuple2(0, -1)
-					]),
-				aT: 'Tiger'
-			},
+			_Utils_Tuple2($author$project$Card$dummyCard, $author$project$Card$dummyCard),
+			_Utils_Tuple2($author$project$Card$dummyCard, $author$project$Card$dummyCard),
+			$author$project$Card$dummyCard,
 			$author$project$Figure$Out,
 			$elm$core$Maybe$Nothing),
-		$elm$core$Platform$Cmd$none);
+		A2(
+			$elm$random$Random$generate,
+			$author$project$Main$NewCards,
+			A2($elm_community$random_extra$Random$List$choices, 5, $author$project$Card$allCards)));
 };
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
@@ -5287,7 +5885,7 @@ var $author$project$Figure$figurePositions = function (figs) {
 	return A2(
 		$elm$core$List$map,
 		function (f) {
-			var _v2 = f.ag;
+			var _v2 = f.ai;
 			if (!_v2.$) {
 				var _v3 = _v2.a;
 				var x = _v3.a;
@@ -5300,7 +5898,7 @@ var $author$project$Figure$figurePositions = function (figs) {
 		A2(
 			$elm$core$List$filter,
 			function (f) {
-				var _v0 = f.ag;
+				var _v0 = f.ai;
 				if (!_v0.$) {
 					var _v1 = _v0.a;
 					return true;
@@ -5352,16 +5950,16 @@ var $author$project$Main$nextPlayer = function (model) {
 	return _Utils_update(
 		model,
 		{
-			a: model.Y,
-			R: $author$project$Figure$invert(model.R),
-			x: A2(
+			a: model.U,
+			T: $author$project$Figure$invert(model.T),
+			z: A2(
 				$elm$core$List$map,
 				function (fig) {
 					return _Utils_update(
 						fig,
 						{
-							ag: function () {
-								var _v0 = fig.ag;
+							ai: function () {
+								var _v0 = fig.ai;
 								if (!_v0.$) {
 									var _v1 = _v0.a;
 									var x = _v1.a;
@@ -5369,21 +5967,21 @@ var $author$project$Main$nextPlayer = function (model) {
 									return $author$project$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.ag;
+									return fig.ai;
 								}
 							}()
 						});
 				},
-				model.S),
-			Y: model.a,
-			S: A2(
+				model.V),
+			U: model.a,
+			V: A2(
 				$elm$core$List$map,
 				function (fig) {
 					return _Utils_update(
 						fig,
 						{
-							ag: function () {
-								var _v2 = fig.ag;
+							ai: function () {
+								var _v2 = fig.ai;
 								if (!_v2.$) {
 									var _v3 = _v2.a;
 									var x = _v3.a;
@@ -5391,12 +5989,12 @@ var $author$project$Main$nextPlayer = function (model) {
 									return $author$project$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.ag;
+									return fig.ai;
 								}
 							}()
 						});
 				},
-				model.x)
+				model.z)
 		});
 };
 var $author$project$Main$movefigure = F2(
@@ -5405,157 +6003,220 @@ var $author$project$Main$movefigure = F2(
 			_Utils_update(
 				model,
 				{
-					x: A2(
+					z: A2(
 						$elm$core$List$map,
 						function (f) {
-							return _Utils_eq(f.ag, model.n) ? _Utils_update(
+							return _Utils_eq(f.ai, model.q) ? _Utils_update(
 								f,
 								{
-									ag: $author$project$Figure$On(newposition)
+									ai: $author$project$Figure$On(newposition)
 								}) : f;
 						},
-						model.x),
-					S: A2(
+						model.z),
+					V: A2(
 						$elm$core$List$map,
 						function (f) {
 							return _Utils_eq(
-								f.ag,
+								f.ai,
 								$author$project$Figure$On(newposition)) ? _Utils_update(
 								f,
-								{ag: $author$project$Figure$Out}) : f;
+								{ai: $author$project$Figure$Out}) : f;
 						},
-						model.S),
-					n: $author$project$Figure$Out
+						model.V),
+					q: $author$project$Figure$Out
 				}));
 	});
+var $elm$core$Platform$Cmd$batch = _Platform_batch;
+var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
 var $elm$core$Tuple$second = function (_v0) {
 	var y = _v0.b;
 	return y;
 };
 var $author$project$Main$update = F2(
 	function (msg, model) {
-		if (msg.$ === 1) {
-			var card = msg.a;
-			var position = function () {
-				var _v1 = model.M;
-				if (!_v1.$) {
-					var p = _v1.a;
-					return p;
-				} else {
-					return _Utils_Tuple2(0, 0);
-				}
-			}();
-			return _Utils_Tuple2(
-				A2(
-					$author$project$Main$movefigure,
-					position,
-					_Utils_eq(card, model.a.a) ? _Utils_update(
-						model,
-						{
-							M: $elm$core$Maybe$Nothing,
-							a: _Utils_Tuple2(model.o, model.a.b),
-							o: model.a.a
-						}) : _Utils_update(
-						model,
-						{
-							M: $elm$core$Maybe$Nothing,
-							a: _Utils_Tuple2(model.a.a, model.o),
-							o: model.a.b
-						})),
-				$elm$core$Platform$Cmd$none);
-		} else {
-			if (msg.a.$ === 1) {
-				var _v2 = msg.a;
+		switch (msg.$) {
+			case 2:
+				var _v1 = msg.a;
+				var shuffledCards = _v1.a;
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
-						{n: $author$project$Figure$Out}),
+						{
+							a: _Utils_Tuple2(
+								function () {
+									var _v2 = $elm$core$List$head(shuffledCards);
+									if (!_v2.$) {
+										var c = _v2.a;
+										return c;
+									} else {
+										return $author$project$Card$dummyCard;
+									}
+								}(),
+								function () {
+									var _v3 = $elm$core$List$head(
+										A2($elm$core$List$drop, 1, shuffledCards));
+									if (!_v3.$) {
+										var c = _v3.a;
+										return c;
+									} else {
+										return $author$project$Card$dummyCard;
+									}
+								}()),
+							p: function () {
+								var _v4 = $elm$core$List$head(
+									A2($elm$core$List$drop, 4, shuffledCards));
+								if (!_v4.$) {
+									var c = _v4.a;
+									return c;
+								} else {
+									return $author$project$Card$dummyCard;
+								}
+							}(),
+							U: _Utils_Tuple2(
+								function () {
+									var _v5 = $elm$core$List$head(
+										A2($elm$core$List$drop, 2, shuffledCards));
+									if (!_v5.$) {
+										var c = _v5.a;
+										return c;
+									} else {
+										return $author$project$Card$dummyCard;
+									}
+								}(),
+								function () {
+									var _v6 = $elm$core$List$head(
+										A2($elm$core$List$drop, 3, shuffledCards));
+									if (!_v6.$) {
+										var c = _v6.a;
+										return c;
+									} else {
+										return $author$project$Card$dummyCard;
+									}
+								}())
+						}),
 					$elm$core$Platform$Cmd$none);
-			} else {
-				var position = msg.a.a;
-				if (A2(
-					$elm$core$List$member,
-					position,
-					$author$project$Figure$figurePositions(model.x))) {
-					var _v3 = model.n;
-					if (!_v3.$) {
-						var previousPosition = _v3.a;
-						return _Utils_eq(position, previousPosition) ? _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{n: $author$project$Figure$Out}),
-							$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									n: $author$project$Figure$On(position)
-								}),
-							$elm$core$Platform$Cmd$none);
+			case 1:
+				var card = msg.a;
+				var position = function () {
+					var _v7 = model.O;
+					if (!_v7.$) {
+						var p = _v7.a;
+						return p;
 					} else {
-						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{
-									n: $author$project$Figure$On(position)
-								}),
-							$elm$core$Platform$Cmd$none);
+						return _Utils_Tuple2(0, 0);
 					}
+				}();
+				return _Utils_Tuple2(
+					A2(
+						$author$project$Main$movefigure,
+						position,
+						_Utils_eq(card, model.a.a) ? _Utils_update(
+							model,
+							{
+								O: $elm$core$Maybe$Nothing,
+								a: _Utils_Tuple2(model.p, model.a.b),
+								p: model.a.a
+							}) : _Utils_update(
+							model,
+							{
+								O: $elm$core$Maybe$Nothing,
+								a: _Utils_Tuple2(model.a.a, model.p),
+								p: model.a.b
+							})),
+					$elm$core$Platform$Cmd$none);
+			default:
+				if (msg.a.$ === 1) {
+					var _v8 = msg.a;
+					return _Utils_Tuple2(
+						_Utils_update(
+							model,
+							{q: $author$project$Figure$Out}),
+						$elm$core$Platform$Cmd$none);
 				} else {
-					var _v4 = model.n;
-					if (!_v4.$) {
-						var previousPosition = _v4.a;
-						var move = _Utils_Tuple2(position.a - previousPosition.a, position.b - previousPosition.b);
-						var _v5 = _Utils_Tuple2(
-							A2($elm$core$List$member, move, model.a.a.aR),
-							A2($elm$core$List$member, move, model.a.b.aR));
-						if (_v5.a) {
-							if (_v5.b) {
-								return _Utils_Tuple2(
-									_Utils_update(
-										model,
-										{
-											M: $elm$core$Maybe$Just(position)
-										}),
-									$elm$core$Platform$Cmd$none);
-							} else {
-								return _Utils_Tuple2(
-									A2(
-										$author$project$Main$movefigure,
-										position,
-										_Utils_update(
-											model,
-											{
-												a: _Utils_Tuple2(model.o, model.a.b),
-												o: model.a.a
-											})),
-									$elm$core$Platform$Cmd$none);
-							}
+					var position = msg.a.a;
+					if (A2(
+						$elm$core$List$member,
+						position,
+						$author$project$Figure$figurePositions(model.z))) {
+						var _v9 = model.q;
+						if (!_v9.$) {
+							var previousPosition = _v9.a;
+							return _Utils_eq(position, previousPosition) ? _Utils_Tuple2(
+								_Utils_update(
+									model,
+									{q: $author$project$Figure$Out}),
+								$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
+								_Utils_update(
+									model,
+									{
+										q: $author$project$Figure$On(position)
+									}),
+								$elm$core$Platform$Cmd$none);
 						} else {
-							if (_v5.b) {
-								return _Utils_Tuple2(
-									A2(
-										$author$project$Main$movefigure,
-										position,
-										_Utils_update(
-											model,
-											{
-												a: _Utils_Tuple2(model.a.a, model.o),
-												o: model.a.b
-											})),
-									$elm$core$Platform$Cmd$none);
-							} else {
-								return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
-							}
+							return _Utils_Tuple2(
+								_Utils_update(
+									model,
+									{
+										q: $author$project$Figure$On(position)
+									}),
+								$elm$core$Platform$Cmd$none);
 						}
 					} else {
-						return _Utils_Tuple2(
-							_Utils_update(
-								model,
-								{n: $author$project$Figure$Out}),
-							$elm$core$Platform$Cmd$none);
+						var _v10 = model.q;
+						if (!_v10.$) {
+							var previousPosition = _v10.a;
+							var move = _Utils_Tuple2(position.a - previousPosition.a, position.b - previousPosition.b);
+							var _v11 = _Utils_Tuple2(
+								A2($elm$core$List$member, move, model.a.a.b),
+								A2($elm$core$List$member, move, model.a.b.b));
+							if (_v11.a) {
+								if (_v11.b) {
+									return _Utils_Tuple2(
+										_Utils_update(
+											model,
+											{
+												O: $elm$core$Maybe$Just(position)
+											}),
+										$elm$core$Platform$Cmd$none);
+								} else {
+									return _Utils_Tuple2(
+										A2(
+											$author$project$Main$movefigure,
+											position,
+											_Utils_update(
+												model,
+												{
+													a: _Utils_Tuple2(model.p, model.a.b),
+													p: model.a.a
+												})),
+										$elm$core$Platform$Cmd$none);
+								}
+							} else {
+								if (_v11.b) {
+									return _Utils_Tuple2(
+										A2(
+											$author$project$Main$movefigure,
+											position,
+											_Utils_update(
+												model,
+												{
+													a: _Utils_Tuple2(model.a.a, model.p),
+													p: model.a.b
+												})),
+										$elm$core$Platform$Cmd$none);
+								} else {
+									return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+								}
+							}
+						} else {
+							return _Utils_Tuple2(
+								_Utils_update(
+									model,
+									{q: $author$project$Figure$Out}),
+								$elm$core$Platform$Cmd$none);
+						}
 					}
 				}
-			}
 		}
 	});
 var $author$project$Main$ChoosedCard = function (a) {
@@ -5571,14 +6232,6 @@ var $elm$browser$Browser$Document = F2(
 var $author$project$Cell$MoveToCell = 2;
 var $author$project$Cell$NormalCell = 0;
 var $author$project$Cell$SelectedCell = 1;
-var $elm$core$List$append = F2(
-	function (xs, ys) {
-		if (!ys.b) {
-			return xs;
-		} else {
-			return A3($elm$core$List$foldr, $elm$core$List$cons, ys, xs);
-		}
-	});
 var $elm$svg$Svg$Attributes$class = _VirtualDom_attribute('class');
 var $elm$svg$Svg$Attributes$display = _VirtualDom_attribute('display');
 var $elm$html$Html$div = _VirtualDom_node('div');
@@ -5713,8 +6366,8 @@ var $elm$svg$Svg$Attributes$textAnchor = _VirtualDom_attribute('text-anchor');
 var $elm$svg$Svg$text_ = $elm$svg$Svg$trustedNode('text');
 var $elm$svg$Svg$Attributes$transform = _VirtualDom_attribute('transform');
 var $author$project$Card$drawCard = function (_v0) {
-	var name = _v0.aT;
-	var moves = _v0.aR;
+	var name = _v0.c;
+	var moves = _v0.b;
 	var stroke_ = 'black';
 	return _List_fromArray(
 		[
@@ -5913,7 +6566,7 @@ var $author$project$Figure$drawFigures = F2(
 					}
 				}();
 				var _v1 = function () {
-					var _v2 = head.ag;
+					var _v2 = head.ai;
 					if (!_v2.$) {
 						var _v3 = _v2.a;
 						var x_ = _v3.a;
@@ -5926,7 +6579,7 @@ var $author$project$Figure$drawFigures = F2(
 				var x = _v1.a;
 				var y = _v1.b;
 				var _v4 = function () {
-					var _v5 = head.aL;
+					var _v5 = head.aN;
 					if (!_v5.$) {
 						return _Utils_Tuple2('King', 0);
 					} else {
@@ -6448,11 +7101,11 @@ var $author$project$Main$view = function (model) {
 												$elm$svg$Svg$Attributes$class('pieces')
 											]),
 										_Utils_ap(
-											A2($author$project$Figure$drawFigures, model.R, model.x),
+											A2($author$project$Figure$drawFigures, model.T, model.z),
 											A2(
 												$author$project$Figure$drawFigures,
-												$author$project$Figure$invert(model.R),
-												model.S))),
+												$author$project$Figure$invert(model.T),
+												model.V))),
 										A2(
 										$elm$svg$Svg$g,
 										_List_fromArray(
@@ -6465,7 +7118,7 @@ var $author$project$Main$view = function (model) {
 												A2($author$project$Cell$draw, 0, $author$project$Main$Clicked),
 												$author$project$Cell$grid),
 											function () {
-												var _v0 = model.n;
+												var _v0 = model.q;
 												if (!_v0.$) {
 													var _v1 = _v0.a;
 													var u = _v1.a;
@@ -6489,7 +7142,7 @@ var $author$project$Main$view = function (model) {
 																	return A2(
 																		$elm$core$List$member,
 																		move,
-																		$author$project$Figure$figurePositions(model.x));
+																		$author$project$Figure$figurePositions(model.z));
 																},
 																A2(
 																	$elm$core$List$filter,
@@ -6504,7 +7157,7 @@ var $author$project$Main$view = function (model) {
 																			return _Utils_Tuple2(x + u, y + v);
 																		},
 																		$elm_community$list_extra$List$Extra$unique(
-																			_Utils_ap(model.a.a.aR, model.a.b.aR)))))));
+																			_Utils_ap(model.a.a.b, model.a.b.b)))))));
 												} else {
 													return _List_Nil;
 												}
@@ -6516,7 +7169,7 @@ var $author$project$Main$view = function (model) {
 									[
 										$elm$svg$Svg$Attributes$class('cards-group')
 									]),
-								A5($author$project$Card$drawAllCards, model.a.a, model.a.b, model.Y.a, model.Y.b, model.o)),
+								A5($author$project$Card$drawAllCards, model.a.a, model.a.b, model.U.a, model.U.b, model.p)),
 								A2(
 								$elm$svg$Svg$g,
 								_List_fromArray(
@@ -6524,7 +7177,7 @@ var $author$project$Main$view = function (model) {
 										$elm$svg$Svg$Attributes$class('card-prompt'),
 										$elm$svg$Svg$Attributes$display(
 										function () {
-											var _v3 = model.M;
+											var _v3 = model.O;
 											if (!_v3.$) {
 												return 'block';
 											} else {
@@ -6547,7 +7200,7 @@ var $author$project$Main$view = function (model) {
 									[
 										$elm$svg$Svg$text(
 										function () {
-											var _v4 = model.R;
+											var _v4 = model.T;
 											if (!_v4) {
 												return 'white to move';
 											} else {
