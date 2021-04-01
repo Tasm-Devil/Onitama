@@ -39,25 +39,14 @@ type alias Figure =
 figurePositions : List Figure -> List ( Int, Int )
 figurePositions figs =
     figs
-        --|> List.filter (\f -> f.color == color)
-        |> List.filter
-            (\f ->
-                case f.pos of
-                    On ( _, _ ) ->
-                        True
-
-                    Out ->
-                        False
-            )
-        |> List.map
+        |> List.filterMap
             (\f ->
                 case f.pos of
                     On ( x, y ) ->
-                        ( x, y )
+                        Just ( x, y )
 
                     Out ->
-                        -- impossible case but compiler needs it
-                        ( 0, 0 )
+                        Nothing
             )
 
 
