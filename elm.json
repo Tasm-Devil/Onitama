@@ -12,8 +12,7 @@
             "elm/random": "1.0.0",
             "elm/svg": "1.0.1",
             "elm-community/list-extra": "8.3.0",
-            "elm-community/random-extra": "3.2.0",
-            "savardd/elm-time-travel": "2.0.0"
+            "elm-community/random-extra": "3.2.0"
         },
         "indirect": {
             "andre-dietrich/parser-combinators": "3.2.0",

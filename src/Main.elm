@@ -19,9 +19,6 @@ import Svg.Attributes as SvgA
 main : Program () Model Msg
 main =
     Browser.document
-        --TimeTravel.element Debug.toString
-        --Debug.toString
-        --TimeTravel.defaultConfig
         { init = init
         , update = update
         , subscriptions = subscriptions
