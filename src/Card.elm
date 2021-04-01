@@ -15,7 +15,7 @@ type alias Card =
 
 dummyCard : Card
 dummyCard =
-    { name = "Error", moves = [ ( 0, 1 ), ( 0, 2 ), ( 0, -1 ), ( 0, -2 ),( -2, 0 ), ( -1, 0 ), ( 1, 0 ), ( 2, 0 ) ] }
+    { name = "Error", moves = [ ( 0, 1 ), ( 0, 2 ), ( 0, -1 ), ( 0, -2 ), ( -2, 0 ), ( -1, 0 ), ( 1, 0 ), ( 2, 0 ) ] }
 
 
 allCards : List Card
@@ -118,5 +118,3 @@ drawCard { name, moves } =
     , Svg.text_ [ SvgA.class "card-caption", SvgA.textAnchor "middle", SvgA.x "175", SvgA.y "65" ]
         [ Svg.text name ]
     ]
-
-

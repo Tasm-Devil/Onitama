@@ -127,6 +127,7 @@ drawFigures color_ figs =
                         ]
                         (drawFigures color_ tail)
 
+
 predefinedSymbols : Svg.Svg msg
 predefinedSymbols =
     Svg.g [ SvgA.class "symbol-definitions" ]
