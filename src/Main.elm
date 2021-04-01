@@ -4,9 +4,9 @@ module Main exposing (main)
 
 import Browser
 import Card exposing (..)
-import Cell exposing (CellType(..), grid)
-import Figure exposing (Color(..), Figure, FigureKind(..), Position(..), drawFigures, figurePositions, invert)
-import Global exposing (gridsize)
+import Cell exposing (..)
+import Figure exposing (..)
+import Global exposing (..)
 import Html
 import Html.Attributes as HtmlA
 import List.Extra
