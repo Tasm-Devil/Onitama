@@ -784,11 +784,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.au.aP === region.aE.aP)
+	if (region.Z.ap === region.ag.ap)
 	{
-		return 'on line ' + region.au.aP;
+		return 'on line ' + region.Z.ap;
 	}
-	return 'on lines ' + region.au.aP + ' through ' + region.aE.aP;
+	return 'on lines ' + region.Z.ap + ' through ' + region.ag.ap;
 }
 
 
@@ -1857,9 +1857,9 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bq,
-		impl.bB,
-		impl.bz,
+		impl.aX,
+		impl.a3,
+		impl.a1,
 		function() { return function() {} }
 	);
 });
@@ -2704,9 +2704,9 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		y: func(record.y),
-		av: record.av,
-		ap: record.ap
+		u: func(record.u),
+		_: record._,
+		W: record.W
 	}
 });
 
@@ -2974,11 +2974,11 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.y;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.av;
+		var message = !tag ? value : tag < 3 ? value.a : value.u;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value._;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.ap) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.W) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3928,11 +3928,11 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bq,
-		impl.bB,
-		impl.bz,
+		impl.aX,
+		impl.a3,
+		impl.a1,
 		function(sendToApp, initialModel) {
-			var view = impl.bC;
+			var view = impl.a4;
 			/**/
 			var domNode = args['node'];
 			//*/
@@ -3964,12 +3964,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bq,
-		impl.bB,
-		impl.bz,
+		impl.aX,
+		impl.a3,
+		impl.a1,
 		function(sendToApp, initialModel) {
-			var divertHrefToApp = impl.as && impl.as(sendToApp)
-			var view = impl.bC;
+			var divertHrefToApp = impl.Y && impl.Y(sendToApp)
+			var view = impl.a4;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
@@ -3977,12 +3977,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
 				var doc = view(model);
-				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.bg);
+				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.aO);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
 				currNode = nextNode;
 				_VirtualDom_divertHrefToApp = 0;
-				(title !== doc.bA) && (_VirtualDom_doc.title = title = doc.bA);
+				(title !== doc.a2) && (_VirtualDom_doc.title = title = doc.a2);
 			});
 		}
 	);
@@ -4038,12 +4038,12 @@ function _Browser_makeAnimator(model, draw)
 
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.bv;
-	var onUrlRequest = impl.bw;
+	var onUrlChange = impl.aZ;
+	var onUrlRequest = impl.a_;
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
-		as: function(sendToApp)
+		Y: function(sendToApp)
 		{
 			key.a = sendToApp;
 			_Browser_window.addEventListener('popstate', key);
@@ -4059,9 +4059,9 @@ function _Browser_application(impl)
 					var next = $elm$url$Url$fromString(href).a;
 					sendToApp(onUrlRequest(
 						(next
-							&& curr.a_ === next.a_
-							&& curr.aK === next.aK
-							&& curr.aX.a === next.aX.a
+							&& curr.ay === next.ay
+							&& curr.ak === next.ak
+							&& curr.av.a === next.av.a
 						)
 							? $elm$browser$Browser$Internal(next)
 							: $elm$browser$Browser$External(href)
@@ -4069,13 +4069,13 @@ function _Browser_application(impl)
 				}
 			});
 		},
-		bq: function(flags)
+		aX: function(flags)
 		{
-			return A3(impl.bq, flags, _Browser_getUrl(), key);
+			return A3(impl.aX, flags, _Browser_getUrl(), key);
 		},
-		bC: impl.bC,
-		bB: impl.bB,
-		bz: impl.bz
+		a4: impl.a4,
+		a3: impl.a3,
+		a1: impl.a1
 	});
 }
 
@@ -4141,17 +4141,17 @@ var _Browser_decodeEvent = F2(function(decoder, event)
 function _Browser_visibilityInfo()
 {
 	return (typeof _VirtualDom_doc.hidden !== 'undefined')
-		? { bn: 'hidden', bh: 'visibilitychange' }
+		? { aU: 'hidden', aP: 'visibilitychange' }
 		:
 	(typeof _VirtualDom_doc.mozHidden !== 'undefined')
-		? { bn: 'mozHidden', bh: 'mozvisibilitychange' }
+		? { aU: 'mozHidden', aP: 'mozvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.msHidden !== 'undefined')
-		? { bn: 'msHidden', bh: 'msvisibilitychange' }
+		? { aU: 'msHidden', aP: 'msvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.webkitHidden !== 'undefined')
-		? { bn: 'webkitHidden', bh: 'webkitvisibilitychange' }
-		: { bn: 'hidden', bh: 'visibilitychange' };
+		? { aU: 'webkitHidden', aP: 'webkitvisibilitychange' }
+		: { aU: 'hidden', aP: 'visibilitychange' };
 }
 
 
@@ -4232,12 +4232,12 @@ var _Browser_call = F2(function(functionName, id)
 function _Browser_getViewport()
 {
 	return {
-		a4: _Browser_getScene(),
-		ba: {
-			bc: _Browser_window.pageXOffset,
-			bd: _Browser_window.pageYOffset,
-			bb: _Browser_doc.documentElement.clientWidth,
-			aJ: _Browser_doc.documentElement.clientHeight
+		aD: _Browser_getScene(),
+		aI: {
+			aK: _Browser_window.pageXOffset,
+			aL: _Browser_window.pageYOffset,
+			aJ: _Browser_doc.documentElement.clientWidth,
+			aj: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4247,8 +4247,8 @@ function _Browser_getScene()
 	var body = _Browser_doc.body;
 	var elem = _Browser_doc.documentElement;
 	return {
-		bb: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		aJ: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		aJ: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
+		aj: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4271,15 +4271,15 @@ function _Browser_getViewportOf(id)
 	return _Browser_withNode(id, function(node)
 	{
 		return {
-			a4: {
-				bb: node.scrollWidth,
-				aJ: node.scrollHeight
+			aD: {
+				aJ: node.scrollWidth,
+				aj: node.scrollHeight
 			},
-			ba: {
-				bc: node.scrollLeft,
-				bd: node.scrollTop,
-				bb: node.clientWidth,
-				aJ: node.clientHeight
+			aI: {
+				aK: node.scrollLeft,
+				aL: node.scrollTop,
+				aJ: node.clientWidth,
+				aj: node.clientHeight
 			}
 		};
 	});
@@ -4309,18 +4309,18 @@ function _Browser_getElement(id)
 		var x = _Browser_window.pageXOffset;
 		var y = _Browser_window.pageYOffset;
 		return {
-			a4: _Browser_getScene(),
-			ba: {
-				bc: x,
-				bd: y,
-				bb: _Browser_doc.documentElement.clientWidth,
-				aJ: _Browser_doc.documentElement.clientHeight
+			aD: _Browser_getScene(),
+			aI: {
+				aK: x,
+				aL: y,
+				aJ: _Browser_doc.documentElement.clientWidth,
+				aj: _Browser_doc.documentElement.clientHeight
 			},
-			bj: {
-				bc: x + rect.left,
-				bd: y + rect.top,
-				bb: rect.width,
-				aJ: rect.height
+			aR: {
+				aK: x + rect.left,
+				aL: y + rect.top,
+				aJ: rect.width,
+				aj: rect.height
 			}
 		};
 	});
@@ -4844,25 +4844,25 @@ var $elm$core$Array$treeFromBuilder = F2(
 	});
 var $elm$core$Array$builderToArray = F2(
 	function (reverseNodeList, builder) {
-		if (!builder.e) {
+		if (!builder.d) {
 			return A4(
 				$elm$core$Array$Array_elm_builtin,
-				$elm$core$Elm$JsArray$length(builder.g),
+				$elm$core$Elm$JsArray$length(builder.f),
 				$elm$core$Array$shiftStep,
 				$elm$core$Elm$JsArray$empty,
-				builder.g);
+				builder.f);
 		} else {
-			var treeLen = builder.e * $elm$core$Array$branchFactor;
+			var treeLen = builder.d * $elm$core$Array$branchFactor;
 			var depth = $elm$core$Basics$floor(
 				A2($elm$core$Basics$logBase, $elm$core$Array$branchFactor, treeLen - 1));
-			var correctNodeList = reverseNodeList ? $elm$core$List$reverse(builder.h) : builder.h;
-			var tree = A2($elm$core$Array$treeFromBuilder, correctNodeList, builder.e);
+			var correctNodeList = reverseNodeList ? $elm$core$List$reverse(builder.g) : builder.g;
+			var tree = A2($elm$core$Array$treeFromBuilder, correctNodeList, builder.d);
 			return A4(
 				$elm$core$Array$Array_elm_builtin,
-				$elm$core$Elm$JsArray$length(builder.g) + treeLen,
+				$elm$core$Elm$JsArray$length(builder.f) + treeLen,
 				A2($elm$core$Basics$max, 5, depth * $elm$core$Array$shiftStep),
 				tree,
-				builder.g);
+				builder.f);
 		}
 	});
 var $elm$core$Basics$idiv = _Basics_idiv;
@@ -4875,7 +4875,7 @@ var $elm$core$Array$initializeHelp = F5(
 				return A2(
 					$elm$core$Array$builderToArray,
 					false,
-					{h: nodeList, e: (len / $elm$core$Array$branchFactor) | 0, g: tail});
+					{g: nodeList, d: (len / $elm$core$Array$branchFactor) | 0, f: tail});
 			} else {
 				var leaf = $elm$core$Array$Leaf(
 					A3($elm$core$Elm$JsArray$initialize, $elm$core$Array$branchFactor, fromIndex, fn));
@@ -4942,7 +4942,7 @@ var $elm$url$Url$Http = 0;
 var $elm$url$Url$Https = 1;
 var $elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {aI: fragment, aK: host, aV: path, aX: port_, a_: protocol, a$: query};
+		return {ai: fragment, ak: host, at: path, av: port_, ay: protocol, az: query};
 	});
 var $elm$core$String$contains = _String_contains;
 var $elm$core$String$length = _String_length;
@@ -5224,7 +5224,7 @@ var $elm$browser$Browser$document = _Browser_document;
 var $author$project$Figure$King = {$: 0};
 var $author$project$Main$Model = F8(
 	function (myColor, myFigures, opFigures, myCards, opCards, nextCard, prevPosition, chooseCard) {
-		return {O: chooseCard, a: myCards, T: myColor, z: myFigures, p: nextCard, U: opCards, V: opFigures, q: prevPosition};
+		return {E: chooseCard, a: myCards, G: myColor, v: myFigures, n: nextCard, H: opCards, I: opFigures, o: prevPosition};
 	});
 var $author$project$Main$NewCards = function (a) {
 	return {$: 2, a: a};
@@ -5715,7 +5715,13 @@ var $author$project$Card$dummyCard = {
 	b: _List_fromArray(
 		[
 			_Utils_Tuple2(0, 1),
-			_Utils_Tuple2(0, -1)
+			_Utils_Tuple2(0, 2),
+			_Utils_Tuple2(0, -1),
+			_Utils_Tuple2(0, -2),
+			_Utils_Tuple2(-2, 0),
+			_Utils_Tuple2(-1, 0),
+			_Utils_Tuple2(1, 0),
+			_Utils_Tuple2(2, 0)
 		]),
 	c: 'Error'
 };
@@ -5802,56 +5808,56 @@ var $author$project$Main$init = function (_v0) {
 			_List_fromArray(
 				[
 					{
-					aN: $author$project$Figure$Pawn(1),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(1),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(0, 0))
 				},
 					{
-					aN: $author$project$Figure$Pawn(2),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(2),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(1, 0))
 				},
 					{
-					aN: $author$project$Figure$King,
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$King,
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(2, 0))
 				},
 					{
-					aN: $author$project$Figure$Pawn(3),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(3),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(3, 0))
 				},
 					{
-					aN: $author$project$Figure$Pawn(4),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(4),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(4, 0))
 				}
 				]),
 			_List_fromArray(
 				[
 					{
-					aN: $author$project$Figure$Pawn(4),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(4),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(0, 4))
 				},
 					{
-					aN: $author$project$Figure$Pawn(3),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(3),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(1, 4))
 				},
 					{
-					aN: $author$project$Figure$King,
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$King,
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(2, 4))
 				},
 					{
-					aN: $author$project$Figure$Pawn(2),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(2),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(3, 4))
 				},
 					{
-					aN: $author$project$Figure$Pawn(1),
-					ai: $author$project$Figure$On(
+					an: $author$project$Figure$Pawn(1),
+					R: $author$project$Figure$On(
 						_Utils_Tuple2(4, 4))
 				}
 				]),
@@ -5885,7 +5891,7 @@ var $author$project$Figure$figurePositions = function (figs) {
 	return A2(
 		$elm$core$List$map,
 		function (f) {
-			var _v2 = f.ai;
+			var _v2 = f.R;
 			if (!_v2.$) {
 				var _v3 = _v2.a;
 				var x = _v3.a;
@@ -5898,7 +5904,7 @@ var $author$project$Figure$figurePositions = function (figs) {
 		A2(
 			$elm$core$List$filter,
 			function (f) {
-				var _v0 = f.ai;
+				var _v0 = f.R;
 				if (!_v0.$) {
 					var _v1 = _v0.a;
 					return true;
@@ -5950,16 +5956,16 @@ var $author$project$Main$nextPlayer = function (model) {
 	return _Utils_update(
 		model,
 		{
-			a: model.U,
-			T: $author$project$Figure$invert(model.T),
-			z: A2(
+			a: model.H,
+			G: $author$project$Figure$invert(model.G),
+			v: A2(
 				$elm$core$List$map,
 				function (fig) {
 					return _Utils_update(
 						fig,
 						{
-							ai: function () {
-								var _v0 = fig.ai;
+							R: function () {
+								var _v0 = fig.R;
 								if (!_v0.$) {
 									var _v1 = _v0.a;
 									var x = _v1.a;
@@ -5967,21 +5973,21 @@ var $author$project$Main$nextPlayer = function (model) {
 									return $author$project$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.ai;
+									return fig.R;
 								}
 							}()
 						});
 				},
-				model.V),
-			U: model.a,
-			V: A2(
+				model.I),
+			H: model.a,
+			I: A2(
 				$elm$core$List$map,
 				function (fig) {
 					return _Utils_update(
 						fig,
 						{
-							ai: function () {
-								var _v2 = fig.ai;
+							R: function () {
+								var _v2 = fig.R;
 								if (!_v2.$) {
 									var _v3 = _v2.a;
 									var x = _v3.a;
@@ -5989,12 +5995,12 @@ var $author$project$Main$nextPlayer = function (model) {
 									return $author$project$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.ai;
+									return fig.R;
 								}
 							}()
 						});
 				},
-				model.z)
+				model.v)
 		});
 };
 var $author$project$Main$movefigure = F2(
@@ -6003,27 +6009,27 @@ var $author$project$Main$movefigure = F2(
 			_Utils_update(
 				model,
 				{
-					z: A2(
+					v: A2(
 						$elm$core$List$map,
 						function (f) {
-							return _Utils_eq(f.ai, model.q) ? _Utils_update(
+							return _Utils_eq(f.R, model.o) ? _Utils_update(
 								f,
 								{
-									ai: $author$project$Figure$On(newposition)
+									R: $author$project$Figure$On(newposition)
 								}) : f;
 						},
-						model.z),
-					V: A2(
+						model.v),
+					I: A2(
 						$elm$core$List$map,
 						function (f) {
 							return _Utils_eq(
-								f.ai,
+								f.R,
 								$author$project$Figure$On(newposition)) ? _Utils_update(
 								f,
-								{ai: $author$project$Figure$Out}) : f;
+								{R: $author$project$Figure$Out}) : f;
 						},
-						model.V),
-					q: $author$project$Figure$Out
+						model.I),
+					o: $author$project$Figure$Out
 				}));
 	});
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
@@ -6062,7 +6068,7 @@ var $author$project$Main$update = F2(
 										return $author$project$Card$dummyCard;
 									}
 								}()),
-							p: function () {
+							n: function () {
 								var _v4 = $elm$core$List$head(
 									A2($elm$core$List$drop, 4, shuffledCards));
 								if (!_v4.$) {
@@ -6072,7 +6078,7 @@ var $author$project$Main$update = F2(
 									return $author$project$Card$dummyCard;
 								}
 							}(),
-							U: _Utils_Tuple2(
+							H: _Utils_Tuple2(
 								function () {
 									var _v5 = $elm$core$List$head(
 										A2($elm$core$List$drop, 2, shuffledCards));
@@ -6098,7 +6104,7 @@ var $author$project$Main$update = F2(
 			case 1:
 				var card = msg.a;
 				var position = function () {
-					var _v7 = model.O;
+					var _v7 = model.E;
 					if (!_v7.$) {
 						var p = _v7.a;
 						return p;
@@ -6113,15 +6119,15 @@ var $author$project$Main$update = F2(
 						_Utils_eq(card, model.a.a) ? _Utils_update(
 							model,
 							{
-								O: $elm$core$Maybe$Nothing,
-								a: _Utils_Tuple2(model.p, model.a.b),
-								p: model.a.a
+								E: $elm$core$Maybe$Nothing,
+								a: _Utils_Tuple2(model.n, model.a.b),
+								n: model.a.a
 							}) : _Utils_update(
 							model,
 							{
-								O: $elm$core$Maybe$Nothing,
-								a: _Utils_Tuple2(model.a.a, model.p),
-								p: model.a.b
+								E: $elm$core$Maybe$Nothing,
+								a: _Utils_Tuple2(model.a.a, model.n),
+								n: model.a.b
 							})),
 					$elm$core$Platform$Cmd$none);
 			default:
@@ -6130,26 +6136,26 @@ var $author$project$Main$update = F2(
 					return _Utils_Tuple2(
 						_Utils_update(
 							model,
-							{q: $author$project$Figure$Out}),
+							{o: $author$project$Figure$Out}),
 						$elm$core$Platform$Cmd$none);
 				} else {
 					var position = msg.a.a;
 					if (A2(
 						$elm$core$List$member,
 						position,
-						$author$project$Figure$figurePositions(model.z))) {
-						var _v9 = model.q;
+						$author$project$Figure$figurePositions(model.v))) {
+						var _v9 = model.o;
 						if (!_v9.$) {
 							var previousPosition = _v9.a;
 							return _Utils_eq(position, previousPosition) ? _Utils_Tuple2(
 								_Utils_update(
 									model,
-									{q: $author$project$Figure$Out}),
+									{o: $author$project$Figure$Out}),
 								$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
 								_Utils_update(
 									model,
 									{
-										q: $author$project$Figure$On(position)
+										o: $author$project$Figure$On(position)
 									}),
 								$elm$core$Platform$Cmd$none);
 						} else {
@@ -6157,12 +6163,12 @@ var $author$project$Main$update = F2(
 								_Utils_update(
 									model,
 									{
-										q: $author$project$Figure$On(position)
+										o: $author$project$Figure$On(position)
 									}),
 								$elm$core$Platform$Cmd$none);
 						}
 					} else {
-						var _v10 = model.q;
+						var _v10 = model.o;
 						if (!_v10.$) {
 							var previousPosition = _v10.a;
 							var move = _Utils_Tuple2(position.a - previousPosition.a, position.b - previousPosition.b);
@@ -6175,7 +6181,7 @@ var $author$project$Main$update = F2(
 										_Utils_update(
 											model,
 											{
-												O: $elm$core$Maybe$Just(position)
+												E: $elm$core$Maybe$Just(position)
 											}),
 										$elm$core$Platform$Cmd$none);
 								} else {
@@ -6186,8 +6192,8 @@ var $author$project$Main$update = F2(
 											_Utils_update(
 												model,
 												{
-													a: _Utils_Tuple2(model.p, model.a.b),
-													p: model.a.a
+													a: _Utils_Tuple2(model.n, model.a.b),
+													n: model.a.a
 												})),
 										$elm$core$Platform$Cmd$none);
 								}
@@ -6200,8 +6206,8 @@ var $author$project$Main$update = F2(
 											_Utils_update(
 												model,
 												{
-													a: _Utils_Tuple2(model.a.a, model.p),
-													p: model.a.b
+													a: _Utils_Tuple2(model.a.a, model.n),
+													n: model.a.b
 												})),
 										$elm$core$Platform$Cmd$none);
 								} else {
@@ -6212,7 +6218,7 @@ var $author$project$Main$update = F2(
 							return _Utils_Tuple2(
 								_Utils_update(
 									model,
-									{q: $author$project$Figure$Out}),
+									{o: $author$project$Figure$Out}),
 								$elm$core$Platform$Cmd$none);
 						}
 					}
@@ -6227,7 +6233,7 @@ var $author$project$Main$Clicked = function (a) {
 };
 var $elm$browser$Browser$Document = F2(
 	function (title, body) {
-		return {bg: body, bA: title};
+		return {aO: body, a2: title};
 	});
 var $author$project$Cell$MoveToCell = 2;
 var $author$project$Cell$NormalCell = 0;
@@ -6566,7 +6572,7 @@ var $author$project$Figure$drawFigures = F2(
 					}
 				}();
 				var _v1 = function () {
-					var _v2 = head.ai;
+					var _v2 = head.R;
 					if (!_v2.$) {
 						var _v3 = _v2.a;
 						var x_ = _v3.a;
@@ -6579,7 +6585,7 @@ var $author$project$Figure$drawFigures = F2(
 				var x = _v1.a;
 				var y = _v1.b;
 				var _v4 = function () {
-					var _v5 = head.aN;
+					var _v5 = head.an;
 					if (!_v5.$) {
 						return _Utils_Tuple2('King', 0);
 					} else {
@@ -6658,7 +6664,7 @@ var $elm$svg$Svg$path = $elm$svg$Svg$trustedNode('path');
 var $elm$svg$Svg$Attributes$style = _VirtualDom_attribute('style');
 var $elm$svg$Svg$symbol = $elm$svg$Svg$trustedNode('symbol');
 var $elm$svg$Svg$Attributes$viewBox = _VirtualDom_attribute('viewBox');
-var $author$project$Card$predefinedSymbols = A2(
+var $author$project$Figure$predefinedSymbols = A2(
 	$elm$svg$Svg$g,
 	_List_fromArray(
 		[
@@ -7084,7 +7090,7 @@ var $author$project$Main$view = function (model) {
 							]),
 						_List_fromArray(
 							[
-								$author$project$Card$predefinedSymbols,
+								$author$project$Figure$predefinedSymbols,
 								A2(
 								$elm$svg$Svg$g,
 								_List_fromArray(
@@ -7101,11 +7107,11 @@ var $author$project$Main$view = function (model) {
 												$elm$svg$Svg$Attributes$class('pieces')
 											]),
 										_Utils_ap(
-											A2($author$project$Figure$drawFigures, model.T, model.z),
+											A2($author$project$Figure$drawFigures, model.G, model.v),
 											A2(
 												$author$project$Figure$drawFigures,
-												$author$project$Figure$invert(model.T),
-												model.V))),
+												$author$project$Figure$invert(model.G),
+												model.I))),
 										A2(
 										$elm$svg$Svg$g,
 										_List_fromArray(
@@ -7118,7 +7124,7 @@ var $author$project$Main$view = function (model) {
 												A2($author$project$Cell$draw, 0, $author$project$Main$Clicked),
 												$author$project$Cell$grid),
 											function () {
-												var _v0 = model.q;
+												var _v0 = model.o;
 												if (!_v0.$) {
 													var _v1 = _v0.a;
 													var u = _v1.a;
@@ -7142,7 +7148,7 @@ var $author$project$Main$view = function (model) {
 																	return A2(
 																		$elm$core$List$member,
 																		move,
-																		$author$project$Figure$figurePositions(model.z));
+																		$author$project$Figure$figurePositions(model.v));
 																},
 																A2(
 																	$elm$core$List$filter,
@@ -7169,7 +7175,7 @@ var $author$project$Main$view = function (model) {
 									[
 										$elm$svg$Svg$Attributes$class('cards-group')
 									]),
-								A5($author$project$Card$drawAllCards, model.a.a, model.a.b, model.U.a, model.U.b, model.p)),
+								A5($author$project$Card$drawAllCards, model.a.a, model.a.b, model.H.a, model.H.b, model.n)),
 								A2(
 								$elm$svg$Svg$g,
 								_List_fromArray(
@@ -7177,7 +7183,7 @@ var $author$project$Main$view = function (model) {
 										$elm$svg$Svg$Attributes$class('card-prompt'),
 										$elm$svg$Svg$Attributes$display(
 										function () {
-											var _v3 = model.O;
+											var _v3 = model.E;
 											if (!_v3.$) {
 												return 'block';
 											} else {
@@ -7200,7 +7206,7 @@ var $author$project$Main$view = function (model) {
 									[
 										$elm$svg$Svg$text(
 										function () {
-											var _v4 = model.T;
+											var _v4 = model.G;
 											if (!_v4) {
 												return 'white to move';
 											} else {
@@ -7213,6 +7219,6 @@ var $author$project$Main$view = function (model) {
 			]));
 };
 var $author$project$Main$main = $elm$browser$Browser$document(
-	{bq: $author$project$Main$init, bz: $author$project$Main$subscriptions, bB: $author$project$Main$update, bC: $author$project$Main$view});
+	{aX: $author$project$Main$init, a1: $author$project$Main$subscriptions, a3: $author$project$Main$update, a4: $author$project$Main$view});
 _Platform_export({'Main':{'init':$author$project$Main$main(
 	$elm$json$Json$Decode$succeed(0))(0)}});}(this));
