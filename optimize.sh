@@ -13,3 +13,5 @@ uglifyjs $js --compress 'pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A
 echo "Compiled size:$(wc $js -c) bytes  ($js)"
 echo "Minified size:$(wc $min -c) bytes  ($min)"
 echo "Gzipped size: $(gzip $min -c | wc -c) bytes"
+
+#git subtree push --prefix app origin gh-pages
