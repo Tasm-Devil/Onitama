@@ -66,7 +66,7 @@ drawFigures color_ figs =
                         White ->
                             "white"
 
-                ( kind, num ) =
+                ( kind, _ ) =
                     case head.kind of
                         King ->
                             ( "King", 0 )
@@ -96,7 +96,7 @@ drawFigures color_ figs =
                             , SvgA.y <| String.fromFloat <| toFloat gridsize * toFloat (4 - y) + 2.5
                             ]
                             []
-                        , Svg.text_
+{-                        , Svg.text_
                             [ SvgA.class "status-line"
                             , SvgA.x <| String.fromFloat <| toFloat gridsize * toFloat x + 3
                             , SvgA.y <| String.fromFloat <| toFloat gridsize * toFloat (4 - y) - 1.5 + toFloat gridsize
@@ -113,6 +113,7 @@ drawFigures color_ figs =
                                             ""
                                        )
                             ]
+-}
                         ]
                         (drawFigures color_ tail)
 

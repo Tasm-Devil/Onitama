@@ -5809,27 +5809,27 @@ var $author$project$Main$init = function (_v0) {
 				[
 					{
 					an: $author$project$Figure$Pawn(1),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(0, 0))
 				},
 					{
 					an: $author$project$Figure$Pawn(2),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(1, 0))
 				},
 					{
 					an: $author$project$Figure$King,
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(2, 0))
 				},
 					{
 					an: $author$project$Figure$Pawn(3),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(3, 0))
 				},
 					{
 					an: $author$project$Figure$Pawn(4),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(4, 0))
 				}
 				]),
@@ -5837,27 +5837,27 @@ var $author$project$Main$init = function (_v0) {
 				[
 					{
 					an: $author$project$Figure$Pawn(4),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(0, 4))
 				},
 					{
 					an: $author$project$Figure$Pawn(3),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(1, 4))
 				},
 					{
 					an: $author$project$Figure$King,
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(2, 4))
 				},
 					{
 					an: $author$project$Figure$Pawn(2),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(3, 4))
 				},
 					{
 					an: $author$project$Figure$Pawn(1),
-					R: $author$project$Figure$On(
+					V: $author$project$Figure$On(
 						_Utils_Tuple2(4, 4))
 				}
 				]),
@@ -5876,43 +5876,40 @@ var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
 var $author$project$Main$subscriptions = function (_v0) {
 	return $elm$core$Platform$Sub$none;
 };
-var $elm$core$List$filter = F2(
-	function (isGood, list) {
+var $elm$core$List$maybeCons = F3(
+	function (f, mx, xs) {
+		var _v0 = f(mx);
+		if (!_v0.$) {
+			var x = _v0.a;
+			return A2($elm$core$List$cons, x, xs);
+		} else {
+			return xs;
+		}
+	});
+var $elm$core$List$filterMap = F2(
+	function (f, xs) {
 		return A3(
 			$elm$core$List$foldr,
-			F2(
-				function (x, xs) {
-					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
-				}),
+			$elm$core$List$maybeCons(f),
 			_List_Nil,
-			list);
+			xs);
 	});
 var $author$project$Figure$figurePositions = function (figs) {
 	return A2(
-		$elm$core$List$map,
+		$elm$core$List$filterMap,
 		function (f) {
-			var _v2 = f.R;
-			if (!_v2.$) {
-				var _v3 = _v2.a;
-				var x = _v3.a;
-				var y = _v3.b;
-				return _Utils_Tuple2(x, y);
+			var _v0 = f.V;
+			if (!_v0.$) {
+				var _v1 = _v0.a;
+				var x = _v1.a;
+				var y = _v1.b;
+				return $elm$core$Maybe$Just(
+					_Utils_Tuple2(x, y));
 			} else {
-				return _Utils_Tuple2(0, 0);
+				return $elm$core$Maybe$Nothing;
 			}
 		},
-		A2(
-			$elm$core$List$filter,
-			function (f) {
-				var _v0 = f.R;
-				if (!_v0.$) {
-					var _v1 = _v0.a;
-					return true;
-				} else {
-					return false;
-				}
-			},
-			figs));
+		figs);
 };
 var $elm$core$List$any = F2(
 	function (isOkay, list) {
@@ -5964,8 +5961,8 @@ var $author$project$Main$nextPlayer = function (model) {
 					return _Utils_update(
 						fig,
 						{
-							R: function () {
-								var _v0 = fig.R;
+							V: function () {
+								var _v0 = fig.V;
 								if (!_v0.$) {
 									var _v1 = _v0.a;
 									var x = _v1.a;
@@ -5973,7 +5970,7 @@ var $author$project$Main$nextPlayer = function (model) {
 									return $author$project$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.R;
+									return fig.V;
 								}
 							}()
 						});
@@ -5986,8 +5983,8 @@ var $author$project$Main$nextPlayer = function (model) {
 					return _Utils_update(
 						fig,
 						{
-							R: function () {
-								var _v2 = fig.R;
+							V: function () {
+								var _v2 = fig.V;
 								if (!_v2.$) {
 									var _v3 = _v2.a;
 									var x = _v3.a;
@@ -5995,7 +5992,7 @@ var $author$project$Main$nextPlayer = function (model) {
 									return $author$project$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.R;
+									return fig.V;
 								}
 							}()
 						});
@@ -6012,10 +6009,10 @@ var $author$project$Main$movefigure = F2(
 					v: A2(
 						$elm$core$List$map,
 						function (f) {
-							return _Utils_eq(f.R, model.o) ? _Utils_update(
+							return _Utils_eq(f.V, model.o) ? _Utils_update(
 								f,
 								{
-									R: $author$project$Figure$On(newposition)
+									V: $author$project$Figure$On(newposition)
 								}) : f;
 						},
 						model.v),
@@ -6023,10 +6020,10 @@ var $author$project$Main$movefigure = F2(
 						$elm$core$List$map,
 						function (f) {
 							return _Utils_eq(
-								f.R,
+								f.V,
 								$author$project$Figure$On(newposition)) ? _Utils_update(
 								f,
-								{R: $author$project$Figure$Out}) : f;
+								{V: $author$project$Figure$Out}) : f;
 						},
 						model.I),
 					o: $author$project$Figure$Out
@@ -6544,9 +6541,7 @@ var $author$project$Card$drawCardPrompt = F2(
 				$author$project$Card$drawCard(cardB))
 			]);
 	});
-var $elm$svg$Svg$Attributes$fontSize = _VirtualDom_attribute('font-size');
 var $elm$core$String$fromFloat = _String_fromNumber;
-var $elm$core$Basics$neq = _Utils_notEqual;
 var $elm$svg$Svg$use = $elm$svg$Svg$trustedNode('use');
 var $elm$svg$Svg$Attributes$xlinkHref = function (value) {
 	return A3(
@@ -6572,7 +6567,7 @@ var $author$project$Figure$drawFigures = F2(
 					}
 				}();
 				var _v1 = function () {
-					var _v2 = head.R;
+					var _v2 = head.V;
 					if (!_v2.$) {
 						var _v3 = _v2.a;
 						var x_ = _v3.a;
@@ -6594,7 +6589,6 @@ var $author$project$Figure$drawFigures = F2(
 					}
 				}();
 				var kind = _v4.a;
-				var num = _v4.b;
 				var _v6 = _Utils_Tuple2(x, y);
 				if ((_v6.a === 5) && (_v6.b === 5)) {
 					var $temp$color_ = color_,
@@ -6621,29 +6615,23 @@ var $author$project$Figure$drawFigures = F2(
 										$elm$svg$Svg$Attributes$y(
 										$elm$core$String$fromFloat(($author$project$Global$gridsize * (4 - y)) + 2.5))
 									]),
-								_List_Nil),
-								A2(
-								$elm$svg$Svg$text_,
-								_List_fromArray(
-									[
-										$elm$svg$Svg$Attributes$class('status-line'),
-										$elm$svg$Svg$Attributes$x(
-										$elm$core$String$fromFloat(($author$project$Global$gridsize * x) + 3)),
-										$elm$svg$Svg$Attributes$y(
-										$elm$core$String$fromFloat((($author$project$Global$gridsize * (4 - y)) - 1.5) + $author$project$Global$gridsize)),
-										$elm$svg$Svg$Attributes$fontSize('3'),
-										$elm$svg$Svg$Attributes$textAnchor('start')
-									]),
-								_List_fromArray(
-									[
-										$elm$svg$Svg$text(
-										kind + (' ' + ((!(!num)) ? $elm$core$String$fromInt(num) : '')))
-									]))
+								_List_Nil)
 							]),
 						A2($author$project$Figure$drawFigures, color_, tail));
 				}
 			}
 		}
+	});
+var $elm$core$List$filter = F2(
+	function (isGood, list) {
+		return A3(
+			$elm$core$List$foldr,
+			F2(
+				function (x, xs) {
+					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
+				}),
+			_List_Nil,
+			list);
 	});
 var $elm$core$Basics$composeL = F3(
 	function (g, f, x) {
@@ -6658,6 +6646,7 @@ var $elm_community$list_extra$List$Extra$filterNot = F2(
 			A2($elm$core$Basics$composeL, $elm$core$Basics$not, pred),
 			list);
 	});
+var $elm$svg$Svg$Attributes$fontSize = _VirtualDom_attribute('font-size');
 var $elm$svg$Svg$Attributes$id = _VirtualDom_attribute('id');
 var $elm$svg$Svg$Attributes$d = _VirtualDom_attribute('d');
 var $elm$svg$Svg$path = $elm$svg$Svg$trustedNode('path');
