@@ -50,6 +50,10 @@ setupNewGame =
         Nothing
 
 
+giveNewCards : Cmd Msg
+giveNewCards =
+    Random.generate GotNewCards chooseFiveCards
+
 
 -- UPDATE
 
@@ -318,6 +322,3 @@ view game =
     ]
 
 
-startNewGame : Cmd Msg
-startNewGame =
-    Random.generate GotNewCards chooseFiveCards

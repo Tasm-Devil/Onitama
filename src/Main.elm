@@ -26,7 +26,7 @@ type Model
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( Running Game.setupNewGame, Cmd.map GameMsg Game.startNewGame )
+    ( Running Game.setupNewGame, Cmd.map GameMsg Game.giveNewCards )
 
 
 
@@ -35,9 +35,6 @@ init _ =
 
 type Msg
     = GameMsg Game.Msg
-
-
-
 --    | NewGame
 
 
@@ -48,10 +45,7 @@ update msg model =
             ( Running (Game.updateGame msg_ game_), Cmd.none )
 
         ( _, NotRunning ) ->
-            ( Running Game.setupNewGame, Cmd.map GameMsg Game.startNewGame )
-
-
-
+            ( Running Game.setupNewGame, Cmd.map GameMsg Game.giveNewCards )
 --        ( NewGame, Running _ ) ->
 --            ( Running Game.gameSetup, Cmd.map GameMsg Game.startNewGame )
 --        ( NewGame, NotRunning ) ->
