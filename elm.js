@@ -5225,103 +5225,11 @@ var $author$project$Main$GameMsg = $elm$core$Basics$identity;
 var $author$project$Main$Running = function (a) {
 	return {$: 0, a: a};
 };
-var $elm$core$Platform$Cmd$map = _Platform_map;
-var $author$project$Game$Game$Game = F8(
-	function (myColor, myFigures, opFigures, myCards, opCards, nextCard, prevPosition, chooseCard) {
-		return {E: chooseCard, a: myCards, G: myColor, v: myFigures, n: nextCard, H: opCards, I: opFigures, o: prevPosition};
-	});
-var $author$project$Game$Figure$King = {$: 0};
-var $author$project$Game$Figure$On = function (a) {
-	return {$: 0, a: a};
-};
-var $author$project$Game$Figure$Out = {$: 1};
-var $author$project$Game$Figure$Pawn = function (a) {
-	return {$: 1, a: a};
-};
-var $author$project$Game$Figure$White = 0;
-var $elm$core$Basics$negate = function (n) {
-	return -n;
-};
-var $author$project$Game$Card$dummyCard = {
-	b: _List_fromArray(
-		[
-			_Utils_Tuple2(0, 1),
-			_Utils_Tuple2(0, 2),
-			_Utils_Tuple2(0, -1),
-			_Utils_Tuple2(0, -2),
-			_Utils_Tuple2(-2, 0),
-			_Utils_Tuple2(-1, 0),
-			_Utils_Tuple2(1, 0),
-			_Utils_Tuple2(2, 0)
-		]),
-	c: 'Error'
-};
-var $author$project$Game$Game$setupNewGame = A8(
-	$author$project$Game$Game$Game,
-	0,
-	_List_fromArray(
-		[
-			{
-			an: $author$project$Game$Figure$Pawn(1),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(0, 0))
-		},
-			{
-			an: $author$project$Game$Figure$Pawn(2),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(1, 0))
-		},
-			{
-			an: $author$project$Game$Figure$King,
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(2, 0))
-		},
-			{
-			an: $author$project$Game$Figure$Pawn(3),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(3, 0))
-		},
-			{
-			an: $author$project$Game$Figure$Pawn(4),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(4, 0))
-		}
-		]),
-	_List_fromArray(
-		[
-			{
-			an: $author$project$Game$Figure$Pawn(4),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(0, 4))
-		},
-			{
-			an: $author$project$Game$Figure$Pawn(3),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(1, 4))
-		},
-			{
-			an: $author$project$Game$Figure$King,
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(2, 4))
-		},
-			{
-			an: $author$project$Game$Figure$Pawn(2),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(3, 4))
-		},
-			{
-			an: $author$project$Game$Figure$Pawn(1),
-			V: $author$project$Game$Figure$On(
-				_Utils_Tuple2(4, 4))
-		}
-		]),
-	_Utils_Tuple2($author$project$Game$Card$dummyCard, $author$project$Game$Card$dummyCard),
-	_Utils_Tuple2($author$project$Game$Card$dummyCard, $author$project$Game$Card$dummyCard),
-	$author$project$Game$Card$dummyCard,
-	$author$project$Game$Figure$Out,
-	$elm$core$Maybe$Nothing);
 var $author$project$Game$Game$GotNewCards = function (a) {
 	return {$: 2, a: a};
+};
+var $elm$core$Basics$negate = function (n) {
+	return -n;
 };
 var $author$project$Game$Card$allCards = _List_fromArray(
 	[
@@ -5870,11 +5778,103 @@ var $elm$random$Random$generate = F2(
 		return $elm$random$Random$command(
 			A2($elm$random$Random$map, tagger, generator));
 	});
-var $author$project$Game$Game$startNewGame = A2($elm$random$Random$generate, $author$project$Game$Game$GotNewCards, $author$project$Game$Card$chooseFiveCards);
+var $author$project$Game$Game$giveNewCards = A2($elm$random$Random$generate, $author$project$Game$Game$GotNewCards, $author$project$Game$Card$chooseFiveCards);
+var $elm$core$Platform$Cmd$map = _Platform_map;
+var $author$project$Game$Game$Game = F8(
+	function (myColor, myFigures, opFigures, myCards, opCards, nextCard, prevPosition, chooseCard) {
+		return {E: chooseCard, a: myCards, G: myColor, v: myFigures, n: nextCard, H: opCards, I: opFigures, o: prevPosition};
+	});
+var $author$project$Game$Figure$King = {$: 0};
+var $author$project$Game$Figure$On = function (a) {
+	return {$: 0, a: a};
+};
+var $author$project$Game$Figure$Out = {$: 1};
+var $author$project$Game$Figure$Pawn = function (a) {
+	return {$: 1, a: a};
+};
+var $author$project$Game$Figure$White = 0;
+var $author$project$Game$Card$dummyCard = {
+	b: _List_fromArray(
+		[
+			_Utils_Tuple2(0, 1),
+			_Utils_Tuple2(0, 2),
+			_Utils_Tuple2(0, -1),
+			_Utils_Tuple2(0, -2),
+			_Utils_Tuple2(-2, 0),
+			_Utils_Tuple2(-1, 0),
+			_Utils_Tuple2(1, 0),
+			_Utils_Tuple2(2, 0)
+		]),
+	c: 'Error'
+};
+var $author$project$Game$Game$setupNewGame = A8(
+	$author$project$Game$Game$Game,
+	0,
+	_List_fromArray(
+		[
+			{
+			an: $author$project$Game$Figure$Pawn(1),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(0, 0))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(2),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(1, 0))
+		},
+			{
+			an: $author$project$Game$Figure$King,
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(2, 0))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(3),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(3, 0))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(4),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(4, 0))
+		}
+		]),
+	_List_fromArray(
+		[
+			{
+			an: $author$project$Game$Figure$Pawn(4),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(0, 4))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(3),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(1, 4))
+		},
+			{
+			an: $author$project$Game$Figure$King,
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(2, 4))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(2),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(3, 4))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(1),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(4, 4))
+		}
+		]),
+	_Utils_Tuple2($author$project$Game$Card$dummyCard, $author$project$Game$Card$dummyCard),
+	_Utils_Tuple2($author$project$Game$Card$dummyCard, $author$project$Game$Card$dummyCard),
+	$author$project$Game$Card$dummyCard,
+	$author$project$Game$Figure$Out,
+	$elm$core$Maybe$Nothing);
 var $author$project$Main$init = function (_v0) {
 	return _Utils_Tuple2(
 		$author$project$Main$Running($author$project$Game$Game$setupNewGame),
-		A2($elm$core$Platform$Cmd$map, $elm$core$Basics$identity, $author$project$Game$Game$startNewGame));
+		A2($elm$core$Platform$Cmd$map, $elm$core$Basics$identity, $author$project$Game$Game$giveNewCards));
 };
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
@@ -6228,7 +6228,7 @@ var $author$project$Main$update = F2(
 			var _v1 = _v0.b;
 			return _Utils_Tuple2(
 				$author$project$Main$Running($author$project$Game$Game$setupNewGame),
-				A2($elm$core$Platform$Cmd$map, $elm$core$Basics$identity, $author$project$Game$Game$startNewGame));
+				A2($elm$core$Platform$Cmd$map, $elm$core$Basics$identity, $author$project$Game$Game$giveNewCards));
 		}
 	});
 var $elm$browser$Browser$Document = F2(
