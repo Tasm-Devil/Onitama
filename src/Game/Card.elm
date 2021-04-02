@@ -1,7 +1,9 @@
-module Card exposing (..)
+module Game.Card exposing (..)
 
-import Cell exposing (CellType(..), drawSimpleCell, grid)
+import Game.Cell exposing (CellType(..), drawSimpleCell, grid)
 import Global exposing (gridsize)
+import Random
+import Random.List exposing (choices)
 import Svg
 import Svg.Attributes as SvgA
 import Svg.Events as SvgE
@@ -37,6 +39,11 @@ allCards =
     , { name = "Eel", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 0 ) ] }
     , { name = "Cobra", moves = [ ( 1, 1 ), ( 1, -1 ), ( -1, 0 ) ] }
     ]
+
+
+chooseFiveCards : Random.Generator ( List Card, List Card )
+chooseFiveCards =
+    allCards |> choices 5
 
 
 drawCardPrompt : ( Card, Card ) -> (Card -> msg) -> List (Svg.Svg msg)

@@ -5221,26 +5221,111 @@ var $elm$core$Task$perform = F2(
 			A2($elm$core$Task$map, toMessage, task));
 	});
 var $elm$browser$Browser$document = _Browser_document;
-var $author$project$Figure$King = {$: 0};
-var $author$project$Main$Model = F8(
+var $author$project$Main$GameMsg = function (a) {
+	return {$: 0, a: a};
+};
+var $author$project$Main$Running = function (a) {
+	return {$: 0, a: a};
+};
+var $author$project$Game$Game$Game = F8(
 	function (myColor, myFigures, opFigures, myCards, opCards, nextCard, prevPosition, chooseCard) {
 		return {E: chooseCard, a: myCards, G: myColor, v: myFigures, n: nextCard, H: opCards, I: opFigures, o: prevPosition};
 	});
-var $author$project$Main$NewCards = function (a) {
-	return {$: 2, a: a};
-};
-var $author$project$Figure$On = function (a) {
+var $author$project$Game$Figure$King = {$: 0};
+var $author$project$Game$Figure$On = function (a) {
 	return {$: 0, a: a};
 };
-var $author$project$Figure$Out = {$: 1};
-var $author$project$Figure$Pawn = function (a) {
+var $author$project$Game$Figure$Out = {$: 1};
+var $author$project$Game$Figure$Pawn = function (a) {
 	return {$: 1, a: a};
 };
-var $author$project$Figure$White = 0;
+var $author$project$Game$Figure$White = 0;
 var $elm$core$Basics$negate = function (n) {
 	return -n;
 };
-var $author$project$Card$allCards = _List_fromArray(
+var $author$project$Game$Card$dummyCard = {
+	b: _List_fromArray(
+		[
+			_Utils_Tuple2(0, 1),
+			_Utils_Tuple2(0, 2),
+			_Utils_Tuple2(0, -1),
+			_Utils_Tuple2(0, -2),
+			_Utils_Tuple2(-2, 0),
+			_Utils_Tuple2(-1, 0),
+			_Utils_Tuple2(1, 0),
+			_Utils_Tuple2(2, 0)
+		]),
+	c: 'Error'
+};
+var $author$project$Game$Game$gameSetup = A8(
+	$author$project$Game$Game$Game,
+	0,
+	_List_fromArray(
+		[
+			{
+			an: $author$project$Game$Figure$Pawn(1),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(0, 0))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(2),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(1, 0))
+		},
+			{
+			an: $author$project$Game$Figure$King,
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(2, 0))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(3),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(3, 0))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(4),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(4, 0))
+		}
+		]),
+	_List_fromArray(
+		[
+			{
+			an: $author$project$Game$Figure$Pawn(4),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(0, 4))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(3),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(1, 4))
+		},
+			{
+			an: $author$project$Game$Figure$King,
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(2, 4))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(2),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(3, 4))
+		},
+			{
+			an: $author$project$Game$Figure$Pawn(1),
+			V: $author$project$Game$Figure$On(
+				_Utils_Tuple2(4, 4))
+		}
+		]),
+	_Utils_Tuple2($author$project$Game$Card$dummyCard, $author$project$Game$Card$dummyCard),
+	_Utils_Tuple2($author$project$Game$Card$dummyCard, $author$project$Game$Card$dummyCard),
+	$author$project$Game$Card$dummyCard,
+	$author$project$Game$Figure$Out,
+	$elm$core$Maybe$Nothing);
+var $elm$core$Platform$Cmd$map = _Platform_map;
+var $author$project$Game$Game$GotNewCards = function (a) {
+	return {$: 2, a: a};
+};
+var $author$project$Game$Card$allCards = _List_fromArray(
 	[
 		{
 		b: _List_fromArray(
@@ -5711,20 +5796,7 @@ var $elm_community$random_extra$Random$List$choices = F2(
 			},
 			$elm_community$random_extra$Random$List$choose(list));
 	});
-var $author$project$Card$dummyCard = {
-	b: _List_fromArray(
-		[
-			_Utils_Tuple2(0, 1),
-			_Utils_Tuple2(0, 2),
-			_Utils_Tuple2(0, -1),
-			_Utils_Tuple2(0, -2),
-			_Utils_Tuple2(-2, 0),
-			_Utils_Tuple2(-1, 0),
-			_Utils_Tuple2(1, 0),
-			_Utils_Tuple2(2, 0)
-		]),
-	c: 'Error'
-};
+var $author$project$Game$Card$chooseFiveCards = A2($elm_community$random_extra$Random$List$choices, 5, $author$project$Game$Card$allCards);
 var $elm$random$Random$Generate = $elm$core$Basics$identity;
 var $elm$random$Random$initialSeed = function (x) {
 	var _v0 = $elm$random$Random$next(
@@ -5800,82 +5872,25 @@ var $elm$random$Random$generate = F2(
 		return $elm$random$Random$command(
 			A2($elm$random$Random$map, tagger, generator));
 	});
+var $author$project$Game$Game$startNewGame = A2($elm$random$Random$generate, $author$project$Game$Game$GotNewCards, $author$project$Game$Card$chooseFiveCards);
 var $author$project$Main$init = function (_v0) {
 	return _Utils_Tuple2(
-		A8(
-			$author$project$Main$Model,
-			0,
-			_List_fromArray(
-				[
-					{
-					an: $author$project$Figure$Pawn(1),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(0, 0))
-				},
-					{
-					an: $author$project$Figure$Pawn(2),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(1, 0))
-				},
-					{
-					an: $author$project$Figure$King,
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(2, 0))
-				},
-					{
-					an: $author$project$Figure$Pawn(3),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(3, 0))
-				},
-					{
-					an: $author$project$Figure$Pawn(4),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(4, 0))
-				}
-				]),
-			_List_fromArray(
-				[
-					{
-					an: $author$project$Figure$Pawn(4),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(0, 4))
-				},
-					{
-					an: $author$project$Figure$Pawn(3),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(1, 4))
-				},
-					{
-					an: $author$project$Figure$King,
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(2, 4))
-				},
-					{
-					an: $author$project$Figure$Pawn(2),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(3, 4))
-				},
-					{
-					an: $author$project$Figure$Pawn(1),
-					V: $author$project$Figure$On(
-						_Utils_Tuple2(4, 4))
-				}
-				]),
-			_Utils_Tuple2($author$project$Card$dummyCard, $author$project$Card$dummyCard),
-			_Utils_Tuple2($author$project$Card$dummyCard, $author$project$Card$dummyCard),
-			$author$project$Card$dummyCard,
-			$author$project$Figure$Out,
-			$elm$core$Maybe$Nothing),
-		A2(
-			$elm$random$Random$generate,
-			$author$project$Main$NewCards,
-			A2($elm_community$random_extra$Random$List$choices, 5, $author$project$Card$allCards)));
+		$author$project$Main$Running($author$project$Game$Game$gameSetup),
+		A2($elm$core$Platform$Cmd$map, $author$project$Main$GameMsg, $author$project$Game$Game$startNewGame));
 };
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
 var $author$project$Main$subscriptions = function (_v0) {
 	return $elm$core$Platform$Sub$none;
 };
+var $author$project$Main$NotRunning = {$: 1};
+var $elm$core$Platform$Cmd$batch = _Platform_batch;
+var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+var $elm$core$Basics$composeR = F3(
+	function (f, g, x) {
+		return g(
+			f(x));
+	});
 var $elm$core$List$maybeCons = F3(
 	function (f, mx, xs) {
 		var _v0 = f(mx);
@@ -5894,7 +5909,7 @@ var $elm$core$List$filterMap = F2(
 			_List_Nil,
 			xs);
 	});
-var $author$project$Figure$figurePositions = function (figs) {
+var $author$project$Game$Figure$figurePositions = function (figs) {
 	return A2(
 		$elm$core$List$filterMap,
 		function (f) {
@@ -5941,20 +5956,48 @@ var $elm$core$List$member = F2(
 			},
 			xs);
 	});
-var $author$project$Figure$Black = 1;
-var $author$project$Figure$invert = function (color) {
+var $author$project$Game$Game$movefigure = F2(
+	function (newposition, game) {
+		return _Utils_update(
+			game,
+			{
+				v: A2(
+					$elm$core$List$map,
+					function (f) {
+						return _Utils_eq(f.V, game.o) ? _Utils_update(
+							f,
+							{
+								V: $author$project$Game$Figure$On(newposition)
+							}) : f;
+					},
+					game.v),
+				I: A2(
+					$elm$core$List$map,
+					function (f) {
+						return _Utils_eq(
+							f.V,
+							$author$project$Game$Figure$On(newposition)) ? _Utils_update(
+							f,
+							{V: $author$project$Game$Figure$Out}) : f;
+					},
+					game.I),
+				o: $author$project$Game$Figure$Out
+			});
+	});
+var $author$project$Game$Figure$Black = 1;
+var $author$project$Game$Figure$invert = function (color) {
 	if (!color) {
 		return 1;
 	} else {
 		return 0;
 	}
 };
-var $author$project$Main$nextPlayer = function (model) {
+var $author$project$Game$Game$nextPlayer = function (game) {
 	return _Utils_update(
-		model,
+		game,
 		{
-			a: model.H,
-			G: $author$project$Figure$invert(model.G),
+			a: game.H,
+			G: $author$project$Game$Figure$invert(game.G),
 			v: A2(
 				$elm$core$List$map,
 				function (fig) {
@@ -5967,7 +6010,7 @@ var $author$project$Main$nextPlayer = function (model) {
 									var _v1 = _v0.a;
 									var x = _v1.a;
 									var y = _v1.b;
-									return $author$project$Figure$On(
+									return $author$project$Game$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
 									return fig.V;
@@ -5975,8 +6018,8 @@ var $author$project$Main$nextPlayer = function (model) {
 							}()
 						});
 				},
-				model.I),
-			H: model.a,
+				game.I),
+			H: game.a,
 			I: A2(
 				$elm$core$List$map,
 				function (fig) {
@@ -5989,7 +6032,7 @@ var $author$project$Main$nextPlayer = function (model) {
 									var _v3 = _v2.a;
 									var x = _v3.a;
 									var y = _v3.b;
-									return $author$project$Figure$On(
+									return $author$project$Game$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
 									return fig.V;
@@ -5997,111 +6040,78 @@ var $author$project$Main$nextPlayer = function (model) {
 							}()
 						});
 				},
-				model.v)
+				game.v)
 		});
 };
-var $author$project$Main$movefigure = F2(
-	function (newposition, model) {
-		return $author$project$Main$nextPlayer(
-			_Utils_update(
-				model,
-				{
-					v: A2(
-						$elm$core$List$map,
-						function (f) {
-							return _Utils_eq(f.V, model.o) ? _Utils_update(
-								f,
-								{
-									V: $author$project$Figure$On(newposition)
-								}) : f;
-						},
-						model.v),
-					I: A2(
-						$elm$core$List$map,
-						function (f) {
-							return _Utils_eq(
-								f.V,
-								$author$project$Figure$On(newposition)) ? _Utils_update(
-								f,
-								{V: $author$project$Figure$Out}) : f;
-						},
-						model.I),
-					o: $author$project$Figure$Out
-				}));
-	});
-var $elm$core$Platform$Cmd$batch = _Platform_batch;
-var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
 var $elm$core$Tuple$second = function (_v0) {
 	var y = _v0.b;
 	return y;
 };
-var $author$project$Main$update = F2(
-	function (msg, model) {
+var $author$project$Game$Game$updateGame = F2(
+	function (msg, game) {
 		switch (msg.$) {
 			case 2:
 				var _v1 = msg.a;
 				var shuffledCards = _v1.a;
-				return _Utils_Tuple2(
-					_Utils_update(
-						model,
-						{
-							a: _Utils_Tuple2(
-								function () {
-									var _v2 = $elm$core$List$head(shuffledCards);
-									if (!_v2.$) {
-										var c = _v2.a;
-										return c;
-									} else {
-										return $author$project$Card$dummyCard;
-									}
-								}(),
-								function () {
-									var _v3 = $elm$core$List$head(
-										A2($elm$core$List$drop, 1, shuffledCards));
-									if (!_v3.$) {
-										var c = _v3.a;
-										return c;
-									} else {
-										return $author$project$Card$dummyCard;
-									}
-								}()),
-							n: function () {
-								var _v4 = $elm$core$List$head(
-									A2($elm$core$List$drop, 4, shuffledCards));
-								if (!_v4.$) {
-									var c = _v4.a;
+				return _Utils_update(
+					game,
+					{
+						a: _Utils_Tuple2(
+							function () {
+								var _v2 = $elm$core$List$head(shuffledCards);
+								if (!_v2.$) {
+									var c = _v2.a;
 									return c;
 								} else {
-									return $author$project$Card$dummyCard;
+									return $author$project$Game$Card$dummyCard;
 								}
 							}(),
-							H: _Utils_Tuple2(
-								function () {
-									var _v5 = $elm$core$List$head(
-										A2($elm$core$List$drop, 2, shuffledCards));
-									if (!_v5.$) {
-										var c = _v5.a;
-										return c;
-									} else {
-										return $author$project$Card$dummyCard;
-									}
-								}(),
-								function () {
-									var _v6 = $elm$core$List$head(
-										A2($elm$core$List$drop, 3, shuffledCards));
-									if (!_v6.$) {
-										var c = _v6.a;
-										return c;
-									} else {
-										return $author$project$Card$dummyCard;
-									}
-								}())
-						}),
-					$elm$core$Platform$Cmd$none);
+							function () {
+								var _v3 = $elm$core$List$head(
+									A2($elm$core$List$drop, 1, shuffledCards));
+								if (!_v3.$) {
+									var c = _v3.a;
+									return c;
+								} else {
+									return $author$project$Game$Card$dummyCard;
+								}
+							}()),
+						n: function () {
+							var _v4 = $elm$core$List$head(
+								A2($elm$core$List$drop, 4, shuffledCards));
+							if (!_v4.$) {
+								var c = _v4.a;
+								return c;
+							} else {
+								return $author$project$Game$Card$dummyCard;
+							}
+						}(),
+						H: _Utils_Tuple2(
+							function () {
+								var _v5 = $elm$core$List$head(
+									A2($elm$core$List$drop, 2, shuffledCards));
+								if (!_v5.$) {
+									var c = _v5.a;
+									return c;
+								} else {
+									return $author$project$Game$Card$dummyCard;
+								}
+							}(),
+							function () {
+								var _v6 = $elm$core$List$head(
+									A2($elm$core$List$drop, 3, shuffledCards));
+								if (!_v6.$) {
+									var c = _v6.a;
+									return c;
+								} else {
+									return $author$project$Game$Card$dummyCard;
+								}
+							}())
+					});
 			case 1:
 				var card = msg.a;
 				var position = function () {
-					var _v7 = model.E;
+					var _v7 = game.E;
 					if (!_v7.$) {
 						var p = _v7.a;
 						return p;
@@ -6109,135 +6119,144 @@ var $author$project$Main$update = F2(
 						return _Utils_Tuple2(0, 0);
 					}
 				}();
-				return _Utils_Tuple2(
-					A2(
-						$author$project$Main$movefigure,
-						position,
-						_Utils_eq(card, model.a.a) ? _Utils_update(
-							model,
-							{
-								E: $elm$core$Maybe$Nothing,
-								a: _Utils_Tuple2(model.n, model.a.b),
-								n: model.a.a
-							}) : _Utils_update(
-							model,
-							{
-								E: $elm$core$Maybe$Nothing,
-								a: _Utils_Tuple2(model.a.a, model.n),
-								n: model.a.b
-							})),
-					$elm$core$Platform$Cmd$none);
+				return _Utils_eq(card, game.a.a) ? _Utils_update(
+					game,
+					{
+						E: $elm$core$Maybe$Nothing,
+						a: _Utils_Tuple2(game.n, game.a.b),
+						n: game.a.a
+					}) : A3(
+					$elm$core$Basics$composeR,
+					$author$project$Game$Game$movefigure(position),
+					$author$project$Game$Game$nextPlayer,
+					_Utils_update(
+						game,
+						{
+							E: $elm$core$Maybe$Nothing,
+							a: _Utils_Tuple2(game.a.a, game.n),
+							n: game.a.b
+						}));
 			default:
 				if (msg.a.$ === 1) {
 					var _v8 = msg.a;
-					return _Utils_Tuple2(
-						_Utils_update(
-							model,
-							{o: $author$project$Figure$Out}),
-						$elm$core$Platform$Cmd$none);
+					return _Utils_update(
+						game,
+						{o: $author$project$Game$Figure$Out});
 				} else {
 					var position = msg.a.a;
 					if (A2(
 						$elm$core$List$member,
 						position,
-						$author$project$Figure$figurePositions(model.v))) {
-						var _v9 = model.o;
+						$author$project$Game$Figure$figurePositions(game.v))) {
+						var _v9 = game.o;
 						if (!_v9.$) {
 							var previousPosition = _v9.a;
-							return _Utils_eq(position, previousPosition) ? _Utils_Tuple2(
-								_Utils_update(
-									model,
-									{o: $author$project$Figure$Out}),
-								$elm$core$Platform$Cmd$none) : _Utils_Tuple2(
-								_Utils_update(
-									model,
-									{
-										o: $author$project$Figure$On(position)
-									}),
-								$elm$core$Platform$Cmd$none);
+							return _Utils_eq(position, previousPosition) ? _Utils_update(
+								game,
+								{o: $author$project$Game$Figure$Out}) : _Utils_update(
+								game,
+								{
+									o: $author$project$Game$Figure$On(position)
+								});
 						} else {
-							return _Utils_Tuple2(
-								_Utils_update(
-									model,
-									{
-										o: $author$project$Figure$On(position)
-									}),
-								$elm$core$Platform$Cmd$none);
+							return _Utils_update(
+								game,
+								{
+									o: $author$project$Game$Figure$On(position)
+								});
 						}
 					} else {
-						var _v10 = model.o;
+						var _v10 = game.o;
 						if (!_v10.$) {
 							var previousPosition = _v10.a;
 							var move = _Utils_Tuple2(position.a - previousPosition.a, position.b - previousPosition.b);
 							var _v11 = _Utils_Tuple2(
-								A2($elm$core$List$member, move, model.a.a.b),
-								A2($elm$core$List$member, move, model.a.b.b));
+								A2($elm$core$List$member, move, game.a.a.b),
+								A2($elm$core$List$member, move, game.a.b.b));
 							if (_v11.a) {
 								if (_v11.b) {
-									return _Utils_Tuple2(
-										_Utils_update(
-											model,
-											{
-												E: $elm$core$Maybe$Just(position)
-											}),
-										$elm$core$Platform$Cmd$none);
+									return _Utils_update(
+										game,
+										{
+											E: $elm$core$Maybe$Just(position)
+										});
 								} else {
-									return _Utils_Tuple2(
-										A2(
-											$author$project$Main$movefigure,
-											position,
-											_Utils_update(
-												model,
-												{
-													a: _Utils_Tuple2(model.n, model.a.b),
-													n: model.a.a
-												})),
-										$elm$core$Platform$Cmd$none);
+									return A3(
+										$elm$core$Basics$composeR,
+										$author$project$Game$Game$movefigure(position),
+										$author$project$Game$Game$nextPlayer,
+										_Utils_update(
+											game,
+											{
+												a: _Utils_Tuple2(game.n, game.a.b),
+												n: game.a.a
+											}));
 								}
 							} else {
 								if (_v11.b) {
-									return _Utils_Tuple2(
-										A2(
-											$author$project$Main$movefigure,
-											position,
-											_Utils_update(
-												model,
-												{
-													a: _Utils_Tuple2(model.a.a, model.n),
-													n: model.a.b
-												})),
-										$elm$core$Platform$Cmd$none);
+									return A3(
+										$elm$core$Basics$composeR,
+										$author$project$Game$Game$movefigure(position),
+										$author$project$Game$Game$nextPlayer,
+										_Utils_update(
+											game,
+											{
+												a: _Utils_Tuple2(game.a.a, game.n),
+												n: game.a.b
+											}));
 								} else {
-									return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+									return game;
 								}
 							}
 						} else {
-							return _Utils_Tuple2(
-								_Utils_update(
-									model,
-									{o: $author$project$Figure$Out}),
-								$elm$core$Platform$Cmd$none);
+							return _Utils_update(
+								game,
+								{o: $author$project$Game$Figure$Out});
 						}
 					}
 				}
 		}
 	});
-var $author$project$Main$ChoosedCard = function (a) {
-	return {$: 1, a: a};
-};
-var $author$project$Main$Clicked = function (a) {
-	return {$: 0, a: a};
-};
+var $author$project$Main$update = F2(
+	function (msg, model) {
+		var _v0 = _Utils_Tuple2(msg, model);
+		if (!_v0.b.$) {
+			if (!_v0.a.$) {
+				var msg_ = _v0.a.a;
+				var game_ = _v0.b.a;
+				return _Utils_Tuple2(
+					$author$project$Main$Running(
+						A2($author$project$Game$Game$updateGame, msg_, game_)),
+					$elm$core$Platform$Cmd$none);
+			} else {
+				var _v1 = _v0.a;
+				return _Utils_Tuple2(
+					$author$project$Main$Running($author$project$Game$Game$gameSetup),
+					A2($elm$core$Platform$Cmd$map, $author$project$Main$GameMsg, $author$project$Game$Game$startNewGame));
+			}
+		} else {
+			var _v2 = _v0.b;
+			return _Utils_Tuple2($author$project$Main$NotRunning, $elm$core$Platform$Cmd$none);
+		}
+	});
 var $elm$browser$Browser$Document = F2(
 	function (title, body) {
 		return {aO: body, a2: title};
 	});
-var $author$project$Cell$MoveToCell = 2;
-var $author$project$Cell$NormalCell = 0;
-var $author$project$Cell$SelectedCell = 1;
+var $elm$html$Html$div = _VirtualDom_node('div');
+var $elm$virtual_dom$VirtualDom$map = _VirtualDom_map;
+var $elm$html$Html$map = $elm$virtual_dom$VirtualDom$map;
+var $author$project$Game$Cell$MoveToCell = 2;
+var $author$project$Game$Cell$NormalCell = 0;
+var $author$project$Game$Cell$SelectedCell = 1;
+var $author$project$Game$Game$UserChoseOneCard = function (a) {
+	return {$: 1, a: a};
+};
+var $author$project$Game$Game$UserClickedOnCell = function (a) {
+	return {$: 0, a: a};
+};
 var $elm$svg$Svg$Attributes$class = _VirtualDom_attribute('class');
 var $elm$svg$Svg$Attributes$display = _VirtualDom_attribute('display');
-var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$svg$Svg$Attributes$fill = _VirtualDom_attribute('fill');
 var $elm$svg$Svg$Attributes$fillOpacity = _VirtualDom_attribute('fill-opacity');
 var $author$project$Global$gridsize = 20;
@@ -6266,7 +6285,7 @@ var $elm$svg$Svg$Attributes$strokeWidth = _VirtualDom_attribute('stroke-width');
 var $elm$svg$Svg$Attributes$width = _VirtualDom_attribute('width');
 var $elm$svg$Svg$Attributes$x = _VirtualDom_attribute('x');
 var $elm$svg$Svg$Attributes$y = _VirtualDom_attribute('y');
-var $author$project$Cell$draw = F3(
+var $author$project$Game$Cell$draw = F3(
 	function (celltype, callback, _v0) {
 		var u = _v0.a;
 		var v = _v0.b;
@@ -6298,12 +6317,12 @@ var $author$project$Cell$draw = F3(
 					$elm$svg$Svg$Attributes$strokeWidth('1'),
 					$elm$svg$Svg$Events$onClick(
 					callback(
-						$author$project$Figure$On(
+						$author$project$Game$Figure$On(
 							_Utils_Tuple2(u, v))))
 				]),
 			_List_Nil);
 	});
-var $author$project$Cell$drawSimpleCell = function (_v0) {
+var $author$project$Game$Cell$drawSimpleCell = function (_v0) {
 	var u = _v0.a;
 	var v = _v0.b;
 	return A2(
@@ -6356,7 +6375,7 @@ var $elm$core$Tuple$pair = F2(
 	function (a, b) {
 		return _Utils_Tuple2(a, b);
 	});
-var $author$project$Cell$grid = A3(
+var $author$project$Game$Cell$grid = A3(
 	$elm_community$list_extra$List$Extra$lift2,
 	$elm$core$Tuple$pair,
 	_List_fromArray(
@@ -6368,7 +6387,7 @@ var $elm$svg$Svg$text = $elm$virtual_dom$VirtualDom$text;
 var $elm$svg$Svg$Attributes$textAnchor = _VirtualDom_attribute('text-anchor');
 var $elm$svg$Svg$text_ = $elm$svg$Svg$trustedNode('text');
 var $elm$svg$Svg$Attributes$transform = _VirtualDom_attribute('transform');
-var $author$project$Card$drawCard = function (_v0) {
+var $author$project$Game$Card$drawCard = function (_v0) {
 	var name = _v0.c;
 	var moves = _v0.b;
 	var stroke_ = 'black';
@@ -6394,7 +6413,7 @@ var $author$project$Card$drawCard = function (_v0) {
 					$elm$svg$Svg$Attributes$transform('translate(12.5,12.5)')
 				]),
 			_Utils_ap(
-				A2($elm$core$List$map, $author$project$Cell$drawSimpleCell, $author$project$Cell$grid),
+				A2($elm$core$List$map, $author$project$Game$Cell$drawSimpleCell, $author$project$Game$Cell$grid),
 				_Utils_ap(
 					A2(
 						$elm$core$List$map,
@@ -6455,7 +6474,7 @@ var $author$project$Card$drawCard = function (_v0) {
 				]))
 		]);
 };
-var $author$project$Card$drawAllCards = F5(
+var $author$project$Game$Card$drawAllCards = F5(
 	function (card1, card2, card3, card4, card5) {
 		return _List_fromArray(
 			[
@@ -6466,7 +6485,7 @@ var $author$project$Card$drawAllCards = F5(
 						$elm$svg$Svg$Attributes$class('card'),
 						$elm$svg$Svg$Attributes$transform('matrix(0.16,  0, 0, 0.16,  6.6, 130)')
 					]),
-				$author$project$Card$drawCard(card1)),
+				$author$project$Game$Card$drawCard(card1)),
 				A2(
 				$elm$svg$Svg$g,
 				_List_fromArray(
@@ -6474,7 +6493,7 @@ var $author$project$Card$drawAllCards = F5(
 						$elm$svg$Svg$Attributes$class('card'),
 						$elm$svg$Svg$Attributes$transform('matrix(0.16,  0, 0, 0.16,  53.3, 130)')
 					]),
-				$author$project$Card$drawCard(card2)),
+				$author$project$Game$Card$drawCard(card2)),
 				A2(
 				$elm$svg$Svg$g,
 				_List_fromArray(
@@ -6482,7 +6501,7 @@ var $author$project$Card$drawAllCards = F5(
 						$elm$svg$Svg$Attributes$class('card'),
 						$elm$svg$Svg$Attributes$transform('matrix(-0.16, 0, 0, -0.16, 93.3, 20)')
 					]),
-				$author$project$Card$drawCard(card3)),
+				$author$project$Game$Card$drawCard(card3)),
 				A2(
 				$elm$svg$Svg$g,
 				_List_fromArray(
@@ -6490,7 +6509,7 @@ var $author$project$Card$drawAllCards = F5(
 						$elm$svg$Svg$Attributes$class('card'),
 						$elm$svg$Svg$Attributes$transform('matrix(-0.16, 0, 0, -0.16, 46.6, 20)')
 					]),
-				$author$project$Card$drawCard(card4)),
+				$author$project$Game$Card$drawCard(card4)),
 				A2(
 				$elm$svg$Svg$g,
 				_List_fromArray(
@@ -6498,10 +6517,10 @@ var $author$project$Card$drawAllCards = F5(
 						$elm$svg$Svg$Attributes$class('card'),
 						$elm$svg$Svg$Attributes$transform('matrix(0.16,  0, 0, 0.16,  105,  65)')
 					]),
-				$author$project$Card$drawCard(card5))
+				$author$project$Game$Card$drawCard(card5))
 			]);
 	});
-var $author$project$Card$drawCardPrompt = F2(
+var $author$project$Game$Card$drawCardPrompt = F2(
 	function (_v0, callback) {
 		var cardA = _v0.a;
 		var cardB = _v0.b;
@@ -6528,7 +6547,7 @@ var $author$project$Card$drawCardPrompt = F2(
 						$elm$svg$Svg$Events$onClick(
 						callback(cardA))
 					]),
-				$author$project$Card$drawCard(cardA)),
+				$author$project$Game$Card$drawCard(cardA)),
 				A2(
 				$elm$svg$Svg$g,
 				_List_fromArray(
@@ -6538,7 +6557,7 @@ var $author$project$Card$drawCardPrompt = F2(
 						$elm$svg$Svg$Events$onClick(
 						callback(cardB))
 					]),
-				$author$project$Card$drawCard(cardB))
+				$author$project$Game$Card$drawCard(cardB))
 			]);
 	});
 var $elm$core$String$fromFloat = _String_fromNumber;
@@ -6550,7 +6569,7 @@ var $elm$svg$Svg$Attributes$xlinkHref = function (value) {
 		'xlink:href',
 		_VirtualDom_noJavaScriptUri(value));
 };
-var $author$project$Figure$drawFigures = F2(
+var $author$project$Game$Figure$drawFigures = F2(
 	function (color_, figs) {
 		drawFigures:
 		while (true) {
@@ -6617,7 +6636,7 @@ var $author$project$Figure$drawFigures = F2(
 									]),
 								_List_Nil)
 							]),
-						A2($author$project$Figure$drawFigures, color_, tail));
+						A2($author$project$Game$Figure$drawFigures, color_, tail));
 				}
 			}
 		}
@@ -6653,7 +6672,7 @@ var $elm$svg$Svg$path = $elm$svg$Svg$trustedNode('path');
 var $elm$svg$Svg$Attributes$style = _VirtualDom_attribute('style');
 var $elm$svg$Svg$symbol = $elm$svg$Svg$trustedNode('symbol');
 var $elm$svg$Svg$Attributes$viewBox = _VirtualDom_attribute('viewBox');
-var $author$project$Figure$predefinedSymbols = A2(
+var $author$project$Game$Figure$predefinedSymbols = A2(
 	$elm$svg$Svg$g,
 	_List_fromArray(
 		[
@@ -7052,160 +7071,176 @@ var $elm_community$list_extra$List$Extra$uniqueHelp = F4(
 var $elm_community$list_extra$List$Extra$unique = function (list) {
 	return A4($elm_community$list_extra$List$Extra$uniqueHelp, $elm$core$Basics$identity, $elm$core$Set$empty, list, _List_Nil);
 };
+var $author$project$Game$Game$view = function (game) {
+	return _List_fromArray(
+		[
+			A2(
+			$elm$html$Html$div,
+			_List_fromArray(
+				[
+					A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+					A2($elm$html$Html$Attributes$style, 'height', '100vh'),
+					A2($elm$html$Html$Attributes$style, 'flex-direction', 'column'),
+					A2($elm$html$Html$Attributes$style, 'padding', '8px'),
+					A2($elm$html$Html$Attributes$style, 'box-sizing', 'border-box')
+				]),
+			_List_fromArray(
+				[
+					A2(
+					$elm$svg$Svg$svg,
+					_List_fromArray(
+						[
+							$elm$svg$Svg$Attributes$id('game-board'),
+							$elm$svg$Svg$Attributes$viewBox('-1 -1 152 152')
+						]),
+					_List_fromArray(
+						[
+							$author$project$Game$Figure$predefinedSymbols,
+							A2(
+							$elm$svg$Svg$g,
+							_List_fromArray(
+								[
+									$elm$svg$Svg$Attributes$transform(
+									'translate(0, ' + ($elm$core$String$fromInt($author$project$Global$gridsize + 5) + ')'))
+								]),
+							_List_fromArray(
+								[
+									A2(
+									$elm$svg$Svg$g,
+									_List_fromArray(
+										[
+											$elm$svg$Svg$Attributes$class('pieces')
+										]),
+									_Utils_ap(
+										A2($author$project$Game$Figure$drawFigures, game.G, game.v),
+										A2(
+											$author$project$Game$Figure$drawFigures,
+											$author$project$Game$Figure$invert(game.G),
+											game.I))),
+									A2(
+									$elm$svg$Svg$g,
+									_List_fromArray(
+										[
+											$elm$svg$Svg$Attributes$class('grid-lines')
+										]),
+									_Utils_ap(
+										A2(
+											$elm$core$List$map,
+											A2($author$project$Game$Cell$draw, 0, $author$project$Game$Game$UserClickedOnCell),
+											$author$project$Game$Cell$grid),
+										function () {
+											var _v0 = game.o;
+											if (!_v0.$) {
+												var _v1 = _v0.a;
+												var u = _v1.a;
+												var v = _v1.b;
+												return A2(
+													$elm$core$List$append,
+													_List_fromArray(
+														[
+															A3(
+															$author$project$Game$Cell$draw,
+															2,
+															$author$project$Game$Game$UserClickedOnCell,
+															_Utils_Tuple2(u, v))
+														]),
+													A2(
+														$elm$core$List$map,
+														A2($author$project$Game$Cell$draw, 1, $author$project$Game$Game$UserClickedOnCell),
+														A2(
+															$elm_community$list_extra$List$Extra$filterNot,
+															function (move) {
+																return A2(
+																	$elm$core$List$member,
+																	move,
+																	$author$project$Game$Figure$figurePositions(game.v));
+															},
+															A2(
+																$elm$core$List$filter,
+																function (move) {
+																	return A2($elm$core$List$member, move, $author$project$Game$Cell$grid);
+																},
+																A2(
+																	$elm$core$List$map,
+																	function (_v2) {
+																		var x = _v2.a;
+																		var y = _v2.b;
+																		return _Utils_Tuple2(x + u, y + v);
+																	},
+																	$elm_community$list_extra$List$Extra$unique(
+																		_Utils_ap(game.a.a.b, game.a.b.b)))))));
+											} else {
+												return _List_Nil;
+											}
+										}()))
+								])),
+							A2(
+							$elm$svg$Svg$g,
+							_List_fromArray(
+								[
+									$elm$svg$Svg$Attributes$class('cards-group')
+								]),
+							A5($author$project$Game$Card$drawAllCards, game.a.a, game.a.b, game.H.a, game.H.b, game.n)),
+							A2(
+							$elm$svg$Svg$g,
+							_List_fromArray(
+								[
+									$elm$svg$Svg$Attributes$class('card-prompt'),
+									$elm$svg$Svg$Attributes$display(
+									function () {
+										var _v3 = game.E;
+										if (!_v3.$) {
+											return 'block';
+										} else {
+											return 'none';
+										}
+									}())
+								]),
+							A2($author$project$Game$Card$drawCardPrompt, game.a, $author$project$Game$Game$UserChoseOneCard)),
+							A2(
+							$elm$svg$Svg$text_,
+							_List_fromArray(
+								[
+									$elm$svg$Svg$Attributes$class('status-line'),
+									$elm$svg$Svg$Attributes$x('145'),
+									$elm$svg$Svg$Attributes$y('2'),
+									$elm$svg$Svg$Attributes$fontSize('3'),
+									$elm$svg$Svg$Attributes$textAnchor('end')
+								]),
+							_List_fromArray(
+								[
+									$elm$svg$Svg$text(
+									function () {
+										var _v4 = game.G;
+										if (!_v4) {
+											return 'white to move';
+										} else {
+											return 'black to move';
+										}
+									}())
+								]))
+						]))
+				]))
+		]);
+};
 var $author$project$Main$view = function (model) {
 	return A2(
 		$elm$browser$Browser$Document,
 		'Onitama',
-		_List_fromArray(
-			[
-				A2(
-				$elm$html$Html$div,
-				_List_fromArray(
+		function () {
+			if (model.$ === 1) {
+				return _List_fromArray(
 					[
-						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
-						A2($elm$html$Html$Attributes$style, 'height', '100vh'),
-						A2($elm$html$Html$Attributes$style, 'flex-direction', 'column'),
-						A2($elm$html$Html$Attributes$style, 'padding', '8px'),
-						A2($elm$html$Html$Attributes$style, 'box-sizing', 'border-box')
-					]),
-				_List_fromArray(
-					[
-						A2(
-						$elm$svg$Svg$svg,
-						_List_fromArray(
-							[
-								$elm$svg$Svg$Attributes$id('game-board'),
-								$elm$svg$Svg$Attributes$viewBox('-1 -1 152 152')
-							]),
-						_List_fromArray(
-							[
-								$author$project$Figure$predefinedSymbols,
-								A2(
-								$elm$svg$Svg$g,
-								_List_fromArray(
-									[
-										$elm$svg$Svg$Attributes$transform(
-										'translate(0, ' + ($elm$core$String$fromInt($author$project$Global$gridsize + 5) + ')'))
-									]),
-								_List_fromArray(
-									[
-										A2(
-										$elm$svg$Svg$g,
-										_List_fromArray(
-											[
-												$elm$svg$Svg$Attributes$class('pieces')
-											]),
-										_Utils_ap(
-											A2($author$project$Figure$drawFigures, model.G, model.v),
-											A2(
-												$author$project$Figure$drawFigures,
-												$author$project$Figure$invert(model.G),
-												model.I))),
-										A2(
-										$elm$svg$Svg$g,
-										_List_fromArray(
-											[
-												$elm$svg$Svg$Attributes$class('grid-lines')
-											]),
-										_Utils_ap(
-											A2(
-												$elm$core$List$map,
-												A2($author$project$Cell$draw, 0, $author$project$Main$Clicked),
-												$author$project$Cell$grid),
-											function () {
-												var _v0 = model.o;
-												if (!_v0.$) {
-													var _v1 = _v0.a;
-													var u = _v1.a;
-													var v = _v1.b;
-													return A2(
-														$elm$core$List$append,
-														_List_fromArray(
-															[
-																A3(
-																$author$project$Cell$draw,
-																2,
-																$author$project$Main$Clicked,
-																_Utils_Tuple2(u, v))
-															]),
-														A2(
-															$elm$core$List$map,
-															A2($author$project$Cell$draw, 1, $author$project$Main$Clicked),
-															A2(
-																$elm_community$list_extra$List$Extra$filterNot,
-																function (move) {
-																	return A2(
-																		$elm$core$List$member,
-																		move,
-																		$author$project$Figure$figurePositions(model.v));
-																},
-																A2(
-																	$elm$core$List$filter,
-																	function (move) {
-																		return A2($elm$core$List$member, move, $author$project$Cell$grid);
-																	},
-																	A2(
-																		$elm$core$List$map,
-																		function (_v2) {
-																			var x = _v2.a;
-																			var y = _v2.b;
-																			return _Utils_Tuple2(x + u, y + v);
-																		},
-																		$elm_community$list_extra$List$Extra$unique(
-																			_Utils_ap(model.a.a.b, model.a.b.b)))))));
-												} else {
-													return _List_Nil;
-												}
-											}()))
-									])),
-								A2(
-								$elm$svg$Svg$g,
-								_List_fromArray(
-									[
-										$elm$svg$Svg$Attributes$class('cards-group')
-									]),
-								A5($author$project$Card$drawAllCards, model.a.a, model.a.b, model.H.a, model.H.b, model.n)),
-								A2(
-								$elm$svg$Svg$g,
-								_List_fromArray(
-									[
-										$elm$svg$Svg$Attributes$class('card-prompt'),
-										$elm$svg$Svg$Attributes$display(
-										function () {
-											var _v3 = model.E;
-											if (!_v3.$) {
-												return 'block';
-											} else {
-												return 'none';
-											}
-										}())
-									]),
-								A2($author$project$Card$drawCardPrompt, model.a, $author$project$Main$ChoosedCard)),
-								A2(
-								$elm$svg$Svg$text_,
-								_List_fromArray(
-									[
-										$elm$svg$Svg$Attributes$class('status-line'),
-										$elm$svg$Svg$Attributes$x('145'),
-										$elm$svg$Svg$Attributes$y('2'),
-										$elm$svg$Svg$Attributes$fontSize('3'),
-										$elm$svg$Svg$Attributes$textAnchor('end')
-									]),
-								_List_fromArray(
-									[
-										$elm$svg$Svg$text(
-										function () {
-											var _v4 = model.G;
-											if (!_v4) {
-												return 'white to move';
-											} else {
-												return 'black to move';
-											}
-										}())
-									]))
-							]))
-					]))
-			]));
+						A2($elm$html$Html$div, _List_Nil, _List_Nil)
+					]);
+			} else {
+				var game = model.a;
+				return A2(
+					$elm$core$List$map,
+					$elm$html$Html$map($author$project$Main$GameMsg),
+					$author$project$Game$Game$view(game));
+			}
+		}());
 };
 var $author$project$Main$main = $elm$browser$Browser$document(
 	{aX: $author$project$Main$init, a1: $author$project$Main$subscriptions, a3: $author$project$Main$update, a4: $author$project$Main$view});

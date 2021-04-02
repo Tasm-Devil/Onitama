@@ -1,4 +1,4 @@
-module Figure exposing (..)
+module Game.Figure exposing (..)
 
 import Global exposing (gridsize)
 import Svg
@@ -96,24 +96,25 @@ drawFigures color_ figs =
                             , SvgA.y <| String.fromFloat <| toFloat gridsize * toFloat (4 - y) + 2.5
                             ]
                             []
-{-                        , Svg.text_
-                            [ SvgA.class "status-line"
-                            , SvgA.x <| String.fromFloat <| toFloat gridsize * toFloat x + 3
-                            , SvgA.y <| String.fromFloat <| toFloat gridsize * toFloat (4 - y) - 1.5 + toFloat gridsize
-                            , SvgA.fontSize "3"
-                            , SvgA.textAnchor "start"
-                            ]
-                            [ Svg.text <|
-                                kind
-                                    ++ " "
-                                    ++ (if num /= 0 then
-                                            String.fromInt num
 
-                                        else
-                                            ""
-                                       )
-                            ]
--}
+                        {- , Svg.text_
+                           [ SvgA.class "status-line"
+                           , SvgA.x <| String.fromFloat <| toFloat gridsize * toFloat x + 3
+                           , SvgA.y <| String.fromFloat <| toFloat gridsize * toFloat (4 - y) - 1.5 + toFloat gridsize
+                           , SvgA.fontSize "3"
+                           , SvgA.textAnchor "start"
+                           ]
+                           [ Svg.text <|
+                               kind
+                                   ++ " "
+                                   ++ (if num /= 0 then
+                                           String.fromInt num
+
+                                       else
+                                           ""
+                                      )
+                           ]
+                        -}
                         ]
                         (drawFigures color_ tail)
 
