@@ -1,11 +1,11 @@
 module Game.Cell exposing (..)
 
 import Game.Figure exposing (Position(..))
+import Global exposing (gridsize)
 import List.Extra
 import Svg
 import Svg.Attributes as SvgA
 import Svg.Events as SvgE
-import Global exposing (gridsize)
 
 
 grid : List ( Int, Int )

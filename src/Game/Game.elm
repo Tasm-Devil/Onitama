@@ -3,13 +3,13 @@ module Game.Game exposing (..)
 import Game.Card exposing (..)
 import Game.Cell exposing (..)
 import Game.Figure exposing (..)
+import Global exposing (gridsize)
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import List.Extra
 import Random
 import Svg
 import Svg.Attributes as SvgA
-import Global exposing (gridsize)
 
 
 
@@ -28,8 +28,8 @@ type alias Game =
     }
 
 
-gameSetup : Game
-gameSetup =
+setupNewGame : Game
+setupNewGame =
     Game White
         [ { kind = Pawn 1, pos = On ( 0, 0 ) }
         , { kind = Pawn 2, pos = On ( 1, 0 ) }
@@ -113,21 +113,22 @@ updateGame msg game =
                             -- cannot happen but compiler needs it
                             ( 0, 0 )
             in
-            if card == Tuple.first game.myCards then
+            (if card == Tuple.first game.myCards then
                 { game
                     | chooseCard = Nothing
                     , nextCard = Tuple.first game.myCards
                     , myCards = ( game.nextCard, Tuple.second game.myCards )
                 }
 
-            else
+             else
                 { game
                     | chooseCard = Nothing
                     , nextCard = Tuple.second game.myCards
                     , myCards = ( Tuple.first game.myCards, game.nextCard )
                 }
-                    |> movefigure position
-                    >> nextPlayer
+            )
+                |> movefigure position
+                >> nextPlayer
 
         UserClickedOnCell Out ->
             { game | prevPosition = Out }
