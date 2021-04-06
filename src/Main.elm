@@ -123,11 +123,7 @@ update msg ({ game } as model) =
                 ( game_, msg_ ) =
                     Game.update (NewGameMove gameMove) game
             in
-            ( { model
-                | game = game_
-
-                --, history = gameMove :: model.history
-              }
+            ( { model | game = game_ }
             , Cmd.batch [ Cmd.map GameMsg msg_, postNewGameMove gameMove ]
             )
 
