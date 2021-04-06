@@ -5,7 +5,6 @@ import Game.Cell exposing (..)
 import Game.Figure exposing (..)
 import Global exposing (gridsize)
 import Html exposing (Html)
-import Html.Attributes as HtmlA
 import List.Extra
 import Random
 import Svg
@@ -28,31 +27,74 @@ type alias Game =
     }
 
 
-setupNewGame : Game
-setupNewGame =
-    Game White
-        [ { kind = Pawn 1, pos = On ( 0, 0 ) }
-        , { kind = Pawn 2, pos = On ( 1, 0 ) }
-        , { kind = King, pos = On ( 2, 0 ) }
-        , { kind = Pawn 3, pos = On ( 3, 0 ) }
-        , { kind = Pawn 4, pos = On ( 4, 0 ) }
-        ]
-        [ { kind = Pawn 4, pos = On ( 0, 4 ) }
-        , { kind = Pawn 3, pos = On ( 1, 4 ) }
-        , { kind = King, pos = On ( 2, 4 ) }
-        , { kind = Pawn 2, pos = On ( 3, 4 ) }
-        , { kind = Pawn 1, pos = On ( 4, 4 ) }
-        ]
-        ( dummyCard, dummyCard )
-        ( dummyCard, dummyCard )
-        dummyCard
-        Out
-        Nothing
+
+-- VIEW
 
 
-giveNewCards : Cmd Msg
-giveNewCards =
-    Random.generate GotNewCards chooseFiveCards
+view : Game -> List (Html Msg)
+view game =
+    [ Svg.svg [ SvgA.id "game-board", SvgA.viewBox "-1 -1 152 152" ]
+        [ predefinedSymbols
+        , Svg.g [ SvgA.transform <| "translate(0, " ++ (String.fromInt <| gridsize + 5) ++ ")" ]
+            [ Svg.g [ SvgA.class "pieces" ]
+                (drawFigures game.myColor game.myFigures
+                    ++ drawFigures (invert game.myColor) game.opFigures
+                )
+            , Svg.g [ SvgA.class "grid-lines" ] <|
+                -- the grid is drawn here
+                List.map (Game.Cell.draw NormalCell UserClickedOnCell) grid
+                    ++ (case game.prevPosition of
+                            On ( u, v ) ->
+                                -- draw the highlighted cells for next possible moves
+                                List.append [ Game.Cell.draw MoveToCell UserClickedOnCell ( u, v ) ]
+                                    ((List.Extra.unique ((Tuple.first game.myCards).moves ++ (Tuple.second game.myCards).moves)
+                                        |> List.map (\( x, y ) -> ( x + u, y + v ))
+                                        |> List.filter (\move -> grid |> List.member move)
+                                        |> List.Extra.filterNot
+                                            (\move ->
+                                                game.myFigures
+                                                    |> figurePositions
+                                                    |> List.member move
+                                            )
+                                     )
+                                        |> List.map (Game.Cell.draw SelectedCell UserClickedOnCell)
+                                    )
+
+                            Out ->
+                                []
+                       )
+            ]
+        , Svg.g [ SvgA.class "cards-group" ]
+            (drawAllCards (Tuple.first game.myCards)
+                (Tuple.second game.myCards)
+                (Tuple.first game.opCards)
+                (Tuple.second game.opCards)
+                game.nextCard
+            )
+        , Svg.g
+            [ SvgA.class "card-prompt"
+            , SvgA.display
+                (case game.chooseCard of
+                    Just _ ->
+                        "block"
+
+                    Nothing ->
+                        "none"
+                )
+            ]
+            (drawCardPrompt game.myCards UserChoseOneCard)
+        , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "3", SvgA.textAnchor "end" ]
+            [ Svg.text <|
+                case game.myColor of
+                    White ->
+                        "white to move"
+
+                    Black ->
+                        "black to move"
+            ]
+        ]
+    ]
+
 
 
 -- UPDATE
@@ -64,8 +106,8 @@ type Msg
     | GotNewCards ( List Card, List Card )
 
 
-updateGame : Msg -> Game -> Game
-updateGame msg game =
+update : Msg -> Game -> Game
+update msg game =
     case msg of
         GotNewCards ( shuffledCards, _ ) ->
             { game
@@ -131,7 +173,7 @@ updateGame msg game =
                     , myCards = ( Tuple.first game.myCards, game.nextCard )
                 }
             )
-                |> movefigure position
+                |> executeGameMove position
                 >> nextPlayer
 
         UserClickedOnCell Out ->
@@ -169,12 +211,12 @@ updateGame msg game =
 
                             ( True, False ) ->
                                 { game | nextCard = Tuple.first game.myCards, myCards = ( game.nextCard, Tuple.second game.myCards ) }
-                                    |> movefigure position
+                                    |> executeGameMove position
                                     >> nextPlayer
 
                             ( False, True ) ->
                                 { game | nextCard = Tuple.second game.myCards, myCards = ( Tuple.first game.myCards, game.nextCard ) }
-                                    |> movefigure position
+                                    |> executeGameMove position
                                     >> nextPlayer
 
                             ( False, False ) ->
@@ -185,8 +227,8 @@ updateGame msg game =
                         { game | prevPosition = Out }
 
 
-movefigure : ( Int, Int ) -> Game -> Game
-movefigure newposition game =
+executeGameMove : ( Int, Int ) -> Game -> Game
+executeGameMove newposition game =
     { game
         | prevPosition = Out
         , myFigures =
@@ -252,73 +294,31 @@ nextPlayer game =
 
 
 
--- VIEW
+-- INIT
 
 
-view : Game -> List (Html Msg)
-view game =
-    [ Html.div [ HtmlA.style "display" "flex", HtmlA.style "height" "100vh", HtmlA.style "flex-direction" "column", HtmlA.style "padding" "8px", HtmlA.style "box-sizing" "border-box" ]
-        [ Svg.svg [ SvgA.id "game-board", SvgA.viewBox "-1 -1 152 152" ]
-            [ predefinedSymbols
-            , Svg.g [ SvgA.transform <| "translate(0, " ++ (String.fromInt <| gridsize + 5) ++ ")" ]
-                [ Svg.g [ SvgA.class "pieces" ]
-                    (drawFigures game.myColor game.myFigures
-                        ++ drawFigures (invert game.myColor) game.opFigures
-                    )
-                , Svg.g [ SvgA.class "grid-lines" ] <|
-                    -- the grid is drawn here
-                    List.map (Game.Cell.draw NormalCell UserClickedOnCell) grid
-                        ++ (case game.prevPosition of
-                                On ( u, v ) ->
-                                    -- draw the highlighted cells for next possible moves
-                                    List.append [ Game.Cell.draw MoveToCell UserClickedOnCell ( u, v ) ]
-                                        ((List.Extra.unique ((Tuple.first game.myCards).moves ++ (Tuple.second game.myCards).moves)
-                                            |> List.map (\( x, y ) -> ( x + u, y + v ))
-                                            |> List.filter (\move -> grid |> List.member move)
-                                            |> List.Extra.filterNot
-                                                (\move ->
-                                                    game.myFigures
-                                                        |> figurePositions
-                                                        |> List.member move
-                                                )
-                                         )
-                                            |> List.map (Game.Cell.draw SelectedCell UserClickedOnCell)
-                                        )
-
-                                Out ->
-                                    []
-                           )
-                ]
-            , Svg.g [ SvgA.class "cards-group" ]
-                (drawAllCards (Tuple.first game.myCards)
-                    (Tuple.second game.myCards)
-                    (Tuple.first game.opCards)
-                    (Tuple.second game.opCards)
-                    game.nextCard
-                )
-            , Svg.g
-                [ SvgA.class "card-prompt"
-                , SvgA.display
-                    (case game.chooseCard of
-                        Just _ ->
-                            "block"
-
-                        Nothing ->
-                            "none"
-                    )
-                ]
-                (drawCardPrompt game.myCards UserChoseOneCard)
-            , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "3", SvgA.textAnchor "end" ]
-                [ Svg.text <|
-                    case game.myColor of
-                        White ->
-                            "white to move"
-
-                        Black ->
-                            "black to move"
-                ]
-            ]
+setupNewGame : Game
+setupNewGame =
+    Game White
+        [ { kind = Pawn 1, pos = On ( 0, 0 ) }
+        , { kind = Pawn 2, pos = On ( 1, 0 ) }
+        , { kind = King, pos = On ( 2, 0 ) }
+        , { kind = Pawn 3, pos = On ( 3, 0 ) }
+        , { kind = Pawn 4, pos = On ( 4, 0 ) }
         ]
-    ]
+        [ { kind = Pawn 4, pos = On ( 0, 4 ) }
+        , { kind = Pawn 3, pos = On ( 1, 4 ) }
+        , { kind = King, pos = On ( 2, 4 ) }
+        , { kind = Pawn 2, pos = On ( 3, 4 ) }
+        , { kind = Pawn 1, pos = On ( 4, 4 ) }
+        ]
+        ( dummyCard, dummyCard )
+        ( dummyCard, dummyCard )
+        dummyCard
+        Out
+        Nothing
 
 
+giveNewCards : Cmd Msg
+giveNewCards =
+    Random.generate GotNewCards chooseFiveCards

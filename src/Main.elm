@@ -3,59 +3,17 @@ module Main exposing (main)
 import Browser
 import Game.Game as Game
 import Html
-
-
-main : Program () Model Msg
-main =
-    Browser.document
-        { init = init
-        , update = update
-        , subscriptions = subscriptions
-        , view = view
-        }
+import Html.Attributes as HtmlA
 
 
 
 -- MODEL
 
 
-type Model
-    = Running Game.Game
-    | NotRunning
-
-
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( Running Game.setupNewGame, Cmd.map GameMsg Game.giveNewCards )
-
-
-
--- UPDATE
-
-
-type Msg
-    = GameMsg Game.Msg
---    | NewGame
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case ( msg, model ) of
-        ( GameMsg msg_, Running game_ ) ->
-            ( Running (Game.updateGame msg_ game_), Cmd.none )
-
-        ( _, NotRunning ) ->
-            ( Running Game.setupNewGame, Cmd.map GameMsg Game.giveNewCards )
---        ( NewGame, Running _ ) ->
---            ( Running Game.gameSetup, Cmd.map GameMsg Game.startNewGame )
---        ( NewGame, NotRunning ) ->
---            ( NotRunning, Cmd.none )
--- SUBSCRIPTIONS
-
-
-subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.none
+type alias Model =
+    { game : Game.Game
+    , errorMessage : Maybe String
+    }
 
 
 
@@ -66,10 +24,49 @@ view : Model -> Browser.Document Msg
 view model =
     Browser.Document
         "Onitama"
-        (case model of
-            NotRunning ->
-                [ Html.div [] [] ]
+        [ Html.div [ HtmlA.style "display" "flex", HtmlA.style "height" "100vh", HtmlA.style "flex-direction" "column", HtmlA.style "padding" "8px", HtmlA.style "box-sizing" "border-box" ]
+            (model.game
+                |> Game.view
+                |> List.map (Html.map GameMsg)
+            )
+        ]
 
-            Running game ->
-                List.map (Html.map GameMsg) (Game.view game)
-        )
+
+
+-- UPDATE
+
+
+type Msg
+    = GameMsg Game.Msg
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg ({ game } as model) =
+    case msg of
+        GameMsg gamemsg ->
+            ( { model | game = Game.update gamemsg game }
+            , Cmd.none
+            )
+
+
+
+-- INIT
+
+
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( { game = Game.setupNewGame
+      , errorMessage = Nothing
+      }
+    , Cmd.map GameMsg Game.giveNewCards
+    )
+
+
+main : Program () Model Msg
+main =
+    Browser.document
+        { init = init
+        , update = update
+        , subscriptions = \_ -> Sub.none
+        , view = view
+        }

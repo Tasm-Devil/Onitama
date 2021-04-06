@@ -784,11 +784,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.Z.ap === region.ag.ap)
+	if (region._.ar === region.ah.ar)
 	{
-		return 'on line ' + region.Z.ap;
+		return 'on line ' + region._.ar;
 	}
-	return 'on lines ' + region.Z.ap + ' through ' + region.ag.ap;
+	return 'on lines ' + region._.ar + ' through ' + region.ah.ar;
 }
 
 
@@ -1857,9 +1857,9 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.aX,
+		impl.aZ,
+		impl.a5,
 		impl.a3,
-		impl.a1,
 		function() { return function() {} }
 	);
 });
@@ -2705,8 +2705,8 @@ var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
 		u: func(record.u),
-		_: record._,
-		W: record.W
+		aa: record.aa,
+		X: record.X
 	}
 });
 
@@ -2975,10 +2975,10 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 
 		var value = result.a;
 		var message = !tag ? value : tag < 3 ? value.a : value.u;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value._;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.aa;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.W) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.X) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3928,11 +3928,11 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.aX,
+		impl.aZ,
+		impl.a5,
 		impl.a3,
-		impl.a1,
 		function(sendToApp, initialModel) {
-			var view = impl.a4;
+			var view = impl.a6;
 			/**/
 			var domNode = args['node'];
 			//*/
@@ -3964,12 +3964,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.aX,
+		impl.aZ,
+		impl.a5,
 		impl.a3,
-		impl.a1,
 		function(sendToApp, initialModel) {
-			var divertHrefToApp = impl.Y && impl.Y(sendToApp)
-			var view = impl.a4;
+			var divertHrefToApp = impl.Z && impl.Z(sendToApp)
+			var view = impl.a6;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
@@ -3977,12 +3977,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
 				var doc = view(model);
-				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.aO);
+				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.aQ);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
 				currNode = nextNode;
 				_VirtualDom_divertHrefToApp = 0;
-				(title !== doc.a2) && (_VirtualDom_doc.title = title = doc.a2);
+				(title !== doc.a4) && (_VirtualDom_doc.title = title = doc.a4);
 			});
 		}
 	);
@@ -4038,12 +4038,12 @@ function _Browser_makeAnimator(model, draw)
 
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.aZ;
-	var onUrlRequest = impl.a_;
+	var onUrlChange = impl.a$;
+	var onUrlRequest = impl.a0;
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
-		Y: function(sendToApp)
+		Z: function(sendToApp)
 		{
 			key.a = sendToApp;
 			_Browser_window.addEventListener('popstate', key);
@@ -4059,9 +4059,9 @@ function _Browser_application(impl)
 					var next = $elm$url$Url$fromString(href).a;
 					sendToApp(onUrlRequest(
 						(next
-							&& curr.ay === next.ay
-							&& curr.ak === next.ak
-							&& curr.av.a === next.av.a
+							&& curr.aA === next.aA
+							&& curr.am === next.am
+							&& curr.ax.a === next.ax.a
 						)
 							? $elm$browser$Browser$Internal(next)
 							: $elm$browser$Browser$External(href)
@@ -4069,13 +4069,13 @@ function _Browser_application(impl)
 				}
 			});
 		},
-		aX: function(flags)
+		aZ: function(flags)
 		{
-			return A3(impl.aX, flags, _Browser_getUrl(), key);
+			return A3(impl.aZ, flags, _Browser_getUrl(), key);
 		},
-		a4: impl.a4,
-		a3: impl.a3,
-		a1: impl.a1
+		a6: impl.a6,
+		a5: impl.a5,
+		a3: impl.a3
 	});
 }
 
@@ -4141,17 +4141,17 @@ var _Browser_decodeEvent = F2(function(decoder, event)
 function _Browser_visibilityInfo()
 {
 	return (typeof _VirtualDom_doc.hidden !== 'undefined')
-		? { aU: 'hidden', aP: 'visibilitychange' }
+		? { aW: 'hidden', aR: 'visibilitychange' }
 		:
 	(typeof _VirtualDom_doc.mozHidden !== 'undefined')
-		? { aU: 'mozHidden', aP: 'mozvisibilitychange' }
+		? { aW: 'mozHidden', aR: 'mozvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.msHidden !== 'undefined')
-		? { aU: 'msHidden', aP: 'msvisibilitychange' }
+		? { aW: 'msHidden', aR: 'msvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.webkitHidden !== 'undefined')
-		? { aU: 'webkitHidden', aP: 'webkitvisibilitychange' }
-		: { aU: 'hidden', aP: 'visibilitychange' };
+		? { aW: 'webkitHidden', aR: 'webkitvisibilitychange' }
+		: { aW: 'hidden', aR: 'visibilitychange' };
 }
 
 
@@ -4232,12 +4232,12 @@ var _Browser_call = F2(function(functionName, id)
 function _Browser_getViewport()
 {
 	return {
-		aD: _Browser_getScene(),
-		aI: {
-			aK: _Browser_window.pageXOffset,
-			aL: _Browser_window.pageYOffset,
-			aJ: _Browser_doc.documentElement.clientWidth,
-			aj: _Browser_doc.documentElement.clientHeight
+		aF: _Browser_getScene(),
+		aK: {
+			aM: _Browser_window.pageXOffset,
+			aN: _Browser_window.pageYOffset,
+			aL: _Browser_doc.documentElement.clientWidth,
+			al: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4247,8 +4247,8 @@ function _Browser_getScene()
 	var body = _Browser_doc.body;
 	var elem = _Browser_doc.documentElement;
 	return {
-		aJ: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		aj: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		aL: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
+		al: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4271,15 +4271,15 @@ function _Browser_getViewportOf(id)
 	return _Browser_withNode(id, function(node)
 	{
 		return {
-			aD: {
-				aJ: node.scrollWidth,
-				aj: node.scrollHeight
+			aF: {
+				aL: node.scrollWidth,
+				al: node.scrollHeight
 			},
-			aI: {
-				aK: node.scrollLeft,
-				aL: node.scrollTop,
-				aJ: node.clientWidth,
-				aj: node.clientHeight
+			aK: {
+				aM: node.scrollLeft,
+				aN: node.scrollTop,
+				aL: node.clientWidth,
+				al: node.clientHeight
 			}
 		};
 	});
@@ -4309,18 +4309,18 @@ function _Browser_getElement(id)
 		var x = _Browser_window.pageXOffset;
 		var y = _Browser_window.pageYOffset;
 		return {
-			aD: _Browser_getScene(),
-			aI: {
-				aK: x,
-				aL: y,
-				aJ: _Browser_doc.documentElement.clientWidth,
-				aj: _Browser_doc.documentElement.clientHeight
+			aF: _Browser_getScene(),
+			aK: {
+				aM: x,
+				aN: y,
+				aL: _Browser_doc.documentElement.clientWidth,
+				al: _Browser_doc.documentElement.clientHeight
 			},
-			aR: {
-				aK: x + rect.left,
-				aL: y + rect.top,
-				aJ: rect.width,
-				aj: rect.height
+			aT: {
+				aM: x + rect.left,
+				aN: y + rect.top,
+				aL: rect.width,
+				al: rect.height
 			}
 		};
 	});
@@ -4942,7 +4942,7 @@ var $elm$url$Url$Http = 0;
 var $elm$url$Url$Https = 1;
 var $elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {ai: fragment, ak: host, at: path, av: port_, ay: protocol, az: query};
+		return {ak: fragment, am: host, av: path, ax: port_, aA: protocol, aB: query};
 	});
 var $elm$core$String$contains = _String_contains;
 var $elm$core$String$length = _String_length;
@@ -5222,9 +5222,6 @@ var $elm$core$Task$perform = F2(
 	});
 var $elm$browser$Browser$document = _Browser_document;
 var $author$project$Main$GameMsg = $elm$core$Basics$identity;
-var $author$project$Main$Running = function (a) {
-	return {$: 0, a: a};
-};
 var $author$project$Game$Game$GotNewCards = function (a) {
 	return {$: 2, a: a};
 };
@@ -5813,56 +5810,56 @@ var $author$project$Game$Game$setupNewGame = A8(
 	_List_fromArray(
 		[
 			{
-			an: $author$project$Game$Figure$Pawn(1),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(1),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(0, 0))
 		},
 			{
-			an: $author$project$Game$Figure$Pawn(2),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(2),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(1, 0))
 		},
 			{
-			an: $author$project$Game$Figure$King,
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$King,
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(2, 0))
 		},
 			{
-			an: $author$project$Game$Figure$Pawn(3),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(3),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(3, 0))
 		},
 			{
-			an: $author$project$Game$Figure$Pawn(4),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(4),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(4, 0))
 		}
 		]),
 	_List_fromArray(
 		[
 			{
-			an: $author$project$Game$Figure$Pawn(4),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(4),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(0, 4))
 		},
 			{
-			an: $author$project$Game$Figure$Pawn(3),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(3),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(1, 4))
 		},
 			{
-			an: $author$project$Game$Figure$King,
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$King,
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(2, 4))
 		},
 			{
-			an: $author$project$Game$Figure$Pawn(2),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(2),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(3, 4))
 		},
 			{
-			an: $author$project$Game$Figure$Pawn(1),
-			V: $author$project$Game$Figure$On(
+			ap: $author$project$Game$Figure$Pawn(1),
+			W: $author$project$Game$Figure$On(
 				_Utils_Tuple2(4, 4))
 		}
 		]),
@@ -5873,20 +5870,45 @@ var $author$project$Game$Game$setupNewGame = A8(
 	$elm$core$Maybe$Nothing);
 var $author$project$Main$init = function (_v0) {
 	return _Utils_Tuple2(
-		$author$project$Main$Running($author$project$Game$Game$setupNewGame),
+		{ai: $elm$core$Maybe$Nothing, M: $author$project$Game$Game$setupNewGame},
 		A2($elm$core$Platform$Cmd$map, $elm$core$Basics$identity, $author$project$Game$Game$giveNewCards));
 };
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
-var $author$project$Main$subscriptions = function (_v0) {
-	return $elm$core$Platform$Sub$none;
-};
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
 var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
 var $elm$core$Basics$composeR = F3(
 	function (f, g, x) {
 		return g(
 			f(x));
+	});
+var $author$project$Game$Game$executeGameMove = F2(
+	function (newposition, game) {
+		return _Utils_update(
+			game,
+			{
+				v: A2(
+					$elm$core$List$map,
+					function (f) {
+						return _Utils_eq(f.W, game.o) ? _Utils_update(
+							f,
+							{
+								W: $author$project$Game$Figure$On(newposition)
+							}) : f;
+					},
+					game.v),
+				I: A2(
+					$elm$core$List$map,
+					function (f) {
+						return _Utils_eq(
+							f.W,
+							$author$project$Game$Figure$On(newposition)) ? _Utils_update(
+							f,
+							{W: $author$project$Game$Figure$Out}) : f;
+					},
+					game.I),
+				o: $author$project$Game$Figure$Out
+			});
 	});
 var $elm$core$List$maybeCons = F3(
 	function (f, mx, xs) {
@@ -5910,7 +5932,7 @@ var $author$project$Game$Figure$figurePositions = function (figs) {
 	return A2(
 		$elm$core$List$filterMap,
 		function (f) {
-			var _v0 = f.V;
+			var _v0 = f.W;
 			if (!_v0.$) {
 				var _v1 = _v0.a;
 				var x = _v1.a;
@@ -5953,34 +5975,6 @@ var $elm$core$List$member = F2(
 			},
 			xs);
 	});
-var $author$project$Game$Game$movefigure = F2(
-	function (newposition, game) {
-		return _Utils_update(
-			game,
-			{
-				v: A2(
-					$elm$core$List$map,
-					function (f) {
-						return _Utils_eq(f.V, game.o) ? _Utils_update(
-							f,
-							{
-								V: $author$project$Game$Figure$On(newposition)
-							}) : f;
-					},
-					game.v),
-				I: A2(
-					$elm$core$List$map,
-					function (f) {
-						return _Utils_eq(
-							f.V,
-							$author$project$Game$Figure$On(newposition)) ? _Utils_update(
-							f,
-							{V: $author$project$Game$Figure$Out}) : f;
-					},
-					game.I),
-				o: $author$project$Game$Figure$Out
-			});
-	});
 var $author$project$Game$Figure$Black = 1;
 var $author$project$Game$Figure$invert = function (color) {
 	if (!color) {
@@ -6001,8 +5995,8 @@ var $author$project$Game$Game$nextPlayer = function (game) {
 					return _Utils_update(
 						fig,
 						{
-							V: function () {
-								var _v0 = fig.V;
+							W: function () {
+								var _v0 = fig.W;
 								if (!_v0.$) {
 									var _v1 = _v0.a;
 									var x = _v1.a;
@@ -6010,7 +6004,7 @@ var $author$project$Game$Game$nextPlayer = function (game) {
 									return $author$project$Game$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.V;
+									return fig.W;
 								}
 							}()
 						});
@@ -6023,8 +6017,8 @@ var $author$project$Game$Game$nextPlayer = function (game) {
 					return _Utils_update(
 						fig,
 						{
-							V: function () {
-								var _v2 = fig.V;
+							W: function () {
+								var _v2 = fig.W;
 								if (!_v2.$) {
 									var _v3 = _v2.a;
 									var x = _v3.a;
@@ -6032,7 +6026,7 @@ var $author$project$Game$Game$nextPlayer = function (game) {
 									return $author$project$Game$Figure$On(
 										_Utils_Tuple2(4 - x, 4 - y));
 								} else {
-									return fig.V;
+									return fig.W;
 								}
 							}()
 						});
@@ -6044,7 +6038,7 @@ var $elm$core$Tuple$second = function (_v0) {
 	var y = _v0.b;
 	return y;
 };
-var $author$project$Game$Game$updateGame = F2(
+var $author$project$Game$Game$update = F2(
 	function (msg, game) {
 		switch (msg.$) {
 			case 2:
@@ -6118,7 +6112,7 @@ var $author$project$Game$Game$updateGame = F2(
 				}();
 				return A3(
 					$elm$core$Basics$composeR,
-					$author$project$Game$Game$movefigure(position),
+					$author$project$Game$Game$executeGameMove(position),
 					$author$project$Game$Game$nextPlayer,
 					_Utils_eq(card, game.a.a) ? _Utils_update(
 						game,
@@ -6180,7 +6174,7 @@ var $author$project$Game$Game$updateGame = F2(
 								} else {
 									return A3(
 										$elm$core$Basics$composeR,
-										$author$project$Game$Game$movefigure(position),
+										$author$project$Game$Game$executeGameMove(position),
 										$author$project$Game$Game$nextPlayer,
 										_Utils_update(
 											game,
@@ -6193,7 +6187,7 @@ var $author$project$Game$Game$updateGame = F2(
 								if (_v11.b) {
 									return A3(
 										$elm$core$Basics$composeR,
-										$author$project$Game$Game$movefigure(position),
+										$author$project$Game$Game$executeGameMove(position),
 										$author$project$Game$Game$nextPlayer,
 										_Utils_update(
 											game,
@@ -6216,28 +6210,25 @@ var $author$project$Game$Game$updateGame = F2(
 	});
 var $author$project$Main$update = F2(
 	function (msg, model) {
-		var _v0 = _Utils_Tuple2(msg, model);
-		if (!_v0.b.$) {
-			var msg_ = _v0.a;
-			var game_ = _v0.b.a;
-			return _Utils_Tuple2(
-				$author$project$Main$Running(
-					A2($author$project$Game$Game$updateGame, msg_, game_)),
-				$elm$core$Platform$Cmd$none);
-		} else {
-			var _v1 = _v0.b;
-			return _Utils_Tuple2(
-				$author$project$Main$Running($author$project$Game$Game$setupNewGame),
-				A2($elm$core$Platform$Cmd$map, $elm$core$Basics$identity, $author$project$Game$Game$giveNewCards));
-		}
+		var game = model.M;
+		var gamemsg = msg;
+		return _Utils_Tuple2(
+			_Utils_update(
+				model,
+				{
+					M: A2($author$project$Game$Game$update, gamemsg, game)
+				}),
+			$elm$core$Platform$Cmd$none);
 	});
 var $elm$browser$Browser$Document = F2(
 	function (title, body) {
-		return {aO: body, a2: title};
+		return {aQ: body, a4: title};
 	});
 var $elm$html$Html$div = _VirtualDom_node('div');
 var $elm$virtual_dom$VirtualDom$map = _VirtualDom_map;
 var $elm$html$Html$map = $elm$virtual_dom$VirtualDom$map;
+var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
+var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
 var $author$project$Game$Cell$MoveToCell = 2;
 var $author$project$Game$Cell$NormalCell = 0;
 var $author$project$Game$Cell$SelectedCell = 1;
@@ -6578,7 +6569,7 @@ var $author$project$Game$Figure$drawFigures = F2(
 					}
 				}();
 				var _v1 = function () {
-					var _v2 = head.V;
+					var _v2 = head.W;
 					if (!_v2.$) {
 						var _v3 = _v2.a;
 						var x_ = _v3.a;
@@ -6591,7 +6582,7 @@ var $author$project$Game$Figure$drawFigures = F2(
 				var x = _v1.a;
 				var y = _v1.b;
 				var _v4 = function () {
-					var _v5 = head.an;
+					var _v5 = head.ap;
 					if (!_v5.$) {
 						return _Utils_Tuple2('King', 0);
 					} else {
@@ -6860,8 +6851,6 @@ var $author$project$Game$Figure$predefinedSymbols = A2(
 					_List_Nil)
 				]))
 		]));
-var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
-var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
 var $elm$svg$Svg$svg = $elm$svg$Svg$trustedNode('svg');
 var $elm$core$Set$Set_elm_builtin = $elm$core$Basics$identity;
 var $elm$core$Dict$RBEmpty_elm_builtin = {$: -2};
@@ -7067,150 +7056,137 @@ var $author$project$Game$Game$view = function (game) {
 	return _List_fromArray(
 		[
 			A2(
-			$elm$html$Html$div,
+			$elm$svg$Svg$svg,
 			_List_fromArray(
 				[
-					A2($elm$html$Html$Attributes$style, 'display', 'flex'),
-					A2($elm$html$Html$Attributes$style, 'height', '100vh'),
-					A2($elm$html$Html$Attributes$style, 'flex-direction', 'column'),
-					A2($elm$html$Html$Attributes$style, 'padding', '8px'),
-					A2($elm$html$Html$Attributes$style, 'box-sizing', 'border-box')
+					$elm$svg$Svg$Attributes$id('game-board'),
+					$elm$svg$Svg$Attributes$viewBox('-1 -1 152 152')
 				]),
 			_List_fromArray(
 				[
+					$author$project$Game$Figure$predefinedSymbols,
 					A2(
-					$elm$svg$Svg$svg,
+					$elm$svg$Svg$g,
 					_List_fromArray(
 						[
-							$elm$svg$Svg$Attributes$id('game-board'),
-							$elm$svg$Svg$Attributes$viewBox('-1 -1 152 152')
+							$elm$svg$Svg$Attributes$transform(
+							'translate(0, ' + ($elm$core$String$fromInt($author$project$Global$gridsize + 5) + ')'))
 						]),
 					_List_fromArray(
 						[
-							$author$project$Game$Figure$predefinedSymbols,
 							A2(
 							$elm$svg$Svg$g,
 							_List_fromArray(
 								[
-									$elm$svg$Svg$Attributes$transform(
-									'translate(0, ' + ($elm$core$String$fromInt($author$project$Global$gridsize + 5) + ')'))
+									$elm$svg$Svg$Attributes$class('pieces')
 								]),
+							_Utils_ap(
+								A2($author$project$Game$Figure$drawFigures, game.G, game.v),
+								A2(
+									$author$project$Game$Figure$drawFigures,
+									$author$project$Game$Figure$invert(game.G),
+									game.I))),
+							A2(
+							$elm$svg$Svg$g,
 							_List_fromArray(
 								[
-									A2(
-									$elm$svg$Svg$g,
-									_List_fromArray(
-										[
-											$elm$svg$Svg$Attributes$class('pieces')
-										]),
-									_Utils_ap(
-										A2($author$project$Game$Figure$drawFigures, game.G, game.v),
-										A2(
-											$author$project$Game$Figure$drawFigures,
-											$author$project$Game$Figure$invert(game.G),
-											game.I))),
-									A2(
-									$elm$svg$Svg$g,
-									_List_fromArray(
-										[
-											$elm$svg$Svg$Attributes$class('grid-lines')
-										]),
-									_Utils_ap(
-										A2(
-											$elm$core$List$map,
-											A2($author$project$Game$Cell$draw, 0, $author$project$Game$Game$UserClickedOnCell),
-											$author$project$Game$Cell$grid),
-										function () {
-											var _v0 = game.o;
-											if (!_v0.$) {
-												var _v1 = _v0.a;
-												var u = _v1.a;
-												var v = _v1.b;
-												return A2(
-													$elm$core$List$append,
-													_List_fromArray(
-														[
-															A3(
-															$author$project$Game$Cell$draw,
-															2,
-															$author$project$Game$Game$UserClickedOnCell,
-															_Utils_Tuple2(u, v))
-														]),
+									$elm$svg$Svg$Attributes$class('grid-lines')
+								]),
+							_Utils_ap(
+								A2(
+									$elm$core$List$map,
+									A2($author$project$Game$Cell$draw, 0, $author$project$Game$Game$UserClickedOnCell),
+									$author$project$Game$Cell$grid),
+								function () {
+									var _v0 = game.o;
+									if (!_v0.$) {
+										var _v1 = _v0.a;
+										var u = _v1.a;
+										var v = _v1.b;
+										return A2(
+											$elm$core$List$append,
+											_List_fromArray(
+												[
+													A3(
+													$author$project$Game$Cell$draw,
+													2,
+													$author$project$Game$Game$UserClickedOnCell,
+													_Utils_Tuple2(u, v))
+												]),
+											A2(
+												$elm$core$List$map,
+												A2($author$project$Game$Cell$draw, 1, $author$project$Game$Game$UserClickedOnCell),
+												A2(
+													$elm_community$list_extra$List$Extra$filterNot,
+													function (move) {
+														return A2(
+															$elm$core$List$member,
+															move,
+															$author$project$Game$Figure$figurePositions(game.v));
+													},
 													A2(
-														$elm$core$List$map,
-														A2($author$project$Game$Cell$draw, 1, $author$project$Game$Game$UserClickedOnCell),
+														$elm$core$List$filter,
+														function (move) {
+															return A2($elm$core$List$member, move, $author$project$Game$Cell$grid);
+														},
 														A2(
-															$elm_community$list_extra$List$Extra$filterNot,
-															function (move) {
-																return A2(
-																	$elm$core$List$member,
-																	move,
-																	$author$project$Game$Figure$figurePositions(game.v));
+															$elm$core$List$map,
+															function (_v2) {
+																var x = _v2.a;
+																var y = _v2.b;
+																return _Utils_Tuple2(x + u, y + v);
 															},
-															A2(
-																$elm$core$List$filter,
-																function (move) {
-																	return A2($elm$core$List$member, move, $author$project$Game$Cell$grid);
-																},
-																A2(
-																	$elm$core$List$map,
-																	function (_v2) {
-																		var x = _v2.a;
-																		var y = _v2.b;
-																		return _Utils_Tuple2(x + u, y + v);
-																	},
-																	$elm_community$list_extra$List$Extra$unique(
-																		_Utils_ap(game.a.a.b, game.a.b.b)))))));
-											} else {
-												return _List_Nil;
-											}
-										}()))
-								])),
-							A2(
-							$elm$svg$Svg$g,
-							_List_fromArray(
-								[
-									$elm$svg$Svg$Attributes$class('cards-group')
-								]),
-							A5($author$project$Game$Card$drawAllCards, game.a.a, game.a.b, game.H.a, game.H.b, game.n)),
-							A2(
-							$elm$svg$Svg$g,
-							_List_fromArray(
-								[
-									$elm$svg$Svg$Attributes$class('card-prompt'),
-									$elm$svg$Svg$Attributes$display(
-									function () {
-										var _v3 = game.E;
-										if (!_v3.$) {
-											return 'block';
-										} else {
-											return 'none';
-										}
-									}())
-								]),
-							A2($author$project$Game$Card$drawCardPrompt, game.a, $author$project$Game$Game$UserChoseOneCard)),
-							A2(
-							$elm$svg$Svg$text_,
-							_List_fromArray(
-								[
-									$elm$svg$Svg$Attributes$class('status-line'),
-									$elm$svg$Svg$Attributes$x('145'),
-									$elm$svg$Svg$Attributes$y('2'),
-									$elm$svg$Svg$Attributes$fontSize('3'),
-									$elm$svg$Svg$Attributes$textAnchor('end')
-								]),
-							_List_fromArray(
-								[
-									$elm$svg$Svg$text(
-									function () {
-										var _v4 = game.G;
-										if (!_v4) {
-											return 'white to move';
-										} else {
-											return 'black to move';
-										}
-									}())
-								]))
+															$elm_community$list_extra$List$Extra$unique(
+																_Utils_ap(game.a.a.b, game.a.b.b)))))));
+									} else {
+										return _List_Nil;
+									}
+								}()))
+						])),
+					A2(
+					$elm$svg$Svg$g,
+					_List_fromArray(
+						[
+							$elm$svg$Svg$Attributes$class('cards-group')
+						]),
+					A5($author$project$Game$Card$drawAllCards, game.a.a, game.a.b, game.H.a, game.H.b, game.n)),
+					A2(
+					$elm$svg$Svg$g,
+					_List_fromArray(
+						[
+							$elm$svg$Svg$Attributes$class('card-prompt'),
+							$elm$svg$Svg$Attributes$display(
+							function () {
+								var _v3 = game.E;
+								if (!_v3.$) {
+									return 'block';
+								} else {
+									return 'none';
+								}
+							}())
+						]),
+					A2($author$project$Game$Card$drawCardPrompt, game.a, $author$project$Game$Game$UserChoseOneCard)),
+					A2(
+					$elm$svg$Svg$text_,
+					_List_fromArray(
+						[
+							$elm$svg$Svg$Attributes$class('status-line'),
+							$elm$svg$Svg$Attributes$x('145'),
+							$elm$svg$Svg$Attributes$y('2'),
+							$elm$svg$Svg$Attributes$fontSize('3'),
+							$elm$svg$Svg$Attributes$textAnchor('end')
+						]),
+					_List_fromArray(
+						[
+							$elm$svg$Svg$text(
+							function () {
+								var _v4 = game.G;
+								if (!_v4) {
+									return 'white to move';
+								} else {
+									return 'black to move';
+								}
+							}())
 						]))
 				]))
 		]);
@@ -7219,22 +7195,32 @@ var $author$project$Main$view = function (model) {
 	return A2(
 		$elm$browser$Browser$Document,
 		'Onitama',
-		function () {
-			if (model.$ === 1) {
-				return _List_fromArray(
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
 					[
-						A2($elm$html$Html$div, _List_Nil, _List_Nil)
-					]);
-			} else {
-				var game = model.a;
-				return A2(
+						A2($elm$html$Html$Attributes$style, 'display', 'flex'),
+						A2($elm$html$Html$Attributes$style, 'height', '100vh'),
+						A2($elm$html$Html$Attributes$style, 'flex-direction', 'column'),
+						A2($elm$html$Html$Attributes$style, 'padding', '8px'),
+						A2($elm$html$Html$Attributes$style, 'box-sizing', 'border-box')
+					]),
+				A2(
 					$elm$core$List$map,
 					$elm$html$Html$map($elm$core$Basics$identity),
-					$author$project$Game$Game$view(game));
-			}
-		}());
+					$author$project$Game$Game$view(model.M)))
+			]));
 };
 var $author$project$Main$main = $elm$browser$Browser$document(
-	{aX: $author$project$Main$init, a1: $author$project$Main$subscriptions, a3: $author$project$Main$update, a4: $author$project$Main$view});
+	{
+		aZ: $author$project$Main$init,
+		a3: function (_v0) {
+			return $elm$core$Platform$Sub$none;
+		},
+		a5: $author$project$Main$update,
+		a6: $author$project$Main$view
+	});
 _Platform_export({'Main':{'init':$author$project$Main$main(
 	$elm$json$Json$Decode$succeed(0))(0)}});}(this));
