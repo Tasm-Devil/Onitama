@@ -25,6 +25,24 @@ invert color =
             White
 
 
+colorFromString : String -> Color
+colorFromString color =
+    if color == "White" then
+        White
+
+    else
+        Black
+
+
+colorToString : Color -> String
+colorToString color =
+    if color == White then
+        "White"
+
+    else
+        "Black"
+
+
 type FigureKind
     = King
     | Pawn Int -- Pawnnumber from 1 to 4 (in both colors)

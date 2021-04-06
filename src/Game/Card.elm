@@ -41,6 +41,19 @@ allCards =
     ]
 
 
+cardByName : String -> Card
+cardByName name =
+    case
+        allCards
+            |> List.filter (\card -> card.name == name)
+    of
+        x :: _ ->
+            x
+
+        [] ->
+            dummyCard
+
+
 chooseFiveCards : Random.Generator ( List Card, List Card )
 chooseFiveCards =
     allCards |> choices 5
