@@ -5,11 +5,6 @@ import Svg
 import Svg.Attributes as SvgA
 
 
-type Position
-    = On ( Int, Int ) -- Position from (0, 0) to (4, 4)
-    | Out
-
-
 type Color
     = White
     | Black
@@ -50,22 +45,14 @@ type FigureKind
 
 type alias Figure =
     { kind : FigureKind
-    , pos : Position
+    , pos : ( Int, Int )
     }
 
 
 figurePositions : List Figure -> List ( Int, Int )
 figurePositions figs =
     figs
-        |> List.filterMap
-            (\f ->
-                case f.pos of
-                    On ( x, y ) ->
-                        Just ( x, y )
-
-                    Out ->
-                        Nothing
-            )
+        |> List.map (\f -> f.pos)
 
 
 drawFigures : Color -> List Figure -> List (Svg.Svg msg)
@@ -93,12 +80,7 @@ drawFigures color_ figs =
                             ( "Pawn", n )
 
                 ( x, y ) =
-                    case head.pos of
-                        On ( x_, y_ ) ->
-                            ( x_, y_ )
-
-                        Out ->
-                            ( 5, 5 )
+                    head.pos
             in
             case ( x, y ) of
                 ( 5, 5 ) ->

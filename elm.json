@@ -15,25 +15,25 @@
             "elm/random": "1.0.0",
             "elm/svg": "1.0.1",
             "elm-community/list-extra": "8.3.0",
-            "elm-community/random-extra": "3.2.0"
+            "elm-community/random-extra": "3.2.0",
+            "savardd/elm-time-travel": "2.0.0"
         },
-        "indirect": {
-            "elm/bytes": "1.0.8",
-            "elm/file": "1.0.5",
-            "elm/time": "1.0.0",
-            "elm/url": "1.0.0",
-            "elm/virtual-dom": "1.0.2"
-        }
-    },
-    "test-dependencies": {
-        "direct": {},
         "indirect": {
             "andre-dietrich/parser-combinators": "3.2.0",
             "avh4/elm-color": "1.0.0",
             "danmarcab/material-icons": "1.0.0",
+            "elm/bytes": "1.0.8",
+            "elm/file": "1.0.5",
             "elm/regex": "1.0.0",
+            "elm/time": "1.0.0",
+            "elm/url": "1.0.0",
+            "elm/virtual-dom": "1.0.2",
             "jinjor/elm-diff": "1.0.6",
             "pilatch/flip": "1.0.0"
         }
+    },
+    "test-dependencies": {
+        "direct": {},
+        "indirect": {}
     }
 }

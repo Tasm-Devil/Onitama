@@ -3,7 +3,7 @@ module Main exposing (main)
 import Browser
 import Game.Card exposing (Card)
 import Game.Figure exposing (Color(..), colorToString)
-import Game.Game as Game exposing (Game, GameMove, Msg(..), rotateCardMove)
+import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import Html.Events exposing (onClick)
@@ -11,10 +11,13 @@ import Http
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
+import Task
 
 
 
---import TimeTravel.Browser as TimeTravel exposing (defaultConfig)
+{-
+   import TimeTravel.Browser as TimeTravel exposing (defaultConfig)
+-}
 -- MODEL
 
 
@@ -87,11 +90,7 @@ viewGameMove gameMove =
             gameMove.from
 
         ( move_x, move_y ) =
-            if gameMove.color == White then
-                gameMove.move
-
-            else
-                gameMove |> rotateCardMove |> .move
+            gameMove.move
 
         from =
             String.fromInt from_x ++ " , " ++ String.fromInt from_y
@@ -118,27 +117,38 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ game } as model) =
     case msg of
-        GameMsg (NewGameMove gameMove) ->
-            let
-                ( game_, msg_ ) =
-                    Game.update (NewGameMove gameMove) game
-            in
-            ( { model | game = game_ }
-            , Cmd.batch [ Cmd.map GameMsg msg_, postNewGameMove gameMove ]
-            )
-
         GameMsg gamemsg ->
             let
-                ( game_, msg_ ) =
+                game_ =
                     Game.update gamemsg game
             in
             ( { model | game = game_ }
-            , Cmd.map GameMsg msg_
+            , case game_.state of
+                MoveDone gameMove ->
+                    postNewGameMove gameMove
+
+                _ ->
+                    Cmd.none
+            )
+
+        ReceivedPostCreatedFromServer (Ok gameMove) ->
+            ( { model
+                | game = Game.update (NewGameMove gameMove) game
+                , history = gameMove :: model.history
+              }
+            , Cmd.none
+            )
+
+        ReceivedPostCreatedFromServer (Err httpError) ->
+            ( { model
+                | errorMessage = Just (buildErrorMessage httpError)
+              }
+            , Cmd.none
             )
 
         ReceivedCardsFromServer (Ok cards) ->
             ( { model | cards = cards |> List.map Game.Card.cardByName }
-            , Game.send RequestHistoryFromServer
+            , send RequestHistoryFromServer
             )
 
         ReceivedCardsFromServer (Err httpError) ->
@@ -170,7 +180,7 @@ update msg ({ game } as model) =
 
                 gameMove :: [] ->
                     let
-                        ( game_, msg_ ) =
+                        game_ =
                             Game.setupNewGame Black White
                                 |> Game.newCards model.cards
                                 |> Game.update (NewGameMove gameMove)
@@ -180,13 +190,13 @@ update msg ({ game } as model) =
                         , errorMessage = Nothing
                         , game = game_
                       }
-                    , Cmd.map GameMsg msg_
+                    , Cmd.none
                     )
 
                 gameMove :: pastHistory ->
                     if pastHistory == model.history then
                         let
-                            ( game_, msg_ ) =
+                            game_ =
                                 game
                                     |> Game.update (NewGameMove gameMove)
                         in
@@ -195,7 +205,7 @@ update msg ({ game } as model) =
                             , errorMessage = Nothing
                             , game = game_
                           }
-                        , Cmd.map GameMsg msg_
+                        , Cmd.none
                         )
 
                     else
@@ -208,17 +218,11 @@ update msg ({ game } as model) =
             , Cmd.none
             )
 
-        ReceivedPostCreatedFromServer (Ok gameMove) ->
-            ( { model | history = gameMove :: model.history }
-            , Cmd.none
-            )
 
-        ReceivedPostCreatedFromServer (Err httpError) ->
-            ( { model
-                | errorMessage = Just (buildErrorMessage httpError)
-              }
-            , Cmd.none
-            )
+send : msg -> Cmd msg
+send msg =
+    Task.succeed msg
+        |> Task.perform identity
 
 
 getCardsFromServer : Cmd Msg
@@ -319,7 +323,6 @@ main =
 
 
 {-
-
 
    main =
        TimeTravel.document Debug.toString

@@ -9,11 +9,17 @@ import List.Extra
 import Random
 import Svg
 import Svg.Attributes as SvgA
-import Task
 
 
 
 -- MODEL
+
+
+type GameState
+    = Thinking
+    | FigureSelected ( Int, Int )
+    | ChosingCard ( ( Int, Int ), ( Int, Int ) )
+    | MoveDone GameMove
 
 
 type alias Game =
@@ -24,8 +30,7 @@ type alias Game =
     , myCards : ( Card, Card )
     , opCards : ( Card, Card )
     , commonCard : Card
-    , lastClickedCell : Maybe ( Int, Int )
-    , chooseCard : Maybe ( ( Int, Int ), ( Int, Int ) )
+    , state : GameState
     }
 
 
@@ -59,8 +64,8 @@ view game =
             , Svg.g [ SvgA.class "grid-lines" ] <|
                 -- the grid is drawn here
                 List.map (Game.Cell.draw NormalCell UserClickedOnCell) grid
-                    ++ (case game.lastClickedCell of
-                            Just ( u, v ) ->
+                    ++ (case game.state of
+                            FigureSelected ( u, v ) ->
                                 -- draw the highlighted cells for next possible moves
                                 List.append [ Game.Cell.draw MoveToCell UserClickedOnCell ( u, v ) ]
                                     ((List.Extra.unique ((Tuple.first game.myCards).moves ++ (Tuple.second game.myCards).moves)
@@ -76,7 +81,7 @@ view game =
                                         |> List.map (Game.Cell.draw SelectedCell UserClickedOnCell)
                                     )
 
-                            Nothing ->
+                            _ ->
                                 []
                        )
             ]
@@ -90,11 +95,11 @@ view game =
         , Svg.g
             [ SvgA.class "card-prompt"
             , SvgA.display
-                (case game.chooseCard of
-                    Just _ ->
+                (case game.state of
+                    ChosingCard ( _, _ ) ->
                         "block"
 
-                    Nothing ->
+                    _ ->
                         "none"
                 )
             ]
@@ -117,133 +122,37 @@ view game =
 
 
 type Msg
-    = UserClickedOnCell Position
+    = GotNewCards ( List Card, List Card )
     | UserChoseOneCard Card
-    | GotNewCards ( List Card, List Card )
+    | UserClickedOnCell ( Int, Int )
     | NewGameMove GameMove
 
 
-update : Msg -> Game -> ( Game, Cmd Msg )
+update : Msg -> Game -> Game
 update msg game =
     case msg of
         GotNewCards ( shuffledCards, _ ) ->
-            ( game
+            game
                 |> newCards shuffledCards
-            , Cmd.none
-            )
-
-        NewGameMove gameMove ->
-            if gameMove.color == game.nextColor then
-                case ( game.myColor, gameMove.color ) of
-                    ( White, White ) ->
-                        ( game
-                            |> executeGameMove gameMove
-                        , Cmd.none
-                        )
-
-                    ( White, Black ) ->
-                        ( game
-                            |> flipFigures
-                            |> flipCards
-                            |> executeGameMove (gameMove |> rotateCardMove)
-                            |> flipFigures
-                            |> flipCards
-                        , Cmd.none
-                        )
-
-                    ( Black, White ) ->
-                        ( game
-                            |> flipFigures
-                            |> flipCards
-                            |> executeGameMove (gameMove |> rotateCardMove >> rotateFromMove)
-                            |> flipFigures
-                            |> flipCards
-                        , Cmd.none
-                        )
-
-                    ( Black, Black ) ->
-                        ( game
-                            |> executeGameMove (gameMove |> rotateFromMove)
-                        , Cmd.none
-                        )
-
-            else
-                ( game, Cmd.none )
 
         UserChoseOneCard card ->
-            let
-                ( previousPosition, move ) =
-                    case game.chooseCard of
-                        Just ( prev, move_ ) ->
-                            ( prev, move_ )
+            case game.state of
+                ChosingCard ( from, move ) ->
+                    { game | state = MoveDone { color = game.myColor, card = card, from = from, move = move } }
 
-                        Nothing ->
-                            -- cannot happen but compiler needs it
-                            ( ( 0, 0 ), ( 0, 0 ) )
-            in
-            ( game
-            , sendNewGameMove { color = game.myColor, card = card, from = previousPosition, move = move }
-            )
+                _ ->
+                    game
 
-        UserClickedOnCell Out ->
-            ( { game | lastClickedCell = Nothing }, Cmd.none )
-
-        UserClickedOnCell (On position) ->
+        UserClickedOnCell ( x, y ) ->
             if game.myColor == game.nextColor then
-                if game.myFigures |> figurePositions |> List.member position then
-                    -- There is one of my own figures on this position
-                    case game.lastClickedCell of
-                        Just previousPosition ->
-                            if position == previousPosition then
-                                -- my figure was allready selected -> Toggle it
-                                ( { game | lastClickedCell = Nothing }, Cmd.none )
-
-                            else
-                                -- select another figure
-                                ( { game | lastClickedCell = Just position }, Cmd.none )
-
-                        Nothing ->
-                            -- none of my fugures was selected -> select this one
-                            ( { game | lastClickedCell = Just position }, Cmd.none )
-
-                else
-                    -- There is none of my own figures on this position -> move and/or eat opponents figures
-                    case game.lastClickedCell of
-                        Just previousPosition ->
-                            -- One of my figures was selected before
-                            let
-                                move =
-                                    ( Tuple.first position - Tuple.first previousPosition, Tuple.second position - Tuple.second previousPosition )
-                            in
-                            case
-                                ( (Tuple.first game.myCards).moves
-                                    |> List.member move
-                                , (Tuple.second game.myCards).moves
-                                    |> List.member move
-                                )
-                            of
-                                ( True, True ) ->
-                                    ( { game | chooseCard = Just ( previousPosition, move ) }, Cmd.none )
-
-                                ( True, False ) ->
-                                    ( game
-                                    , sendNewGameMove { color = game.myColor, card = Tuple.first game.myCards, from = previousPosition, move = move }
-                                    )
-
-                                ( False, True ) ->
-                                    ( game
-                                    , sendNewGameMove { color = game.myColor, card = Tuple.second game.myCards, from = previousPosition, move = move }
-                                    )
-
-                                ( False, False ) ->
-                                    ( game, Cmd.none )
-
-                        Nothing ->
-                            -- none of my own figures was selected before
-                            ( { game | lastClickedCell = Nothing }, Cmd.none )
+                handleClick ( x, y ) game
 
             else
-                ( game, Cmd.none )
+                game
+
+        NewGameMove gm ->
+            { game | state = MoveDone gm }
+                |> execGameMove
 
 
 newCards : List Card -> Game -> Game
@@ -293,50 +202,110 @@ newCards shuffledCards game =
            )
 
 
-sendNewGameMove : GameMove -> Cmd Msg
-sendNewGameMove gameMove =
-    (gameMove
-        |> (if gameMove.color == Black then
-                rotateFromMove
+handleClick : ( Int, Int ) -> Game -> Game
+handleClick ( x, y ) game =
+    if game.myFigures |> figurePositions |> List.member ( x, y ) then
+        -- There is one of my own figures on this position
+        case game.state of
+            FigureSelected ( u, v ) ->
+                if ( x, y ) == ( u, v ) then
+                    -- my figure was allready selected -> Toggle it
+                    { game | state = Thinking }
 
-            else
-                identity
-           )
-        |> NewGameMove
-    )
-        |> send
+                else
+                    -- select another figure
+                    { game | state = FigureSelected ( x, y ) }
+
+            Thinking ->
+                -- none of my fugures was selected -> select this one
+                { game | state = FigureSelected ( x, y ) }
+
+            _ ->
+                game
+
+    else
+        -- There is none of my own figures on this position -> move and/or eat opponents figures
+        case game.state of
+            FigureSelected ( u, v ) ->
+                -- One of my figures was selected before
+                let
+                    move =
+                        ( x - u, y - v )
+                in
+                case
+                    ( (Tuple.first game.myCards).moves
+                        |> List.member move
+                    , (Tuple.second game.myCards).moves
+                        |> List.member move
+                    )
+                of
+                    ( True, True ) ->
+                        { game | state = ChosingCard ( ( u, v ), move ) }
+
+                    ( True, False ) ->
+                        { game | state = MoveDone { color = game.myColor, card = Tuple.first game.myCards, from = ( u, v ), move = move } }
+
+                    ( False, True ) ->
+                        { game | state = MoveDone { color = game.myColor, card = Tuple.second game.myCards, from = ( u, v ), move = move } }
+
+                    ( False, False ) ->
+                        game
+
+            _ ->
+                game
 
 
-send : msg -> Cmd msg
-send msg =
-    Task.succeed msg
-        |> Task.perform identity
-
-
-rotateCardMove : GameMove -> GameMove
-rotateCardMove { color, from, move, card } =
+rotateGameMove : GameMove -> GameMove
+rotateGameMove { color, from, move, card } =
     let
         ( move_x, move_y ) =
             move
-    in
-    { color = color
-    , from = from
-    , move = ( negate move_x, negate move_y )
-    , card = card
-    }
 
-
-rotateFromMove : GameMove -> GameMove
-rotateFromMove { color, from, move, card } =
-    let
         ( from_x, from_y ) =
             from
     in
     { color = color
     , from = ( 4 - from_x, 4 - from_y )
-    , move = move
+    , move = ( negate move_x, negate move_y )
     , card = card
     }
+
+
+execGameMove : Game -> Game
+execGameMove game =
+    case game.state of
+        MoveDone gameMove ->
+            if gameMove.color == game.nextColor then
+                case ( game.myColor, gameMove.color ) of
+                    ( White, White ) ->
+                        game
+                            |> moveFigures gameMove
+
+                    ( White, Black ) ->
+                        game
+                            |> flipFigures
+                            |> flipCards
+                            |> moveFigures (gameMove |> rotateGameMove)
+                            |> flipFigures
+                            |> flipCards
+
+                    ( Black, White ) ->
+                        game
+                            |> flipFigures
+                            |> flipCards
+                            |> moveFigures (gameMove |> rotateGameMove)
+                            |> flipFigures
+                            |> flipCards
+
+                    ( Black, Black ) ->
+                        game
+                            |> moveFigures gameMove
+
+            else
+                { game | state = Thinking }
+
+        _ ->
+            game
 
 
 {-| The Move happens here
@@ -349,8 +318,8 @@ rotateFromMove { color, from, move, card } =
     -> Do nothing if one test fails (all or nothing)
 
 -}
-executeGameMove : GameMove -> Game -> Game
-executeGameMove { color, from, move, card } game =
+moveFigures : GameMove -> Game -> Game
+moveFigures { color, from, move, card } game =
     let
         ( from_x, from_y ) =
             from
@@ -365,9 +334,9 @@ executeGameMove { color, from, move, card } game =
             game.myFigures
                 |> List.map
                     (\f ->
-                        if f.pos == On ( from_x, from_y ) then
+                        if f.pos == ( from_x, from_y ) then
                             -- move figure from from to newposition
-                            { f | pos = On to }
+                            { f | pos = to }
 
                         else
                             f
@@ -375,15 +344,8 @@ executeGameMove { color, from, move, card } game =
 
         opNewFigures =
             game.opFigures
-                |> List.map
-                    (\f ->
-                        if f.pos == On to then
-                            -- eat opponents figure
-                            { f | pos = Out }
-
-                        else
-                            f
-                    )
+                |> List.filter
+                    (\f -> f.pos /= to)
 
         ( myFirstCard, mySecondCard ) =
             ( Tuple.first game.myCards, Tuple.second game.myCards )
@@ -394,10 +356,8 @@ executeGameMove { color, from, move, card } game =
             && (myFirstCard == card || mySecondCard == card)
     then
         { game
-            | lastClickedCell = Nothing
-            , myFigures = myNewFigures
+            | myFigures = myNewFigures
             , opFigures = opNewFigures
-            , chooseCard = Nothing
             , commonCard = card
             , myCards =
                 if Tuple.first game.myCards == card then
@@ -406,6 +366,7 @@ executeGameMove { color, from, move, card } game =
                 else
                     ( myFirstCard, game.commonCard )
             , nextColor = invert color
+            , state = Thinking
         }
 
     else
@@ -432,32 +393,28 @@ flipCards game =
 -- INIT
 
 
-
-
 setupNewGame : Color -> Color -> Game
 setupNewGame playerColor nextColor =
     Game playerColor
         nextColor
-        [ { kind = Pawn 1, pos = On ( 0, 0 ) }
-        , { kind = Pawn 2, pos = On ( 1, 0 ) }
-        , { kind = King, pos = On ( 2, 0 ) }
-        , { kind = Pawn 3, pos = On ( 3, 0 ) }
-        , { kind = Pawn 4, pos = On ( 4, 0 ) }
+        [ { kind = Pawn 1, pos = ( 0, 0 ) }
+        , { kind = Pawn 2, pos = ( 1, 0 ) }
+        , { kind = King, pos = ( 2, 0 ) }
+        , { kind = Pawn 3, pos = ( 3, 0 ) }
+        , { kind = Pawn 4, pos = ( 4, 0 ) }
         ]
-        [ { kind = Pawn 4, pos = On ( 0, 4 ) }
-        , { kind = Pawn 3, pos = On ( 1, 4 ) }
-        , { kind = King, pos = On ( 2, 4 ) }
-        , { kind = Pawn 2, pos = On ( 3, 4 ) }
-        , { kind = Pawn 1, pos = On ( 4, 4 ) }
+        [ { kind = Pawn 4, pos = ( 0, 4 ) }
+        , { kind = Pawn 3, pos = ( 1, 4 ) }
+        , { kind = King, pos = ( 2, 4 ) }
+        , { kind = Pawn 2, pos = ( 3, 4 ) }
+        , { kind = Pawn 1, pos = ( 4, 4 ) }
         ]
         ( dummyCard, dummyCard )
         ( dummyCard, dummyCard )
         dummyCard
-        Nothing
-        Nothing
+        Thinking
 
 
 giveNewCards : Cmd Msg
 giveNewCards =
     Random.generate GotNewCards chooseFiveCards
-

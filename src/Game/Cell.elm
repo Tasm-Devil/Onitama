@@ -1,6 +1,5 @@
 module Game.Cell exposing (..)
 
-import Game.Figure exposing (Position(..))
 import Global exposing (gridsize)
 import List.Extra
 import Svg
@@ -20,7 +19,7 @@ type CellType
     | MoveToCell
 
 
-draw : CellType -> (Position -> msg) -> ( Int, Int ) -> Svg.Svg msg
+draw : CellType -> (( Int, Int ) -> msg) -> ( Int, Int ) -> Svg.Svg msg
 draw celltype callback ( u, v ) =
     Svg.rect
         -- ToDO: Use class attibutes instead of stroke SvgA.class="highlighted-cell" SvgA.class="possible-move"
@@ -42,7 +41,7 @@ draw celltype callback ( u, v ) =
                     "yellow"
             )
         , SvgA.strokeWidth "1"
-        , SvgE.onClick <| callback (On ( u, v ))
+        , SvgE.onClick <| callback ( u, v )
         ]
         []
 
