@@ -6644,6 +6644,32 @@ var $author$project$Main$send = function (msg) {
 		$elm$core$Basics$identity,
 		$elm$core$Task$succeed(msg));
 };
+var $author$project$Game$Game$rotateGameMove = function (_v0) {
+	var color = _v0.q;
+	var from = _v0.I;
+	var move = _v0.L;
+	var card = _v0.F;
+	var _v1 = move;
+	var move_x = _v1.a;
+	var move_y = _v1.b;
+	var _v2 = from;
+	var from_x = _v2.a;
+	var from_y = _v2.b;
+	return {
+		F: card,
+		q: color,
+		I: _Utils_Tuple2(4 - from_x, 4 - from_y),
+		L: _Utils_Tuple2(-move_x, -move_y)
+	};
+};
+var $author$project$Main$transformGameMove = function (g) {
+	var _v0 = g.q;
+	if (_v0 === 1) {
+		return $author$project$Game$Game$rotateGameMove(g);
+	} else {
+		return g;
+	}
+};
 var $author$project$Game$Game$MoveDone = function (a) {
 	return {$: 3, a: a};
 };
@@ -6785,24 +6811,6 @@ var $author$project$Game$Game$moveFigures = F2(
 				h: $author$project$Game$Game$Thinking
 			}) : game;
 	});
-var $author$project$Game$Game$rotateGameMove = function (_v0) {
-	var color = _v0.q;
-	var from = _v0.I;
-	var move = _v0.L;
-	var card = _v0.F;
-	var _v1 = move;
-	var move_x = _v1.a;
-	var move_y = _v1.b;
-	var _v2 = from;
-	var from_x = _v2.a;
-	var from_y = _v2.b;
-	return {
-		F: card,
-		q: color,
-		I: _Utils_Tuple2(4 - from_x, 4 - from_y),
-		L: _Utils_Tuple2(-move_x, -move_y)
-	};
-};
 var $author$project$Game$Game$execGameMove = function (game) {
 	var _v0 = game.h;
 	if (_v0.$ === 3) {
@@ -7002,7 +7010,8 @@ var $author$project$Main$update = F2(
 						var _v1 = game_.h;
 						if (_v1.$ === 3) {
 							var gameMove = _v1.a;
-							return $author$project$Main$postNewGameMove(gameMove);
+							return $author$project$Main$postNewGameMove(
+								$author$project$Main$transformGameMove(gameMove));
 						} else {
 							return $elm$core$Platform$Cmd$none;
 						}
@@ -7016,7 +7025,8 @@ var $author$project$Main$update = F2(
 							{
 								s: A2(
 									$author$project$Game$Game$update,
-									$author$project$Game$Game$NewGameMove(gameMove),
+									$author$project$Game$Game$NewGameMove(
+										$author$project$Main$transformGameMove(gameMove)),
 									game),
 								t: A2($elm$core$List$cons, gameMove, model.t)
 							}),
@@ -7074,7 +7084,8 @@ var $author$project$Main$update = F2(
 							var gameMove = history.a;
 							var game_ = A2(
 								$author$project$Game$Game$update,
-								$author$project$Game$Game$NewGameMove(gameMove),
+								$author$project$Game$Game$NewGameMove(
+									$author$project$Main$transformGameMove(gameMove)),
 								A2(
 									$author$project$Game$Game$newCards,
 									model.ad,
@@ -7090,7 +7101,8 @@ var $author$project$Main$update = F2(
 							if (_Utils_eq(pastHistory, model.t)) {
 								var game_ = A2(
 									$author$project$Game$Game$update,
-									$author$project$Game$Game$NewGameMove(gameMove),
+									$author$project$Game$Game$NewGameMove(
+										$author$project$Main$transformGameMove(gameMove)),
 									game);
 								return _Utils_Tuple2(
 									_Utils_update(
@@ -7927,16 +7939,33 @@ var $elm$html$Html$Attributes$id = $elm$html$Html$Attributes$stringProperty('id'
 var $elm$html$Html$input = _VirtualDom_node('input');
 var $elm$html$Html$Attributes$type_ = $elm$html$Html$Attributes$stringProperty('type');
 var $elm$html$Html$ul = _VirtualDom_node('ul');
+var $elm$core$String$cons = _String_cons;
+var $elm$core$String$fromChar = function (_char) {
+	return A2($elm$core$String$cons, _char, '');
+};
+var $elm$core$Char$fromCode = _Char_fromCode;
 var $elm$html$Html$li = _VirtualDom_node('li');
 var $author$project$Main$viewGameMove = function (gameMove) {
 	var _v0 = gameMove.L;
 	var move_x = _v0.a;
 	var move_y = _v0.b;
-	var _v1 = gameMove.I;
+	var _v1 = _Utils_Tuple2(1 + gameMove.I.a, 1 + gameMove.I.b);
 	var from_x = _v1.a;
 	var from_y = _v1.b;
-	var from = $elm$core$String$fromInt(from_x) + (' , ' + $elm$core$String$fromInt(from_y));
-	var to = $elm$core$String$fromInt(from_x + move_x) + (' , ' + $elm$core$String$fromInt(from_y + move_y));
+	var _v2 = _Utils_Tuple2(from_x + move_x, from_y + move_y);
+	var to_x = _v2.a;
+	var to_y = _v2.b;
+	var _v3 = _Utils_Tuple2(
+		$elm$core$Char$fromCode(96 + from_x),
+		$elm$core$Char$fromCode(96 + to_x));
+	var from_x_char = _v3.a;
+	var to_x_char = _v3.b;
+	var to = _Utils_ap(
+		$elm$core$String$fromChar(to_x_char),
+		$elm$core$String$fromInt(to_y));
+	var from = _Utils_ap(
+		$elm$core$String$fromChar(from_x_char),
+		$elm$core$String$fromInt(from_y));
 	return A2(
 		$elm$html$Html$li,
 		_List_fromArray(
@@ -7946,7 +7975,7 @@ var $author$project$Main$viewGameMove = function (gameMove) {
 		_List_fromArray(
 			[
 				$elm$html$Html$text(
-				$author$project$Game$Figure$colorToString(gameMove.q) + (' moved from ( ' + (from + (' ) to ( ' + (to + (' ) by playing the ' + (gameMove.F.a + ' card.')))))))
+				$author$project$Game$Figure$colorToString(gameMove.q) + (' moved from ' + (from + (' to ' + (to + (' by playing the ' + (gameMove.F.a + ' card.')))))))
 			]));
 };
 var $author$project$Main$viewHistory = function (history) {

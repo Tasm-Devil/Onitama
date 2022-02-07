@@ -36,7 +36,7 @@ type alias Game =
 
 {-| GameMove
 
-    - The from field is the start position and is always seen from the perspective of the White player
+    - The from field is the start position and is always seen from the perspective of the grid. Bottom left cell is (0,0) for white and black.
     - The move field is independent from the player color. See it from the perspectiv of a non rotated card
 
 -}

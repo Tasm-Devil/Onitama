@@ -87,19 +87,25 @@ viewGameMove : GameMove -> Html Msg
 viewGameMove gameMove =
     let
         ( from_x, from_y ) =
-            gameMove.from
+            ( 1 + Tuple.first gameMove.from, 1 + Tuple.second gameMove.from )
 
         ( move_x, move_y ) =
             gameMove.move
 
+        ( to_x, to_y ) =
+            ( from_x + move_x, from_y + move_y )
+
+        ( from_x_char, to_x_char ) =
+            ( Char.fromCode (96 + from_x), Char.fromCode (96 + to_x) )
+
         from =
-            String.fromInt from_x ++ " , " ++ String.fromInt from_y
+            String.fromChar from_x_char ++ String.fromInt from_y
 
         to =
-            String.fromInt (from_x + move_x) ++ " , " ++ String.fromInt (from_y + move_y)
+            String.fromChar to_x_char ++ String.fromInt to_y
     in
     Html.li [ HtmlA.class "log-message" ]
-        [ Html.text (colorToString gameMove.color ++ " moved from ( " ++ from ++ " ) to ( " ++ to ++ " ) by playing the " ++ gameMove.card.name ++ " card.") ]
+        [ Html.text (colorToString gameMove.color ++ " moved from " ++ from ++ " to " ++ to ++ " by playing the " ++ gameMove.card.name ++ " card.") ]
 
 
 
@@ -114,6 +120,10 @@ type Msg
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
 
 
+
+--    | WssIncome String
+
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ game } as model) =
     case msg of
@@ -125,7 +135,7 @@ update msg ({ game } as model) =
             ( { model | game = game_ }
             , case game_.state of
                 MoveDone gameMove ->
-                    postNewGameMove gameMove
+                    postNewGameMove <| transformGameMove gameMove
 
                 _ ->
                     Cmd.none
@@ -133,7 +143,7 @@ update msg ({ game } as model) =
 
         ReceivedPostCreatedFromServer (Ok gameMove) ->
             ( { model
-                | game = Game.update (NewGameMove gameMove) game
+                | game = Game.update (NewGameMove <| transformGameMove gameMove) game
                 , history = gameMove :: model.history
               }
             , Cmd.none
@@ -183,7 +193,7 @@ update msg ({ game } as model) =
                         game_ =
                             Game.setupNewGame Black White
                                 |> Game.newCards model.cards
-                                |> Game.update (NewGameMove gameMove)
+                                |> Game.update (NewGameMove <| transformGameMove gameMove)
                     in
                     ( { model
                         | history = history
@@ -198,7 +208,7 @@ update msg ({ game } as model) =
                         let
                             game_ =
                                 game
-                                    |> Game.update (NewGameMove gameMove)
+                                    |> Game.update (NewGameMove <| transformGameMove gameMove)
                         in
                         ( { model
                             | history = history
@@ -219,10 +229,27 @@ update msg ({ game } as model) =
             )
 
 
+
+{-
+   WssIncome _ ->
+       Debug.todo "branch 'Recv _' not implemented"
+-}
+
+
 send : msg -> Cmd msg
 send msg =
     Task.succeed msg
         |> Task.perform identity
+
+
+transformGameMove : Game.GameMove -> Game.GameMove
+transformGameMove g =
+    case g.color of
+        Black ->
+            Game.rotateGameMove g
+
+        White ->
+            g
 
 
 getCardsFromServer : Cmd Msg
@@ -333,4 +360,18 @@ main =
            , update = update
            , subscriptions = \_ -> Sub.none
            }
+-}
+{-
+   -- PORTS
+   port sendMessage : String -> Cmd msg
+   port messageReceiver : (String -> msg) -> Sub msg
+
+   -- SUBSCRIPTIONS
+   -- Subscribe to the `messageReceiver` port to hear about messages coming in
+   -- from JS. Check out the index.html file to see how this is hooked up to a
+   -- WebSocket.
+   --
+   subscriptions : Model -> Sub Msg
+   subscriptions _ =
+     messageReceiver WssIncome
 -}
