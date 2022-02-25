@@ -4,11 +4,11 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           onitama-haskell-server
+name:           onitama
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/servant-test1#readme>
-homepage:       https://github.com/Tasm-Devil/onitama-haskell-server#readme
-bug-reports:    https://github.com/Tasm-Devil/onitama-haskell-server/issues
+description:    Please see the README on GitHub at <https://github.com/Tasm-Devil/Onitama#readme>
+homepage:       https://github.com/Tasm-Devil/Onitama#readme
+bug-reports:    https://github.com/Tasm-Devil/Onitama/issues
 author:         Pascal Deneaux
 maintainer:     pascal@deneaux.de
 copyright:      2022 Pascal Deneaux
@@ -20,7 +20,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/Tasm-Devil/onitama-haskell-server
+  location: https://github.com/Tasm-Devil/Onitama
 
 library
   exposed-modules:
@@ -29,7 +29,7 @@ library
       Game
       MakeAssets
   other-modules:
-      Paths_onitama_haskell_server
+      Paths_onitama
   hs-source-dirs:
       server/src
   build-depends:
@@ -57,7 +57,7 @@ library
 executable server
   main-is: Main.hs
   other-modules:
-      Paths_onitama_haskell_server
+      Paths_onitama
   hs-source-dirs:
       server/app
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -70,7 +70,7 @@ executable server
     , directory
     , filepath
     , http-types
-    , onitama-haskell-server
+    , onitama
     , random
     , random-shuffle
     , servant-server
@@ -84,11 +84,11 @@ executable server
     , warp
   default-language: Haskell2010
 
-test-suite onitama-haskell-server-test
+test-suite onitama-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Paths_onitama_haskell_server
+      Paths_onitama
   hs-source-dirs:
       server/test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
@@ -104,7 +104,7 @@ test-suite onitama-haskell-server-test
     , hspec-wai
     , hspec-wai-json
     , http-types
-    , onitama-haskell-server
+    , onitama
     , random
     , random-shuffle
     , servant-server
