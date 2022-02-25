@@ -7,3 +7,4 @@
 
 clean:
 	rm ../assets/*.js
+	rm -r elm-stuff

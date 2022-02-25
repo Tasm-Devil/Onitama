@@ -19,3 +19,7 @@ test:
 	stack test
 	(cd client ; make run-tests)
 	(cd client ; make)
+
+clean:
+	rm -r .stack-work
+	(cd client ; make clean)
