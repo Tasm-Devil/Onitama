@@ -1,0 +1,73 @@
+name:                onitama-haskell-server
+version:             0.1.0.0
+github:              "Tasm-Devil/onitama-haskell-server"
+license:             BSD3
+author:              "Pascal Deneaux"
+maintainer:          "pascal@deneaux.de"
+copyright:           "2022 Pascal Deneaux"
+
+extra-source-files:
+- README.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/servant-test1#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- aeson
+- containers
+- random
+- random-shuffle
+- servant-server
+- transformers
+- wai
+- wai-cors
+- wai-extra
+- warp
+- wai-app-static     # for wai-make-assets
+- string-conversions # for wai-make-assets
+- bytestring         # for wai-make-assets
+- data-default       # for wai-make-assets
+- filepath           # for wai-make-assets
+- shake              # for wai-make-assets
+- http-types         # for wai-make-assets
+- directory          # for wai-make-assets
+
+
+library:
+  source-dirs: 
+  - server/src
+
+executables:
+  server:
+    main:                Main.hs
+    source-dirs:         server/app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - onitama-haskell-server
+
+tests:
+  onitama-haskell-server-test:
+    main:                Spec.hs
+    source-dirs:         server/test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - onitama-haskell-server
+    - hspec
+    - hspec-wai
+    - hspec-wai-json
+    - aeson

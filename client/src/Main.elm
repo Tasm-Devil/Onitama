@@ -49,7 +49,7 @@ view model =
                         , Html.button [ onClick JoinGame ]
                             [ Html.text "Join" ]
                         , Html.button [ onClick RequestGameFromServer ]
-                            [ Html.text "Update (Poll Server)" ]
+                            [ Html.text "Update" ]
                         , viewHistoryOrError model
                         ]
                    ]
@@ -83,7 +83,7 @@ viewHistory : List GameMove -> Html Msg
 viewHistory history =
     Html.div [ HtmlA.class "game-log" ]
         [ Html.ul [ HtmlA.id "log-lines" ]
-            (List.map viewGameMove history)
+            (List.map viewGameMove <| List.reverse history)
         , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
         ]
 
@@ -283,7 +283,7 @@ transformGameMove g =
 getGameIdFromServer : Cmd Msg
 getGameIdFromServer =
     Http.post
-        { url = "http://localhost:5019/game"
+        { url = "/game" --http://localhost:3000/game
         , body = Http.emptyBody
         , expect = Http.expectJson ReceivedGameIdFromServer Decode.int
         }
@@ -292,9 +292,17 @@ getGameIdFromServer =
 getGameFromServer : Int -> Cmd Msg
 getGameFromServer gameid =
     Http.get
-        { url = "http://localhost:5019/game/" ++ String.fromInt gameid
+        { url = "/game/" ++ String.fromInt gameid
         , expect =
             Http.expectJson ReceivedGameFromServer decodeGame
+        }
+
+postNewGameMove : Int -> Game.GameMove -> Cmd Msg
+postNewGameMove gameid gameMove =
+    Http.post
+        { url = "/game/" ++ String.fromInt gameid
+        , body = Http.jsonBody (enecodergameMove gameMove)
+        , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
         }
 
 
@@ -319,15 +327,6 @@ decodeGame =
     Decode.map2 Tuple.pair
         (Decode.field "cards" (Decode.list (Decode.map Game.Card.cardByName Decode.string)))
         (Decode.field "history" (Decode.list decodeGameMove))
-
-
-postNewGameMove : Int -> Game.GameMove -> Cmd Msg
-postNewGameMove gameid gameMove =
-    Http.post
-        { url = "http://localhost:5019/game/" ++ String.fromInt gameid
-        , body = Http.jsonBody (enecodergameMove gameMove)
-        , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
-        }
 
 
 enecodergameMove : Game.GameMove -> Encode.Value
