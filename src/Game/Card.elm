@@ -22,22 +22,22 @@ dummyCard =
 
 allCards : List Card
 allCards =
-    [ { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ] }
-    , { name = "Dragon", moves = [ ( -2, 1 ), ( -1, -1 ), ( 2, 1 ), ( 1, -1 ) ] }
-    , { name = "Frog", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, -1 ) ] }
-    , { name = "Rabbit", moves = [ ( 2, 0 ), ( 1, 1 ), ( -1, -1 ) ] }
-    , { name = "Crab", moves = [ ( -2, 0 ), ( 2, 0 ), ( 0, 1 ) ] }
-    , { name = "Elephant", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, 1 ) ] }
-    , { name = "Goose", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
-    , { name = "Rooster", moves = [ ( -1, 0 ), ( -1, -1 ), ( 1, 0 ), ( 1, 1 ) ] }
-    , { name = "Monkey", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 1 ), ( 1, -1 ) ] }
-    , { name = "Mantis", moves = [ ( -1, 1 ), ( 1, 1 ), ( 0, -1 ) ] }
-    , { name = "Horse", moves = [ ( -1, 0 ), ( 0, 1 ), ( 0, -1 ) ] }
-    , { name = "Ox", moves = [ ( 1, 0 ), ( 0, 1 ), ( 0, -1 ) ] }
-    , { name = "Crane", moves = [ ( 0, 1 ), ( -1, -1 ), ( 1, -1 ) ] }
-    , { name = "Boar", moves = [ ( -1, 0 ), ( 1, 0 ), ( 0, 1 ) ] }
-    , { name = "Eel", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 0 ) ] }
+    [ { name = "Boar", moves = [ ( -1, 0 ), ( 1, 0 ), ( 0, 1 ) ] }
     , { name = "Cobra", moves = [ ( 1, 1 ), ( 1, -1 ), ( -1, 0 ) ] }
+    , { name = "Crab", moves = [ ( -2, 0 ), ( 2, 0 ), ( 0, 1 ) ] }
+    , { name = "Crane", moves = [ ( 0, 1 ), ( -1, -1 ), ( 1, -1 ) ] }
+    , { name = "Dragon", moves = [ ( -2, 1 ), ( -1, -1 ), ( 2, 1 ), ( 1, -1 ) ] }
+    , { name = "Eel", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 0 ) ] }
+    , { name = "Elephant", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, 1 ) ] }
+    , { name = "Frog", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, -1 ) ] }
+    , { name = "Goose", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
+    , { name = "Horse", moves = [ ( -1, 0 ), ( 0, 1 ), ( 0, -1 ) ] }
+    , { name = "Mantis", moves = [ ( -1, 1 ), ( 1, 1 ), ( 0, -1 ) ] }
+    , { name = "Monkey", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 1 ), ( 1, -1 ) ] }
+    , { name = "Ox", moves = [ ( 1, 0 ), ( 0, 1 ), ( 0, -1 ) ] }
+    , { name = "Rabbit", moves = [ ( 2, 0 ), ( 1, 1 ), ( -1, -1 ) ] }
+    , { name = "Rooster", moves = [ ( -1, 0 ), ( -1, -1 ), ( 1, 0 ), ( 1, 1 ) ] }
+    , { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ] }
     ]
 
 

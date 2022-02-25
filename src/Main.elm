@@ -6,7 +6,7 @@ import Game.Figure exposing (Color(..), colorToString)
 import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
 import Html exposing (Html)
 import Html.Attributes as HtmlA
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
@@ -23,6 +23,7 @@ import Task
 
 type alias Model =
     { game : Game
+    , gameid : Int
     , cards : List Card
     , history : List Game.GameMove
     , errorMessage : Maybe String
@@ -43,7 +44,12 @@ view model =
                 |> List.map (Html.map GameMsg)
              )
                 ++ [ Html.div []
-                        [ Html.button [ onClick RequestHistoryFromServer ]
+                        [ Html.button [ onClick RequestNewGameFromServer ]
+                            [ Html.text "New Game" ]
+                        , Html.input [ HtmlA.id "gameid", HtmlA.type_ "number", HtmlA.value <| String.fromInt model.gameid, onInput GameIdEntered ] []
+                        , Html.button [ onClick JoinGame ]
+                            [ Html.text "Join" ]
+                        , Html.button [ onClick RequestGameFromServer ]
                             [ Html.text "Update (Poll Server)" ]
                         , viewHistoryOrError model
                         ]
@@ -114,10 +120,13 @@ viewGameMove gameMove =
 
 type Msg
     = GameMsg Game.Msg
-    | RequestHistoryFromServer
-    | ReceivedHistoryFromServer (Result Http.Error (List Game.GameMove))
-    | ReceivedCardsFromServer (Result Http.Error (List String))
+    | RequestNewGameFromServer
+    | RequestGameFromServer
+    | ReceivedGameIdFromServer (Result Http.Error Int)
+    | ReceivedGameFromServer (Result Http.Error ( List Card, List Game.GameMove ))
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
+    | JoinGame
+    | GameIdEntered String
 
 
 
@@ -135,7 +144,7 @@ update msg ({ game } as model) =
             ( { model | game = game_ }
             , case game_.state of
                 MoveDone gameMove ->
-                    postNewGameMove <| transformGameMove gameMove
+                    postNewGameMove model.gameid <| transformGameMove gameMove
 
                 _ ->
                     Cmd.none
@@ -156,33 +165,41 @@ update msg ({ game } as model) =
             , Cmd.none
             )
 
-        ReceivedCardsFromServer (Ok cards) ->
-            ( { model | cards = cards |> List.map Game.Card.cardByName }
-            , send RequestHistoryFromServer
+        RequestNewGameFromServer ->
+            ( model
+            , getGameIdFromServer
             )
 
-        ReceivedCardsFromServer (Err httpError) ->
+        ReceivedGameIdFromServer (Ok gameId) ->
+            ( { model
+                | gameid = gameId
+              }
+            , send RequestGameFromServer
+            )
+
+        ReceivedGameIdFromServer (Err httpError) ->
             ( { model
                 | errorMessage = Just (buildErrorMessage httpError)
               }
             , Cmd.none
             )
 
-        RequestHistoryFromServer ->
+        RequestGameFromServer ->
             ( model
-            , getHistoryFromServer
+            , getGameFromServer model.gameid
             )
 
-        ReceivedHistoryFromServer (Ok history_) ->
-            let
-                history =
-                    List.reverse history_
-            in
+        ReceivedGameFromServer (Ok ( cards, history )) ->
             case history of
                 [] ->
+                    let
+                        game_ =
+                            Game.setupNewGame White White
+                                |> Game.newCards cards
+                    in
                     ( { model
-                        | game = Game.newCards model.cards game
-                        , history = history
+                        | game = game_
+                        , history = []
                         , errorMessage = Nothing
                       }
                     , Cmd.none
@@ -192,13 +209,13 @@ update msg ({ game } as model) =
                     let
                         game_ =
                             Game.setupNewGame Black White
-                                |> Game.newCards model.cards
+                                |> Game.newCards cards
                                 |> Game.update (NewGameMove <| transformGameMove gameMove)
                     in
                     ( { model
-                        | history = history
+                        | game = game_
+                        , history = [ gameMove ]
                         , errorMessage = Nothing
-                        , game = game_
                       }
                     , Cmd.none
                     )
@@ -211,9 +228,9 @@ update msg ({ game } as model) =
                                     |> Game.update (NewGameMove <| transformGameMove gameMove)
                         in
                         ( { model
-                            | history = history
+                            | game = game_
+                            , history = history
                             , errorMessage = Nothing
-                            , game = game_
                           }
                         , Cmd.none
                         )
@@ -221,11 +238,23 @@ update msg ({ game } as model) =
                     else
                         ( model, Cmd.none )
 
-        ReceivedHistoryFromServer (Err httpError) ->
+        ReceivedGameFromServer (Err httpError) ->
             ( { model
                 | errorMessage = Just (buildErrorMessage httpError)
               }
             , Cmd.none
+            )
+
+        GameIdEntered gameId ->
+            ( { model
+                | gameid = Maybe.withDefault 0 <| String.toInt gameId
+              }
+            , Cmd.none
+            )
+
+        JoinGame ->
+            ( model
+            , send RequestGameFromServer
             )
 
 
@@ -252,20 +281,21 @@ transformGameMove g =
             g
 
 
-getCardsFromServer : Cmd Msg
-getCardsFromServer =
-    Http.get
-        { url = "http://localhost:5019/cards"
-        , expect = Http.expectJson ReceivedCardsFromServer (Decode.list Decode.string)
+getGameIdFromServer : Cmd Msg
+getGameIdFromServer =
+    Http.post
+        { url = "http://localhost:5019/game"
+        , body = Http.emptyBody
+        , expect = Http.expectJson ReceivedGameIdFromServer Decode.int
         }
 
 
-getHistoryFromServer : Cmd Msg
-getHistoryFromServer =
+getGameFromServer : Int -> Cmd Msg
+getGameFromServer gameid =
     Http.get
-        { url = "http://localhost:5019/history"
+        { url = "http://localhost:5019/game/" ++ String.fromInt gameid
         , expect =
-            Http.expectJson ReceivedHistoryFromServer (Decode.list decodeGameMove)
+            Http.expectJson ReceivedGameFromServer decodeGame
         }
 
 
@@ -285,10 +315,17 @@ decodeGameMove =
         |> required "move" decodeTuple
 
 
-postNewGameMove : Game.GameMove -> Cmd Msg
-postNewGameMove gameMove =
+decodeGame : Decoder ( List Card, List Game.GameMove )
+decodeGame =
+    Decode.map2 Tuple.pair
+        (Decode.field "cards" (Decode.list (Decode.map Game.Card.cardByName Decode.string)))
+        (Decode.field "history" (Decode.list decodeGameMove))
+
+
+postNewGameMove : Int -> Game.GameMove -> Cmd Msg
+postNewGameMove gameid gameMove =
     Http.post
-        { url = "http://localhost:5019/history"
+        { url = "http://localhost:5019/game/" ++ String.fromInt gameid
         , body = Http.jsonBody (enecodergameMove gameMove)
         , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
         }
@@ -330,11 +367,12 @@ buildErrorMessage httpError =
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( { game = Game.setupNewGame White White
+      , gameid = 0
       , cards = []
       , history = []
       , errorMessage = Nothing
       }
-    , getCardsFromServer
+    , Cmd.none
     )
 
 
