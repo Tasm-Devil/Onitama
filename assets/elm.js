@@ -6462,7 +6462,7 @@ var $author$project$Main$getGameFromServer = function (gameid) {
 	return $elm$http$Http$get(
 		{
 			aq: A2($elm$http$Http$expectJson, $author$project$Main$ReceivedGameFromServer, $author$project$Main$decodeGame),
-			aE: 'http://localhost:5019/game/' + $elm$core$String$fromInt(gameid)
+			aE: '/game/' + $elm$core$String$fromInt(gameid)
 		});
 };
 var $author$project$Main$ReceivedGameIdFromServer = function (a) {
@@ -6476,7 +6476,7 @@ var $author$project$Main$getGameIdFromServer = $elm$http$Http$post(
 	{
 		aH: $elm$http$Http$emptyBody,
 		aq: A2($elm$http$Http$expectJson, $author$project$Main$ReceivedGameIdFromServer, $elm$json$Json$Decode$int),
-		aE: 'http://localhost:5019/game'
+		aE: '/game'
 	});
 var $elm$core$List$drop = F2(
 	function (n, list) {
@@ -6646,7 +6646,7 @@ var $author$project$Main$postNewGameMove = F2(
 				aH: $elm$http$Http$jsonBody(
 					$author$project$Main$enecodergameMove(gameMove)),
 				aq: A2($elm$http$Http$expectJson, $author$project$Main$ReceivedPostCreatedFromServer, $author$project$Main$decodeGameMove),
-				aE: 'http://localhost:5019/game/' + $elm$core$String$fromInt(gameid)
+				aE: '/game/' + $elm$core$String$fromInt(gameid)
 			});
 	});
 var $author$project$Main$send = function (msg) {
@@ -8076,7 +8076,10 @@ var $author$project$Main$viewHistory = function (history) {
 					[
 						$elm$html$Html$Attributes$id('log-lines')
 					]),
-				A2($elm$core$List$map, $author$project$Main$viewGameMove, history)),
+				A2(
+					$elm$core$List$map,
+					$author$project$Main$viewGameMove,
+					$elm$core$List$reverse(history))),
 				A2(
 				$elm$html$Html$input,
 				_List_fromArray(
@@ -8161,7 +8164,7 @@ var $author$project$Main$view = function (model) {
 										]),
 									_List_fromArray(
 										[
-											$elm$html$Html$text('Update (Poll Server)')
+											$elm$html$Html$text('Update')
 										])),
 									$author$project$Main$viewHistoryOrError(model)
 								]))
