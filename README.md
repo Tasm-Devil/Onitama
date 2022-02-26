@@ -48,7 +48,6 @@ In the order in which I would like to tackle them.
 - Implement http polling temporarily.
 - New http GET-Request to see all open games.
 - landing page for game creation and selection.
-- API should return error code if game with gameid is not created.
 - JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
 - Use WebSocket to get new moves without the need to do http polling.
 - Implement Chat feature
@@ -61,8 +60,16 @@ In the order in which I would like to tackle them.
 You can easily test the API with some simple curl commands.
 
 ```
+New Game:
 curl -X POST http://localhost:3000/game -w "\n"
+
+Get all Game Ids:
+curl http://localhost:3000/game -w "\n"
+
+Get Game with Id 1
 curl http://localhost:3000/game/1 -w "\n"
+
+Post new GameMove to Game 1
 curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:5019/game/1 -w "\n"
 ```
 

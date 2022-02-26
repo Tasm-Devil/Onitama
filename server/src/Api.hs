@@ -7,6 +7,16 @@ module Api where
 
 import Game ( GameMove, Game )
 import Servant
+    ( type (:<|>),
+      Proxy(..),
+      FromHttpApiData,
+      ToHttpApiData,
+      Capture,
+      JSON,
+      ReqBody,
+      type (:>),
+      Get,
+      Post )
 import qualified Data.Map.Strict as Map
 import Data.Map ( Map )
 import Data.Aeson.TH (defaultOptions, deriveJSON)
@@ -14,11 +24,13 @@ import Data.Aeson.TH (defaultOptions, deriveJSON)
 
 type NewGame = Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
 
-type GetGame = Capture "gameid" GameId :> Get '[JSON] Game -- Get Current Game from gameId
+type GetGames = Get '[JSON] [GameId] -- Get all GameIds
 
-type NewMove = Capture "gameid" GameId :> ReqBody '[JSON] GameMove :> Post '[JSON] GameMove
+type GetGame = Capture "gameid" GameId :> Get '[JSON] (Maybe Game) -- Get Current Game from gameId
 
-type API = "game" :> (NewGame :<|> GetGame :<|> NewMove)
+type NewMove = Capture "gameid" GameId :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
+
+type API = "game" :> (NewGame :<|> GetGames :<|> GetGame :<|> NewMove)
 
 api :: Proxy API
 api = Proxy
