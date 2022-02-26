@@ -8,8 +8,7 @@ There's a `Makefile` included with the following targets:
   and `elm-test`.)
 - `build` -- Build the server and the client.
 - `server-start` -- Start the server here: <http://localhost:3000/>. Requests sent
-  to this server will trigger a recompilation of the client code (not the server
-  code).
+  to this server will trigger a recompilation (via make) of the client code (if its changed).
 
 ## JSON API
 JSON Message from Server to Client after two game moves. Last move comes first, thats fp style (Head of the List).
@@ -33,7 +32,8 @@ JSON Message from Client to server after third game move.
 The Game logic is implemented entirely on the client side only.
 So there's no checking for cheating on the server side currently!
 This is on purpose because I want to use it for demonstration.
-You can play the older [non-multiplayer version here ](https://tasm-devil.github.io/Onitama/) since it doesn't require a backend server.
+
+Feel free to play the older [non-multiplayer version here ](https://tasm-devil.github.io/Onitama/) since it doesn't want you to setup a backend server.
 
 ### Thanks
 - Inspiration came from [here](http://onitama.lannysport.net/)
@@ -41,19 +41,6 @@ You can play the older [non-multiplayer version here ](https://tasm-devil.github
 
 ## Server
 The Server is my first haskell project. So don't expect very much. I still do not understand monads ;)
-
-### ToDos
-In the order in which I would like to tackle them.
-
-- Implement http polling temporarily.
-- New http GET-Request to see all open games.
-- landing page for game creation and selection.
-- JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
-- Use WebSocket to get new moves without the need to do http polling.
-- Implement Chat feature
-- Authetification by player name at least.
-- More Cards from the explansion.
-
 
 ### Test with curl
 
@@ -70,33 +57,24 @@ Get Game with Id 1
 curl http://localhost:3000/game/1 -w "\n"
 
 Post new GameMove to Game 1
-curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:5019/game/1 -w "\n"
+curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:3000/game/1 -w "\n"
 ```
+
+## ToDos
+In the order in which I would like to tackle them.
+
+- Implement http polling temporarily.
+- landing page for game creation and selection.
+- JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
+- Use WebSocket to get new moves without the need to do http polling.
+- Implement Chat feature
+- Authetification by player name at least.
+- Add support for the Cards from the Senseis Path explansion.
 
 ### Expansion Cards
 
-- Senseis Path [Cards from Addon: Senseis Path](https://www.gadgetsville.store/wp-content/uploads/2017/12/16096-c.jpg)
+- Senseis Path ([image](https://www.gadgetsville.store/wp-content/uploads/2017/12/16096-c.jpg))
+- Promo Cards ([link](https://www.arcanewonders.com/product/onitama-promo-cards/))
 
-```
-FOX = Card("fox", Player.RED, [Pos(1, 1), Pos(1, 0), Pos(1, -1)])
-DOG = Card("dog", Player.BLUE, [Pos(-1, 1), Pos(-1, 0), Pos(-1, -1)])
-GIRAFFE = Card("giraffe", Player.BLUE, [Pos(-2, 1), Pos(0, -1), Pos(2, 1)])
-PANDA = Card("panda", Player.RED, [Pos(-1, -1), Pos(0, 1), Pos(1, 1)])
-BEAR = Card("bear", Player.BLUE, [Pos(-1, 1), Pos(0, 1), Pos(1, -1)])
-KIRIN = Card("kirin", Player.RED, [Pos(-1, 2), Pos(0, -2), Pos(1, 2)])
-SEA_SNAKE = Card("sea_snake", Player.BLUE, [Pos(-1, -1), Pos(0, 1), Pos(2, 0)])
-VIPER = Card("viper", Player.RED, [Pos(-2, 0), Pos(0, 1), Pos(1, -1)])
-PHOENIX = Card("phoenix", Player.BLUE, [Pos(-2, 0), Pos(-1, 1), Pos(1, 1), Pos(2, 0)])
-MOUSE = Card("mouse", Player.BLUE, [Pos(-1, -1), Pos(0, 1), Pos(1, 0)])
-RAT = Card("rat", Player.RED, [Pos(-1, 0), Pos(0, 1), Pos(1, -1)])
-TURTLE = Card("turtle", Player.RED, [Pos(-2, 0), Pos(-1, -1), Pos(1, -1), Pos(2, 0)])
-TANUKI = Card("tanuki", Player.BLUE, [Pos(-1, -1), Pos(0, 1), Pos(2, 1)])
-IGUANA = Card("iguana", Player.RED, [Pos(-2, 1), Pos(0, 1), Pos(1, -1)])
-SABLE = Card("sable", Player.BLUE, [Pos(-2, 0), Pos(-1, -1), Pos(1, 1)])
-OTTER = Card("otter", Player.RED, [Pos(-1, 1), Pos(1, -1), Pos(2, 0)])
-```
-
-- Promo Cards [from here](https://www.arcanewonders.com/product/onitama-promo-cards/)
-
-### Thanks
+## Thanks
 Thanks to <https://github.com/haskell-servant/example-servant-elm>

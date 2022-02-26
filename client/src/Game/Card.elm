@@ -40,6 +40,27 @@ allCards =
     , { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ] }
     ]
 
+{-
+moreCards : List Card -- Senseis Path
+moreCards =
+    [ { name = "bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
+    , { name = "dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ] }
+    , { name = "fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
+    , { name = "giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ] }
+    , { name = "iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
+    , { name = "kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ] }
+    , { name = "mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ] }
+    , { name = "otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ] }
+    , { name = "panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ] }
+    , { name = "phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ] }
+    , { name = "rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
+    , { name = "sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ] }
+    , { name = "sea_snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ] }
+    , { name = "tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ] }
+    , { name = "turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ] }
+    , { name = "viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
+    ]
+-}
 
 cardByName : String -> Card
 cardByName name =

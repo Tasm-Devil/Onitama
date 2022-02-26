@@ -1,16 +1,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Game
+module Game where
 
-where
-
+import Data.Aeson.TH (defaultOptions, deriveJSON)
+import GHC.Conc (TVar)
 import GHC.Generics (Generic)
 import System.Random (StdGen, newStdGen)
 import System.Random.Shuffle (shuffle')
-import Data.Aeson.TH (defaultOptions, deriveJSON)
-import GHC.Conc (TVar)
-
 
 data Color
   = White
@@ -39,7 +36,6 @@ data Game = Game
 
 $(deriveJSON defaultOptions ''Game)
 
-
 validCards :: [Card]
 validCards =
   [ "Boar",
@@ -59,6 +55,28 @@ validCards =
     "Rooster",
     "Tiger"
   ]
+
+{-
+moreCards :: [Card] -- Senseis Path
+moreCards =
+  [ "bear",
+    "dog",
+    "fox",
+    "giraffe",
+    "iguana",
+    "kirin",
+    "mouse",
+    "otter",
+    "panda",
+    "phoenix",
+    "rat",
+    "sable",
+    "sea_snake",
+    "tanuki",
+    "turtle",
+    "viper"
+  ]
+-}
 
 give5Cards :: IO [Card]
 give5Cards = do
