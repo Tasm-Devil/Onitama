@@ -98,8 +98,8 @@ drawCardPrompt ( cardA, cardB ) callback =
     ]
 
 
-drawAllCards : Card -> Card -> Card -> Card -> Card -> List (Svg.Svg msg)
-drawAllCards card1 card2 card3 card4 card5 =
+drawAllCards : Card -> Card -> Card -> Card -> Card -> Bool -> List (Svg.Svg msg)
+drawAllCards card1 card2 card3 card4 card5 rotate =
     [ Svg.g [ SvgA.class "card", SvgA.transform "matrix(0.16,  0, 0, 0.16,  6.6, 130)" ]
         (drawCard card1)
     , Svg.g [ SvgA.class "card", SvgA.transform "matrix(0.16,  0, 0, 0.16,  53.3, 130)" ]
@@ -108,7 +108,7 @@ drawAllCards card1 card2 card3 card4 card5 =
         (drawCard card3)
     , Svg.g [ SvgA.class "card", SvgA.transform "matrix(-0.16, 0, 0, -0.16, 46.6, 20)" ]
         (drawCard card4)
-    , Svg.g [ SvgA.class "card", SvgA.transform "matrix(0.16,  0, 0, 0.16,  105,  65)" ]
+    , Svg.g [ SvgA.class "card", SvgA.transform ("matrix(0.16,  0, 0, 0.16,  105,  65) " ++ if rotate then "rotate(180, 125, 62.5)" else "")]
         (drawCard card5)
     ]
 

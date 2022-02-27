@@ -90,7 +90,7 @@ view game =
                 (Tuple.second game.myCards)
                 (Tuple.first game.opCards)
                 (Tuple.second game.opCards)
-                game.commonCard
+                game.commonCard (game.nextColor /= game.myColor)
             )
         , Svg.g
             [ SvgA.class "card-prompt"
