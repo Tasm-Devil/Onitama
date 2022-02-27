@@ -67,6 +67,7 @@ In the order in which I would like to tackle them.
 - [ ] The Server should remember the player names. Extend API for player names.
 - [ ] Only Black Player can join and rejoin after page reload. When White reloads page, it cannt continue the game.
 - [ ] The common card should determine, which player starts the game.
+- [ ] Check if checkmate!
 - [ ] Implement http polling temporarily.
 - [ ] The URL should change according to the game ID to share it.
 - [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
