@@ -90,7 +90,8 @@ view game =
                 (Tuple.second game.myCards)
                 (Tuple.first game.opCards)
                 (Tuple.second game.opCards)
-                game.commonCard (game.nextColor /= game.myColor)
+                game.commonCard
+                (game.nextColor /= game.myColor)
             )
         , Svg.g
             [ SvgA.class "card-prompt"
@@ -122,8 +123,7 @@ view game =
 
 
 type Msg
-    = GotNewCards ( List Card, List Card )
-    | UserChoseOneCard Card
+    = UserChoseOneCard Card
     | UserClickedOnCell ( Int, Int )
     | NewGameMove GameMove
 
@@ -131,10 +131,6 @@ type Msg
 update : Msg -> Game -> Game
 update msg game =
     case msg of
-        GotNewCards ( shuffledCards, _ ) ->
-            game
-                |> newCards shuffledCards
-
         UserChoseOneCard card ->
             case game.state of
                 ChosingCard ( from, move ) ->
@@ -153,53 +149,6 @@ update msg game =
         NewGameMove gm ->
             { game | state = MoveDone gm }
                 |> execGameMove
-
-
-newCards : List Card -> Game -> Game
-newCards shuffledCards game =
-    { game
-        | myCards =
-            ( case List.head <| shuffledCards of
-                Just c ->
-                    c
-
-                Nothing ->
-                    dummyCard
-            , case List.head <| List.drop 1 <| shuffledCards of
-                Just c ->
-                    c
-
-                Nothing ->
-                    dummyCard
-            )
-        , opCards =
-            ( case List.head <| List.drop 2 <| shuffledCards of
-                Just c ->
-                    c
-
-                Nothing ->
-                    dummyCard
-            , case List.head <| List.drop 3 <| shuffledCards of
-                Just c ->
-                    c
-
-                Nothing ->
-                    dummyCard
-            )
-        , commonCard =
-            case List.head <| List.drop 4 <| shuffledCards of
-                Just c ->
-                    c
-
-                Nothing ->
-                    dummyCard
-    }
-        |> (if game.myColor == Black then
-                flipCards
-
-            else
-                identity
-           )
 
 
 handleClick : ( Int, Int ) -> Game -> Game
@@ -389,12 +338,8 @@ flipCards game =
     }
 
 
-
--- INIT
-
-
-setupNewGame : Color -> Color -> Game
-setupNewGame playerColor nextColor =
+setupNewGame : List Card -> Color -> Color -> Game
+setupNewGame cards playerColor nextColor =
     Game playerColor
         nextColor
         [ { kind = Pawn 1, pos = ( 0, 0 ) }
@@ -409,12 +354,13 @@ setupNewGame playerColor nextColor =
         , { kind = Pawn 2, pos = ( 3, 4 ) }
         , { kind = Pawn 1, pos = ( 4, 4 ) }
         ]
-        ( dummyCard, dummyCard )
-        ( dummyCard, dummyCard )
-        dummyCard
+        ( Maybe.withDefault dummyCard (List.head <| cards), Maybe.withDefault dummyCard (List.head <| List.drop 1 <| cards) )
+        ( Maybe.withDefault dummyCard (List.head <| List.drop 2 <| cards), Maybe.withDefault dummyCard (List.head <| List.drop 3 <| cards) )
+        (Maybe.withDefault dummyCard (List.head <| List.drop 4 <| cards))
         Thinking
+        |> (if playerColor == Black then
+                flipCards
 
-
-giveNewCards : Cmd Msg
-giveNewCards =
-    Random.generate GotNewCards chooseFiveCards
+            else
+                identity
+           )

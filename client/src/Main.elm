@@ -197,7 +197,7 @@ viewGameMove gameMove =
 
 
 
--- UPDATE
+-- UPDATE 
 
 
 type Msg
@@ -263,7 +263,7 @@ update msg ({ state } as model) =
                 ReceivedGameFromServer (Ok ( cards, history )) ->
                     let
                         newgame =
-                            Game.setupNewGame color White |> Game.newCards cards
+                            Game.setupNewGame cards color White 
 
                         -- ToDo: White is not always the first player!
                         finalgame =

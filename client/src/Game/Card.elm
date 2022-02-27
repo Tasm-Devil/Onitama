@@ -2,8 +2,6 @@ module Game.Card exposing (..)
 
 import Game.Cell exposing (CellType(..), drawSimpleCell, grid)
 import Global exposing (gridsize)
-import Random
-import Random.List exposing (choices)
 import Svg
 import Svg.Attributes as SvgA
 import Svg.Events as SvgE
@@ -40,27 +38,30 @@ allCards =
     , { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ] }
     ]
 
+
+
 {-
-moreCards : List Card -- Senseis Path
-moreCards =
-    [ { name = "bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
-    , { name = "dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ] }
-    , { name = "fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
-    , { name = "giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ] }
-    , { name = "iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
-    , { name = "kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ] }
-    , { name = "mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ] }
-    , { name = "otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ] }
-    , { name = "panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ] }
-    , { name = "phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ] }
-    , { name = "rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
-    , { name = "sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ] }
-    , { name = "sea_snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ] }
-    , { name = "tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ] }
-    , { name = "turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ] }
-    , { name = "viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
-    ]
+   moreCards : List Card -- Senseis Path
+   moreCards =
+       [ { name = "bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
+       , { name = "dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ] }
+       , { name = "fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
+       , { name = "giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ] }
+       , { name = "iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
+       , { name = "kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ] }
+       , { name = "mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ] }
+       , { name = "otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ] }
+       , { name = "panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ] }
+       , { name = "phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ] }
+       , { name = "rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
+       , { name = "sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ] }
+       , { name = "sea_snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ] }
+       , { name = "tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ] }
+       , { name = "turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ] }
+       , { name = "viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
+       ]
 -}
+
 
 cardByName : String -> Card
 cardByName name =
@@ -73,11 +74,6 @@ cardByName name =
 
         [] ->
             dummyCard
-
-
-chooseFiveCards : Random.Generator ( List Card, List Card )
-chooseFiveCards =
-    allCards |> choices 5
 
 
 drawCardPrompt : ( Card, Card ) -> (Card -> msg) -> List (Svg.Svg msg)
@@ -108,7 +104,18 @@ drawAllCards card1 card2 card3 card4 card5 rotate =
         (drawCard card3)
     , Svg.g [ SvgA.class "card", SvgA.transform "matrix(-0.16, 0, 0, -0.16, 46.6, 20)" ]
         (drawCard card4)
-    , Svg.g [ SvgA.class "card", SvgA.transform ("matrix(0.16,  0, 0, 0.16,  105,  65) " ++ if rotate then "rotate(180, 125, 62.5)" else "")]
+    , Svg.g
+        [ SvgA.class "card"
+        , SvgA.transform
+            ("matrix(0.16,  0, 0, 0.16,  105,  65) "
+                ++ (if rotate then
+                        "rotate(180, 125, 62.5)"
+
+                    else
+                        ""
+                   )
+            )
+        ]
         (drawCard card5)
     ]
 
