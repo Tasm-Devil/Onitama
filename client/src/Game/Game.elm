@@ -6,7 +6,6 @@ import Game.Figure exposing (..)
 import Global exposing (gridsize)
 import Html exposing (Html)
 import List.Extra
-import Random
 import Svg
 import Svg.Attributes as SvgA
 

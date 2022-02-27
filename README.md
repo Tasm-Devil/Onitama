@@ -68,6 +68,7 @@ In the order in which I would like to tackle them.
 - [ ] Only Black Player can join and rejoin after page reload. When White reloads page, it cannt continue the game.
 - [ ] The common card should determine, which player starts the game.
 - [ ] Implement http polling temporarily.
+- [ ] The URL should change according to the game ID to share it.
 - [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
 - [ ] Use WebSocket to get new moves without the need to do http polling.
 - [ ] Implement Chat feature
