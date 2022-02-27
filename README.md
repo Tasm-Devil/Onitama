@@ -63,8 +63,11 @@ curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H
 ## ToDos
 In the order in which I would like to tackle them.
 
+- [x] landing page for game creation and selection.
+- [ ] The Server should remember the player names. Extend API for player names.
+- [ ] Only Black Player can join and rejoin after page reload. When White reloads page, it cannt continue the game.
+- [ ] The common card should determine, which player starts the game.
 - [ ] Implement http polling temporarily.
-- [ ] landing page for game creation and selection.
 - [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
 - [ ] Use WebSocket to get new moves without the need to do http polling.
 - [ ] Implement Chat feature
