@@ -4,30 +4,38 @@
 
 module App where
 
-import Api ( api, API, GameId )
+import Api (API, GameId, api)
+import Control.Concurrent.STM
+  ( TVar,
+    atomically,
+    modifyTVar,
+    newTVarIO,
+    readTVar,
+    readTVarIO,
+    writeTVar,
+  )
 import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
-import Data.Map ( Map, empty )
+import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe)
-import GHC.Conc
-    ( readTVarIO, writeTVar, readTVar, atomically, newTVarIO, TVar )
 import GHC.Generics ()
 import Game (Game (Game), GameMove, give5Cards)
-import MakeAssets ( serveAssets, Default(def) )
+import MakeAssets (Default (def), serveAssets)
 import Network.Wai (Application)
 import Servant
-    ( hoistServer,
-      serve,
-      Raw,
-      HasServer(ServerT),
-      Server,
-      Tagged(Tagged),
-      type (:<|>)(..),
-      Handler,
-      Application,
-      Proxy(..) )
+  ( Application,
+    Handler,
+    HasServer (ServerT),
+    Proxy (..),
+    Raw,
+    Server,
+    Tagged (Tagged),
+    hoistServer,
+    serve,
+    type (:<|>) (..),
+  )
 
 type Games = Map GameId Game
 
@@ -53,7 +61,7 @@ server = do
   return (readerServer db :<|> Tagged assets)
   where
     readerToHandler :: DB -> AppM a -> Handler a
-    readerToHandler db x = runReaderT x db
+    readerToHandler db appM = runReaderT appM db
     readerServer :: DB -> ServerT API Handler
     readerServer db = hoistServer api (readerToHandler db) apiServer
 
@@ -64,13 +72,10 @@ newGame :: AppM GameId
 newGame = do
   DB db <- ask
   newCards <- liftIO give5Cards
-  let newgame = Game newCards []
-  liftIO $
-    atomically $ do
-      games <- readTVar db
-      writeTVar db $ insertNewGameToDb newgame games
+  liftIO . atomically $ do
+    modifyTVar db . insertNewGameToDb $ Game newCards []
   games <- liftIO $ readTVarIO db
-  return $ fst $ Map.findMax games
+  return . fst $ Map.findMax games
   where
     insertNewGameToDb :: Game -> Games -> Games
     insertNewGameToDb newgame games =
@@ -96,10 +101,8 @@ newMove gameId move = do
   if Map.notMember gameId games
     then do return Nothing
     else do
-      liftIO $
-        atomically $ do
-          games <- readTVar db
-          writeTVar db $ updateGameInDb move gameId games
+      liftIO . atomically $ do
+        modifyTVar db $ updateGameInDb move gameId
       return (Just move)
   where
     updateGameInDb :: GameMove -> GameId -> Games -> Games

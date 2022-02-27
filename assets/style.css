@@ -26,7 +26,7 @@
   padding: 5px;
 }
 
-.landing-screen #name-form .name-line input[type="submit"] {
+.landing-screen #name-form .name-line input {
   -webkit-appearance: none;
   border: none;
   border-left: 1px solid lightgrey;

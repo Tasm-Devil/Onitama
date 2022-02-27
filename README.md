@@ -63,13 +63,13 @@ curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H
 ## ToDos
 In the order in which I would like to tackle them.
 
-- Implement http polling temporarily.
-- landing page for game creation and selection.
-- JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
-- Use WebSocket to get new moves without the need to do http polling.
-- Implement Chat feature
-- Authetification by player name at least.
-- Add support for the Cards from the Senseis Path explansion.
+- [ ] Implement http polling temporarily.
+- [ ] landing page for game creation and selection.
+- [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
+- [ ] Use WebSocket to get new moves without the need to do http polling.
+- [ ] Implement Chat feature
+- [ ] Authetification by player name at least.
+- [ ] Add support for the Cards from the Senseis Path explansion.
 
 ### Expansion Cards
 

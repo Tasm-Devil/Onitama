@@ -10,42 +10,10 @@
 
   <body>
     <div id="myapp"></div>
-    <!--
-    <div class="landing-screen">
-      <form id="name-form">
-        <h1>Onitama</h1>
-        <small>Enter your name...</small>
-        <div class="name-line">
-          <input id="name" placeholder="Enter your name" /><input
-            type="submit"
-            value="Join"
-          />
-        </div>
-        <div class="rejoin" style="display: block">
-          <span
-            >You appear to have a rejoin code for this room. Click the button
-            below if you want to rejoin as the player you were previously.</span
-          ><button id="rejoin-button" type="button">Rejoin</button>
-        </div>
-      </form>
-    </div>
-    -->
   </body>
   <script type="text/javascript">
-    // Start the Elm application.
     var app = Elm.Main.init({
       node: document.getElementById("myapp"),
     });
-  /*
-    var socket = new WebSocket("wss://echo.websocket.org");
-
-    app.ports.sendMessage.subscribe(function (message) {
-      socket.send(message);
-    });
-
-    socket.addEventListener("message", function (event) {
-      app.ports.messageReceiver.send(event.data);
-    });
-  */
   </script>
 </html>

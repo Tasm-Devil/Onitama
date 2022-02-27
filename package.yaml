@@ -30,6 +30,7 @@ dependencies:
 - wai-cors
 - wai-extra
 - warp
+- stm
 - wai-app-static     # for wai-make-assets
 - string-conversions # for wai-make-assets
 - bytestring         # for wai-make-assets

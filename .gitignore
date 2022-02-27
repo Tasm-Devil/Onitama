@@ -1,3 +1,4 @@
 client/elm-stuff/
 .stack-work/
 assets/*.js
+*.cabal
