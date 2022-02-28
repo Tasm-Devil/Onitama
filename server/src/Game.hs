@@ -29,7 +29,9 @@ data GameMove = GameMove
 $(deriveJSON defaultOptions ''GameMove)
 
 data Game = Game
-  { cards :: [Card],
+  { player_white :: String,
+    player_black :: String,
+    cards :: [Card],
     history :: [GameMove]
   }
   deriving (Eq, Show, Generic)

@@ -53,6 +53,9 @@ curl -X POST http://localhost:3000/game -w "\n"
 Get all Game Ids:
 curl http://localhost:3000/game -w "\n"
 
+Join Game
+curl -X PUT http://localhost:3000/game/1?name=Wendy -w "\n"
+
 Get Game with Id 1
 curl http://localhost:3000/game/1 -w "\n"
 
@@ -64,12 +67,12 @@ curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H
 In the order in which I would like to tackle them.
 
 - [x] landing page for game creation and selection.
-- [ ] The Server should remember the player names. Extend API for player names.
-- [ ] Only Black Player can join and rejoin after page reload. When White reloads page, it cannt continue the game.
+- [x] The Server should remember the player names. Extend API for player names.
+- [x] Only Black Player can join and rejoin after page reload. When White reloads page, it cannt continue the game.
+- [ ] Switch from Browser.document to [Browser.application](https://package.elm-lang.org/packages/elm/browser/latest/Browser#application)
 - [ ] The common card should determine, which player starts the game.
-- [ ] Check if checkmate!
+- [ ] Check for checkmate!
 - [ ] Implement http polling temporarily.
-- [ ] The URL should change according to the game ID to share it.
 - [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
 - [ ] Use WebSocket to get new moves without the need to do http polling.
 - [ ] Implement Chat feature

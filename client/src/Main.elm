@@ -21,23 +21,20 @@ type alias GameId =
     Int
 
 
-type alias Model =
-    { state : AppState
-    , errorMessage : Maybe String
-    }
-
-
-type alias Player =
-    { name : String
-    , color : Color
-    }
+type alias PlayerName =
+    String
 
 
 type AppState
     = Lobby (List GameId)
-    | EnterName Player GameId
-    | Playing Player GameId Game (List Game.GameMove)
+    | EnterName PlayerName GameId
+    | Playing PlayerName GameId Game (List Game.GameMove)
 
+
+type alias Model =
+    { state : AppState
+    , errorMessage : Maybe String
+    }
 
 
 -- VIEW
@@ -89,7 +86,7 @@ view ({ state } as model) =
                             [ Html.text "Onitama" ]
                         , Html.small [] [ Html.text "Enter your name..." ]
                         , Html.div [ HtmlA.class "name-line" ]
-                            [ Html.input [ HtmlA.id "name", HtmlA.placeholder "Enter your name", HtmlA.value <| player.name, onInput NameEntered ] []
+                            [ Html.input [ HtmlA.id "name", HtmlA.placeholder "Enter your name", HtmlA.value <| player, onInput NameEntered ] []
                             , Html.input [ HtmlA.type_ "button", HtmlA.value "Join", onClick RequestGameFromServer ] []
                             ]
 
@@ -129,7 +126,7 @@ createGameTableRow id =
         , Html.td []
             [ Html.text "0" ]
         , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href "#", onClick (JoinGame id) ]
+            [ Html.a [ HtmlA.class "join-game", HtmlA.href "#", onClick (ChooseGame id) ]
                 [ Html.text "Join" ]
             ]
         ]
@@ -197,18 +194,25 @@ viewGameMove gameMove =
 
 
 
--- UPDATE 
+-- UPDATE
+
+type alias ServerGame =
+    { player_white : String
+    , player_black : String
+    , cards : List Card
+    , history : List Game.GameMove
+    }
 
 
 type Msg
     = GameMsg Game.Msg
-    | RequestNewGameFromServer -- player white
-    | JoinGame GameId -- player black
+    | RequestNewGameFromServer
+    | ChooseGame GameId
     | NameEntered String
     | RequestGameFromServer -- get geme by id
     | ReceivedGameIdsFromServer (Result Http.Error (List Int)) -- all current game ids
     | ReceivedGameIdFromServer (Result Http.Error Int) -- the game id of the new game
-    | ReceivedGameFromServer (Result Http.Error ( List Card, List Game.GameMove ))
+    | ReceivedGameFromServer (Result Http.Error ServerGame)
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
 
 
@@ -232,13 +236,13 @@ update msg ({ state } as model) =
                     , getGameIdFromServer
                     )
 
-                JoinGame gameId ->
-                    ( { model | state = EnterName { name = "Bob", color = Black } gameId }
+                ChooseGame gameId ->
+                    ( { model | state = EnterName "Bob" gameId }
                     , Cmd.none
                     )
 
                 ReceivedGameIdFromServer (Ok gameId) ->
-                    ( { model | state = EnterName { name = "Wendy", color = White } gameId }
+                    ( { model | state = EnterName "Wendy" gameId }
                     , Cmd.none
                     )
 
@@ -248,29 +252,36 @@ update msg ({ state } as model) =
                 _ ->
                     ( model, Cmd.none )
 
-        EnterName ({ color } as player) gameid ->
+        EnterName name gameid ->
             case msg of
                 NameEntered newname ->
                     ( { model
-                        | state = EnterName { player | name = newname } gameid
+                        | state = EnterName newname gameid
                       }
                     , Cmd.none
                     )
 
                 RequestGameFromServer ->
-                    ( model, getGameFromServer gameid )
+                    ( model, joinGame gameid name )
 
-                ReceivedGameFromServer (Ok ( cards, history )) ->
+                ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ->
                     let
                         newgame =
-                            Game.setupNewGame cards color White 
+                            Game.setupNewGame cards
+                                (if name == player_black then
+                                    Black
+
+                                 else
+                                    White
+                                )
+                                White
 
                         -- ToDo: White is not always the first player!
                         finalgame =
                             List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame history
                     in
                     ( { model
-                        | state = Playing player gameid finalgame history
+                        | state = Playing name gameid finalgame history
                         , errorMessage = Nothing
                       }
                     , Cmd.none
@@ -282,14 +293,14 @@ update msg ({ state } as model) =
                 _ ->
                     ( model, Cmd.none )
 
-        Playing player gameid game history ->
+        Playing name gameid game history_ ->
             case msg of
                 GameMsg gamemsg ->
                     let
                         game_after =
                             Game.update gamemsg game
                     in
-                    ( { model | state = Playing player gameid game_after history }
+                    ( { model | state = Playing name gameid game_after history_ }
                     , case game_after.state of
                         MoveDone gameMove ->
                             postNewGameMove gameid <| transformGameMove gameMove
@@ -298,25 +309,30 @@ update msg ({ state } as model) =
                             Cmd.none
                     )
 
-                ReceivedGameFromServer (Ok ( _, gameMove :: _ )) ->
-                    ( { model
-                        | state =
-                            Playing player
-                                gameid
-                                (game |> Game.update (NewGameMove <| transformGameMove gameMove))
-                                (if List.head history /= Just gameMove then
-                                    gameMove :: history
+                ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ->
+                    Maybe.withDefault ( model, Cmd.none ) <|
+                        Maybe.map
+                            (\gameMove ->
+                                ( { model
+                                    | state =
+                                        Playing name
+                                            gameid
+                                            (game |> Game.update (NewGameMove <| transformGameMove gameMove))
+                                            (if List.head history /= Just gameMove then
+                                                gameMove :: history
 
-                                 else
-                                    history
+                                             else
+                                                history
+                                            )
+                                  }
+                                , Cmd.none
                                 )
-                      }
-                    , Cmd.none
-                    )
+                            )
+                            (List.head history)
 
                 ReceivedPostCreatedFromServer (Ok gameMove) ->
                     ( { model
-                        | state = Playing player gameid (game |> Game.update (NewGameMove <| transformGameMove gameMove)) (gameMove :: history)
+                        | state = Playing name gameid (game |> Game.update (NewGameMove <| transformGameMove gameMove)) (gameMove :: history_)
                       }
                     , Cmd.none
                     )
@@ -373,6 +389,19 @@ getGameIdFromServer =
         }
 
 
+joinGame : Int -> String -> Cmd Msg
+joinGame gameid name =
+    Http.request
+        { method = "PUT"
+        , headers = []
+        , url = "/game/" ++ String.fromInt gameid ++ "?name=" ++ name
+        , body = Http.emptyBody
+        , expect = Http.expectJson ReceivedGameFromServer decodeGame
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
 getGameFromServer : Int -> Cmd Msg
 getGameFromServer gameid =
     Http.get
@@ -385,7 +414,7 @@ getGameFromServer gameid =
 postNewGameMove : Int -> Game.GameMove -> Cmd Msg
 postNewGameMove gameid gameMove =
     Http.post
-        { url = "/game/" ++ String.fromInt gameid
+        { url = "/game/" ++ String.fromInt gameid -- ++ "?name=" ++ name
         , body = Http.jsonBody (enecodergameMove gameMove)
         , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
         }
@@ -407,11 +436,13 @@ decodeGameMove =
         |> required "move" decodeTuple
 
 
-decodeGame : Decoder ( List Card, List Game.GameMove )
+decodeGame : Decoder ServerGame
 decodeGame =
-    Decode.map2 Tuple.pair
-        (Decode.field "cards" (Decode.list (Decode.map Game.Card.cardByName Decode.string)))
-        (Decode.field "history" (Decode.list decodeGameMove))
+    Decode.succeed ServerGame
+        |> required "player_white" Decode.string
+        |> required "player_black" Decode.string
+        |> required "cards" (Decode.list (Decode.map Game.Card.cardByName Decode.string))
+        |> required "history" (Decode.list decodeGameMove)
 
 
 enecodergameMove : Game.GameMove -> Encode.Value
@@ -458,7 +489,7 @@ init _ =
 
 main : Program () Model Msg
 main =
-    Browser.document
+    Browser.document -- Browser.application
         { init = init
         , update = update
         , subscriptions = \_ -> Sub.none

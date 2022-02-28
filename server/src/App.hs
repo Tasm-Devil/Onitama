@@ -19,7 +19,7 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust, isNothing)
 import GHC.Generics ()
 import Game (Game (Game), GameMove, give5Cards)
 import MakeAssets (Default (def), serveAssets)
@@ -66,14 +66,14 @@ server = do
     readerServer db = hoistServer api (readerToHandler db) apiServer
 
 apiServer :: ServerT API AppM
-apiServer = newGame :<|> getAllGames :<|> getGame :<|> newMove
+apiServer = newGame :<|> getAllGames :<|> joinGame :<|> getGame :<|> newMove
 
 newGame :: AppM GameId
 newGame = do
   DB db <- ask
   newCards <- liftIO give5Cards
   liftIO . atomically $ do
-    modifyTVar db . insertNewGameToDb $ Game newCards []
+    modifyTVar db . insertNewGameToDb $ Game "" "" newCards []
   games <- liftIO $ readTVarIO db
   return . fst $ Map.findMax games
   where
@@ -87,6 +87,27 @@ getAllGames = do
   DB db <- ask
   games <- liftIO $ readTVarIO db
   return $ Map.keys games
+
+joinGame :: GameId -> Maybe String -> AppM (Maybe Game) -- adds playername to game of id
+joinGame gameId name = do
+  DB db <- ask
+  games <- liftIO $ readTVarIO db
+  if Map.notMember gameId games || isNothing name
+    then do return Nothing
+    else do
+      liftIO . atomically $ do
+        modifyTVar db $ updateDb (fromJust name) gameId
+      games <- liftIO $ readTVarIO db
+      return $ Map.lookup gameId games
+  where
+    updateDb :: String -> GameId -> Games -> Games
+    updateDb name =
+      let 
+        insertPlayNameToGame name (Game "" "" cards history) = Just $ Game name "" cards history
+        insertPlayNameToGame name (Game "" p2 cards history) = Just $ Game name p2 cards history
+        insertPlayNameToGame name (Game p1 "" cards history) = Just $ Game p1 name cards history
+        insertPlayNameToGame name (Game p1 p2 cards history) = Just $ Game p1 p2 cards history
+       in Map.update (insertPlayNameToGame name)
 
 getGame :: GameId -> AppM (Maybe Game)
 getGame gameId = do
@@ -102,10 +123,10 @@ newMove gameId move = do
     then do return Nothing
     else do
       liftIO . atomically $ do
-        modifyTVar db $ updateGameInDb move gameId
+        modifyTVar db $ updateDb move gameId
       return (Just move)
   where
-    updateGameInDb :: GameMove -> GameId -> Games -> Games
-    updateGameInDb move =
-      let insertMoveToGame m (Game cards history) = Just $ Game cards (m : history)
+    updateDb :: GameMove -> GameId -> Games -> Games
+    updateDb move =
+      let insertMoveToGame m (Game p1 p2 cards history) = Just $ Game p1 p2 cards (m : history)
        in Map.update (insertMoveToGame move)
