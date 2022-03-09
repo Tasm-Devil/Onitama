@@ -12,7 +12,7 @@ setup:
 server-build:
 	stack build
 
-server-start: server-build
+server-start: build 
 	stack exec server
 
 test:

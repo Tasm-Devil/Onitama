@@ -7,8 +7,7 @@ There's a `Makefile` included with the following targets:
 - `setup` -- Set up everything: install ghc and dependencies. (Needs `stack`, `elm`
   and `elm-test`.)
 - `build` -- Build the server and the client.
-- `server-start` -- Start the server here: <http://localhost:3000/>. Requests sent
-  to this server will trigger a recompilation (via make) of the client code (if its changed).
+- `server-start` -- Calls `build` and then starts the server. Open <http://localhost:3000/> in your Browser. Requests sent to this server will trigger a recompilation (via make) of the client code (if its changed).
 
 ## JSON API
 JSON Message from Server to Client after two game moves. Last move comes first, thats fp style (Head of the List).
@@ -66,17 +65,16 @@ curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H
 ## ToDos
 In the order in which I would like to tackle them.
 
-- [x] landing page for game creation and selection.
-- [x] The Server should remember the player names. Extend API for player names.
-- [x] Only Black Player can join and rejoin after page reload. When White reloads page, it cannt continue the game.
-- [ ] Switch from Browser.document to [Browser.application](https://package.elm-lang.org/packages/elm/browser/latest/Browser#application)
+- [ ] GetGame with UUID in the URL should work to
+- [ ] The Server should check the player names on NewMove
+- [ ] Authetification by player name using sessions
+- [ ] Implement http polling temporarily.
+- [ ] GetGames should also return all playernames with gameids.
 - [ ] The common card should determine, which player starts the game.
 - [ ] Check for checkmate!
-- [ ] Implement http polling temporarily.
 - [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
 - [ ] Use WebSocket to get new moves without the need to do http polling.
 - [ ] Implement Chat feature
-- [ ] Authetification by player name at least.
 - [ ] Add support for the Cards from the Senseis Path explansion.
 
 ### Expansion Cards

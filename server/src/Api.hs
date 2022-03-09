@@ -1,25 +1,29 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE TemplateHaskell #-}
 
 module Api where
 
 import Game ( GameMove, Game )
+import GHC.Generics ( Generic )
 import Servant
-    ( type (:<|>),
-      Proxy(..),
-      FromHttpApiData,
-      ToHttpApiData,
-      Capture,
-      JSON,
-      ReqBody,
-      type (:>),
+    ( Put,
+      QueryParam,
+      Post,
       Get,
-      Post, QueryParam, Put )
+      type (:>),
+      ReqBody,
+      JSON,
+      Capture,
+      type (:<|>),
+      ToHttpApiData,
+      FromHttpApiData,
+      Proxy(..) )
 import qualified Data.Map.Strict as Map
+import Data.Aeson ( FromJSON, ToJSON )
 import Data.Map ( Map )
-import Data.Aeson.TH (defaultOptions, deriveJSON)
+import Data.UUID (UUID)
 
 
 type NewGame = Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
@@ -37,8 +41,7 @@ type API = "game" :> (NewGame :<|> GetGames :<|> JoinGame :<|> GetGame :<|> NewM
 api :: Proxy API
 api = Proxy
 
-newtype GameId = GameId Int
-  deriving (Num, Show, Eq, Ord, Enum, FromHttpApiData, ToHttpApiData)
+newtype GameId = GameId UUID
+  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON )
 
-$(deriveJSON defaultOptions ''GameId)
 

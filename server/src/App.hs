@@ -4,7 +4,7 @@
 
 module App where
 
-import Api (API, GameId, api)
+import Api ( GameId(..), API, api )
 import Control.Concurrent.STM
   ( TVar,
     atomically,
@@ -14,7 +14,6 @@ import Control.Concurrent.STM
     readTVarIO,
     writeTVar,
   )
-import Control.Monad (when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.Map (Map, empty)
@@ -36,6 +35,8 @@ import Servant
     serve,
     type (:<|>) (..),
   )
+import Data.UUID ( UUID )
+import Data.UUID.V4 ( nextRandom ) 
 
 type Games = Map GameId Game
 
@@ -72,15 +73,12 @@ newGame :: AppM GameId
 newGame = do
   DB db <- ask
   newCards <- liftIO give5Cards
-  liftIO . atomically $ do
-    modifyTVar db . insertNewGameToDb $ Game "" "" newCards []
+  newUuid <- liftIO nextRandom
+  let insNewGame = Map.insert (GameId newUuid) (Game "" "" newCards [])
+  liftIO . atomically $ do    
+    modifyTVar db insNewGame
   games <- liftIO $ readTVarIO db
-  return . fst $ Map.findMax games
-  where
-    insertNewGameToDb :: Game -> Games -> Games
-    insertNewGameToDb newgame games =
-      let newGameId = 1 + maybe 0 fst (Map.lookupMax games)
-       in Map.insert newGameId newgame games
+  return $ GameId newUuid
 
 getAllGames :: AppM [GameId]
 getAllGames = do
