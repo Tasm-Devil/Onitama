@@ -1,47 +1,65 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Api where
 
-import Game ( GameMove, Game )
-import GHC.Generics ( Generic )
-import Servant
-    ( Put,
-      QueryParam,
-      Post,
-      Get,
-      type (:>),
-      ReqBody,
-      JSON,
-      Capture,
-      type (:<|>),
-      ToHttpApiData,
-      FromHttpApiData,
-      Proxy(..) )
+import Data.Aeson (FromJSON, ToJSON)
+import Data.ByteString.Lazy as Lazy (ByteString)
+import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.Aeson ( FromJSON, ToJSON )
-import Data.Map ( Map )
 import Data.UUID (UUID)
+import GHC.Generics (Generic)
+import Game (Game, GameMove)
+import Network.HTTP.Media ((//), (/:))
+import Servant
+  ( Accept (contentType),
+    Capture,
+    FromHttpApiData,
+    Get,
+    JSON,
+    MimeRender (..),
+    Post,
+    Proxy (..),
+    Put,
+    QueryParam,
+    ReqBody,
+    ToHttpApiData,
+    type (:<|>),
+    type (:>),
+  )
+import Servant.API (Accept (..))
 
+type NewGame = "game" :> Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
 
-type NewGame = Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
+type GetGames = "game" :> Get '[JSON] [GameId] -- Get all GameIds
 
-type GetGames = Get '[JSON] [GameId] -- Get all GameIds
+type JoinGame = "game" :> Capture "gameid" GameId :> QueryParam "name" String :> Put '[JSON] (Maybe Game)
 
-type JoinGame = Capture "gameid" GameId :> QueryParam "name" String :> Put '[JSON] (Maybe Game)
+type GetGame = "game" :> Capture "gameid" GameId :> Get '[JSON] (Maybe Game) -- Get Current Game from gameId
 
-type GetGame = Capture "gameid" GameId :> Get '[JSON] (Maybe Game) -- Get Current Game from gameId
+type NewMove = "game" :> Capture "gameid" GameId :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
 
-type NewMove = Capture "gameid" GameId :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
+type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
-type API = "game" :> (NewGame :<|> GetGames :<|> JoinGame :<|> GetGame :<|> NewMove)
+type API = NewGame :<|> GetGames :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Index
 
 api :: Proxy API
 api = Proxy
 
 newtype GameId = GameId UUID
-  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON )
+  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
 
+--https://mmhaskell.com/blog/2020/3/23/serving-html-with-servant
+data HTML = HTML
 
+newtype RawHtml = RawHtml {unRaw :: Lazy.ByteString}
+
+instance Accept HTML where
+  contentType _ = "text" // "html" /: ("charset", "utf-8")
+
+instance MimeRender HTML RawHtml where
+  mimeRender _ = unRaw

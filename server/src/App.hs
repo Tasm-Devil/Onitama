@@ -1,10 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
-{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 
 module App where
 
-import Api ( GameId(..), API, api )
+import Api (API, GameId (..), api, RawHtml (RawHtml))
 import Control.Concurrent.STM
   ( TVar,
     atomically,
@@ -18,10 +17,11 @@ import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, fromJust, isNothing)
+import Data.Maybe (fromJust, fromMaybe, isNothing)
+import Data.UUID (UUID)
+import Data.UUID.V4 (nextRandom)
 import GHC.Generics ()
 import Game (Game (Game), GameMove, give5Cards)
-import MakeAssets (Default (def), serveAssets)
 import Network.Wai (Application)
 import Servant
   ( Application,
@@ -33,10 +33,12 @@ import Servant
     Tagged (Tagged),
     hoistServer,
     serve,
+    serveDirectoryWebApp,
     type (:<|>) (..),
   )
-import Data.UUID ( UUID )
-import Data.UUID.V4 ( nextRandom ) 
+import Data.ByteString.Lazy as Lazy ( ByteString, readFile )
+import Network.Wai.Application.Static
+    ( staticApp, defaultFileServerSettings )
 
 type Games = Map GameId Game
 
@@ -57,7 +59,7 @@ type AppM = ReaderT DB Handler
 
 server :: IO (Server WithAssets)
 server = do
-  assets <- serveAssets def
+  let assets = staticApp $ defaultFileServerSettings "assets/"
   db <- mkDB
   return (readerServer db :<|> Tagged assets)
   where
@@ -67,7 +69,7 @@ server = do
     readerServer db = hoistServer api (readerToHandler db) apiServer
 
 apiServer :: ServerT API AppM
-apiServer = newGame :<|> getAllGames :<|> joinGame :<|> getGame :<|> newMove
+apiServer = newGame :<|> getAllGames :<|> joinGame :<|> getGame :<|> newMove :<|> getIndexHtml
 
 newGame :: AppM GameId
 newGame = do
@@ -75,7 +77,7 @@ newGame = do
   newCards <- liftIO give5Cards
   newUuid <- liftIO nextRandom
   let insNewGame = Map.insert (GameId newUuid) (Game "" "" newCards [])
-  liftIO . atomically $ do    
+  liftIO . atomically $ do
     modifyTVar db insNewGame
   games <- liftIO $ readTVarIO db
   return $ GameId newUuid
@@ -100,11 +102,10 @@ joinGame gameId name = do
   where
     updateDb :: String -> GameId -> Games -> Games
     updateDb name =
-      let 
-        insertPlayNameToGame name (Game "" "" cards history) = Just $ Game name "" cards history
-        insertPlayNameToGame name (Game "" p2 cards history) = Just $ Game name p2 cards history
-        insertPlayNameToGame name (Game p1 "" cards history) = Just $ Game p1 name cards history
-        insertPlayNameToGame name (Game p1 p2 cards history) = Just $ Game p1 p2 cards history
+      let insertPlayNameToGame name (Game "" "" cards history) = Just $ Game name "" cards history
+          insertPlayNameToGame name (Game "" p2 cards history) = Just $ Game name p2 cards history
+          insertPlayNameToGame name (Game p1 "" cards history) = Just $ Game p1 name cards history
+          insertPlayNameToGame name (Game p1 p2 cards history) = Just $ Game p1 p2 cards history
        in Map.update (insertPlayNameToGame name)
 
 getGame :: GameId -> AppM (Maybe Game)
@@ -128,3 +129,8 @@ newMove gameId move = do
     updateDb move =
       let insertMoveToGame m (Game p1 p2 cards history) = Just $ Game p1 p2 cards (m : history)
        in Map.update (insertMoveToGame move)
+
+getIndexHtml :: GameId -> AppM RawHtml
+getIndexHtml gameId = do
+  bs <- liftIO $ Lazy.readFile "assets/index.html"
+  return $ RawHtml bs
