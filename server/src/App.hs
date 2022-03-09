@@ -3,7 +3,7 @@
 
 module App where
 
-import Api (API, GameId (..), api, RawHtml (RawHtml))
+import Api (API, GameId (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
 import Control.Concurrent.STM
   ( TVar,
     atomically,
@@ -44,23 +44,15 @@ type Games = Map GameId Game
 
 newtype DB = DB (TVar Games)
 
-mkDB :: IO DB
-mkDB = DB <$> newTVarIO empty
-
-type WithAssets = API :<|> Raw
-
-withAssets :: Proxy WithAssets
-withAssets = Proxy
-
 app :: IO Application
-app = serve withAssets <$> server
+app = serve apiWithAssets <$> server
 
 type AppM = ReaderT DB Handler
 
-server :: IO (Server WithAssets)
+server :: IO (Server APIWithAssets)
 server = do
   let assets = staticApp $ defaultFileServerSettings "assets/"
-  db <- mkDB
+  db <- DB <$> newTVarIO empty
   return (readerServer db :<|> Tagged assets)
   where
     readerToHandler :: DB -> AppM a -> Handler a

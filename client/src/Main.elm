@@ -1,7 +1,6 @@
 module Main exposing (main)
 
 import Browser exposing (..)
-import Browser.Navigation as Nav
 import Game.Card exposing (Card)
 import Game.Figure exposing (Color(..), colorToString)
 import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
@@ -12,7 +11,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
-import Url exposing (Url)
+
 
 
 -- MODEL
@@ -34,7 +33,6 @@ type AppState
 
 type alias Model =
     { state : AppState
-    , navkey : Nav.Key
     , errorMessage : Maybe String
     }
 
@@ -81,7 +79,7 @@ view ({ state } as model) =
                         )
                     ]
 
-            EnterName player gameid ->
+            EnterName player gameId ->
                 Html.div [ HtmlA.class "landing-screen" ]
                     --, HtmlA.style "display" "none" ]
                     [ Html.form [ HtmlA.id "name-form" ]
@@ -90,7 +88,9 @@ view ({ state } as model) =
                         , Html.small [] [ Html.text "Enter your name..." ]
                         , Html.div [ HtmlA.class "name-line" ]
                             [ Html.input [ HtmlA.id "name", HtmlA.placeholder "Enter your name", HtmlA.value <| player, onInput NameEntered ] []
-                            , Html.input [ HtmlA.type_ "button", HtmlA.value "Join", onClick RequestGameFromServer ] []
+                            , Html.a [ HtmlA.href <| gameId ++ "?player=" ++ player ]
+                                [ Html.input [ HtmlA.type_ "button", HtmlA.value "Join", onClick RequestGameFromServer ] []
+                                ]
                             ]
 
                         {-
@@ -129,7 +129,7 @@ createGameTableRow id =
         , Html.td []
             [ Html.text "0" ]
         , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href id]
+            [ Html.a [ HtmlA.class "join-game", HtmlA.href id ]
                 [ Html.text "Join" ]
             ]
         ]
@@ -210,8 +210,6 @@ type alias ServerGame =
 
 type Msg
     = GameMsg Game.Msg
-    | ChangedUrl Url
-    | ClickedLink UrlRequest
     | RequestNewGameFromServer
     | NameEntered String
     | RequestGameFromServer
@@ -241,18 +239,9 @@ update msg ({ state } as model) =
                     , getGameIdFromServer
                     )
 
-                ClickedLink urlRequest ->
-                    case urlRequest of
-                        Internal url ->
-                            ( { model | state = EnterName "Bob" <| String.dropLeft 1 url.path }
-                                , Nav.pushUrl model.navkey <| Url.toString url 
-                            )
-                        _ -> ( model, Cmd.none )
-
-
                 ReceivedGameIdFromServer (Ok gameId) ->
                     ( { model | state = EnterName "Wendy" gameId }
-                    , Cmd.none --Nav.pushUrl model.navkey <| Url.toString url
+                    , Cmd.none
                     )
 
                 ReceivedGameIdFromServer (Err httpError) ->
@@ -487,29 +476,24 @@ buildErrorMessage httpError =
 -- INIT
 
 
-init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
-init _ url key =
+init : () -> ( Model, Cmd Msg )
+init _ =
     ( { state = Lobby []
-      , navkey = key
       , errorMessage = Nothing
       }
     , getGamesIdsFromServer
     )
 
 
-
 main : Program () Model Msg
 main =
-    application -- Browser.application
+    document
         { init = init
         , view = view
         , update = update
         , subscriptions = \_ -> Sub.none
-        , onUrlRequest = ClickedLink
-        , onUrlChange = ChangedUrl
         }
 
---Browser.Navigation.pushUrl
 
 
 {-

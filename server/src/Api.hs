@@ -31,7 +31,10 @@ import Servant
     type (:<|>),
     type (:>),
   )
-import Servant.API (Accept (..))
+import Servant.API (Accept (..), Raw)
+
+newtype GameId = GameId UUID
+  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
 
 type NewGame = "game" :> Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
 
@@ -50,8 +53,10 @@ type API = NewGame :<|> GetGames :<|> JoinGame :<|> GetGame :<|> NewMove :<|> In
 api :: Proxy API
 api = Proxy
 
-newtype GameId = GameId UUID
-  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
+type APIWithAssets = API :<|> Raw
+
+apiWithAssets :: Proxy APIWithAssets
+apiWithAssets = Proxy
 
 --https://mmhaskell.com/blog/2020/3/23/serving-html-with-servant
 data HTML = HTML
