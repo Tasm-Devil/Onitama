@@ -1,9 +1,9 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveAnyClass #-}
 
 module Game where
 
-import Data.Aeson.TH (defaultOptions, deriveJSON)
+import Data.Aeson ( FromJSON, ToJSON )
 import GHC.Conc (TVar)
 import GHC.Generics (Generic)
 import System.Random (StdGen, newStdGen)
@@ -12,9 +12,7 @@ import System.Random.Shuffle (shuffle')
 data Color
   = White
   | Black
-  deriving (Eq, Read, Show, Generic)
-
-$(deriveJSON defaultOptions ''Color)
+  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
 type Card = String
 
@@ -24,9 +22,7 @@ data GameMove = GameMove
     from :: (Integer, Integer),
     move :: (Integer, Integer)
   }
-  deriving (Eq, Show, Generic)
-
-$(deriveJSON defaultOptions ''GameMove)
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 data Game = Game
   { player_white :: String,
@@ -34,9 +30,7 @@ data Game = Game
     cards :: [Card],
     history :: [GameMove]
   }
-  deriving (Eq, Show, Generic)
-
-$(deriveJSON defaultOptions ''Game)
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 validCards :: [Card]
 validCards =
