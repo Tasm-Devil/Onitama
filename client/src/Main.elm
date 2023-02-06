@@ -90,7 +90,7 @@ view ({ state } as model) =
                             [ Html.text "Onitama" ]
                         , Html.small [] [ Html.text "Enter your name..." ]
                         , Html.div [ HtmlA.class "name-line" ]
-                            [ Html.input [ HtmlA.id "name", HtmlA.placeholder "Enter your name", HtmlA.value <| player, onInput NameEntered ] []
+                            [ Html.input [ HtmlA.id "name", HtmlA.placeholder "Enter your name", HtmlA.value <| player, onInput TypingName ] []
                             , Html.input [ HtmlA.type_ "button", HtmlA.value "Join", onClick RequestGameFromServer ] []
                             ]
 
@@ -214,7 +214,7 @@ type Msg
     | ChangedUrl Url
     | ClickedLink Browser.UrlRequest
     | RequestNewGameFromServer
-    | NameEntered String
+    | TypingName String
     | RequestGameFromServer
     | ReceivedGameIdsFromServer (Result Http.Error (List GameId)) -- all current game ids
     | ReceivedGameIdFromServer (Result Http.Error GameId) -- the game id of the new game
@@ -225,22 +225,33 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ state } as model) =
     case ( state, msg ) of
-        ( Lobby _, ReceivedGameIdsFromServer (Ok gamesids) ) ->
-            let
-                gameid =
-                    String.dropLeft 1 model.url.path
+        ( Lobby gamesids, ChangedUrl url ) ->
+            let gameid = String.dropLeft 1 url.path
             in
             if List.member gameid gamesids then
-                ( { model | state = EnterName "Bob" gameid }, Cmd.none )
+                -- this never happens
+                ( { model | state = EnterName "Charlie" gameid }, Cmd.none )
+            else
+                ( model , Cmd.none )
+        ( _ , ChangedUrl url ) ->
+            let gameid = String.dropLeft 1 url.path
+            in
+            if String.isEmpty gameid then
+                ( { model | state = Lobby [] }, getGamesIdsFromServer )
+            else
+                ( model , Cmd.none )
+
+        ( Lobby _, ReceivedGameIdsFromServer (Ok gamesids) ) ->
+            let gameid = String.dropLeft 1 model.url.path
+            in
+            if List.member gameid gamesids then
+                ( { model | state = EnterName "Alice" gameid }, Cmd.none )
 
             else if String.isEmpty gameid then
                 ( { model | state = Lobby gamesids }, Cmd.none )
 
             else
                 ( { model | state = Lobby gamesids }, Nav.pushUrl model.navkey <| "/" )
-
-        ( Lobby _, ReceivedGameIdsFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
         ( Lobby _, RequestNewGameFromServer ) ->
             ( model
@@ -257,40 +268,19 @@ update msg ({ state } as model) =
                 _ ->
                     ( model, Cmd.none )
 
-        ( Lobby _, ChangedUrl url ) ->
-            --ToDo in case users wants to go back and forward
-            ( model, Cmd.none )
-
         ( Lobby _, ReceivedGameIdFromServer (Ok gameId) ) ->
             ( { model | state = EnterName "Wendy" gameId }
             , Nav.pushUrl model.navkey <| "/" ++ gameId
             )
 
-        ( Lobby _, ReceivedGameIdFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
-
-        ( EnterName _ gameid, NameEntered newname ) ->
-            ( { model
-                | state = EnterName newname gameid
-              }
-            , Cmd.none
-            )
+        ( EnterName _ gameid, TypingName newname ) ->
+            ( { model | state = EnterName newname gameid } , Cmd.none  )
 
         ( EnterName name gameid, RequestGameFromServer ) ->
             ( model, joinGame gameid name )
 
         ( EnterName name gameid, ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ) ->
-            let
-                newgame =
-                    Game.setupNewGame cards
-                        (if name == player_black then
-                            Black
-
-                         else
-                            White
-                        )
-                        White
-
+            let newgame = Game.setupNewGame cards (if name == player_black then Black else White ) White
                 -- ToDo: White is not always the first player!
                 finalgame =
                     List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame history
@@ -301,9 +291,6 @@ update msg ({ state } as model) =
               }
             , Cmd.none
             )
-
-        ( EnterName _ _, ReceivedGameFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
         ( Playing name gameid game history_, GameMsg gamemsg ) ->
             let
@@ -350,10 +337,16 @@ update msg ({ state } as model) =
         ( Playing _ gameid _ _, RequestGameFromServer ) ->
             ( model, getGameFromServer gameid )
 
-        ( Playing _ _ _ _, ReceivedPostCreatedFromServer (Err httpError) ) ->
+        ( Lobby _, ReceivedGameIdsFromServer (Err httpError) ) ->
             ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
-        ( Playing _ _ _ _, ReceivedGameFromServer (Err httpError) ) ->
+        ( Lobby _, ReceivedGameIdFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+
+        ( _ , ReceivedGameFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+
+        ( Playing _ _ _ _, ReceivedPostCreatedFromServer (Err httpError) ) ->
             ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
         _ ->
