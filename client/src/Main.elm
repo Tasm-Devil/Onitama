@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import Browser exposing (..)
+import Browser
 import Browser.Navigation as Nav
 import Game.Card exposing (Card)
 import Game.Figure exposing (Color(..), colorToString)
@@ -34,6 +34,7 @@ type AppState
 
 type alias Model =
     { state : AppState
+    , url : Url
     , navkey : Nav.Key
     , errorMessage : Maybe String
     }
@@ -81,7 +82,7 @@ view ({ state } as model) =
                         )
                     ]
 
-            EnterName player gameid ->
+            EnterName player _ ->
                 Html.div [ HtmlA.class "landing-screen" ]
                     --, HtmlA.style "display" "none" ]
                     [ Html.form [ HtmlA.id "name-form" ]
@@ -129,7 +130,7 @@ createGameTableRow id =
         , Html.td []
             [ Html.text "0" ]
         , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href id]
+            [ Html.a [ HtmlA.class "join-game", HtmlA.href id ]
                 [ Html.text "Join" ]
             ]
         ]
@@ -211,7 +212,7 @@ type alias ServerGame =
 type Msg
     = GameMsg Game.Msg
     | ChangedUrl Url
-    | ClickedLink UrlRequest
+    | ClickedLink Browser.UrlRequest
     | RequestNewGameFromServer
     | NameEntered String
     | RequestGameFromServer
@@ -221,154 +222,142 @@ type Msg
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
 
 
-
---  | WssIncome String
-
-
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg ({ state } as model) =
-    case state of
-        Lobby _ ->
-            case msg of
-                ReceivedGameIdsFromServer (Ok gamesids) ->
-                    ( { model | state = Lobby gamesids }, Cmd.none )
+    case ( state, msg ) of
+        ( Lobby _, ReceivedGameIdsFromServer (Ok gamesids) ) ->
+            let
+                gameid =
+                    String.dropLeft 1 model.url.path
+            in
+            if List.member gameid gamesids then
+                ( { model | state = EnterName "Bob" gameid }, Cmd.none )
 
-                ReceivedGameIdsFromServer (Err httpError) ->
-                    ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+            else if String.isEmpty gameid then
+                ( { model | state = Lobby gamesids }, Cmd.none )
 
-                RequestNewGameFromServer ->
-                    ( model
-                    , getGameIdFromServer
+            else
+                ( { model | state = Lobby gamesids }, Nav.pushUrl model.navkey <| "/" )
+
+        ( Lobby _, ReceivedGameIdsFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+
+        ( Lobby _, RequestNewGameFromServer ) ->
+            ( model
+            , getGameIdFromServer
+            )
+
+        ( Lobby _, ClickedLink urlRequest ) ->
+            case urlRequest of
+                Browser.Internal url ->
+                    ( { model | state = EnterName "Bob" <| String.dropLeft 1 url.path }
+                    , Nav.pushUrl model.navkey <| Url.toString url
                     )
-
-                ClickedLink urlRequest ->
-                    case urlRequest of
-                        Internal url ->
-                            ( { model | state = EnterName "Bob" <| String.dropLeft 1 url.path }
-                                , Nav.pushUrl model.navkey <| Url.toString url 
-                            )
-                        _ -> ( model, Cmd.none )
-
-
-                ReceivedGameIdFromServer (Ok gameId) ->
-                    ( { model | state = EnterName "Wendy" gameId }
-                    , Cmd.none --Nav.pushUrl model.navkey <| Url.toString url
-                    )
-
-                ReceivedGameIdFromServer (Err httpError) ->
-                    ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
 
-        EnterName name gameid ->
-            case msg of
-                NameEntered newname ->
-                    ( { model
-                        | state = EnterName newname gameid
-                      }
-                    , Cmd.none
-                    )
+        ( Lobby _, ChangedUrl url ) ->
+            --ToDo in case users wants to go back and forward
+            ( model, Cmd.none )
 
-                RequestGameFromServer ->
-                    ( model, joinGame gameid name )
+        ( Lobby _, ReceivedGameIdFromServer (Ok gameId) ) ->
+            ( { model | state = EnterName "Wendy" gameId }
+            , Nav.pushUrl model.navkey <| "/" ++ gameId
+            )
 
-                ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ->
-                    let
-                        newgame =
-                            Game.setupNewGame cards
-                                (if name == player_black then
-                                    Black
+        ( Lobby _, ReceivedGameIdFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
-                                 else
-                                    White
-                                )
-                                White
+        ( EnterName _ gameid, NameEntered newname ) ->
+            ( { model
+                | state = EnterName newname gameid
+              }
+            , Cmd.none
+            )
 
-                        -- ToDo: White is not always the first player!
-                        finalgame =
-                            List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame history
-                    in
-                    ( { model
-                        | state = Playing name gameid finalgame history
-                        , errorMessage = Nothing
-                      }
-                    , Cmd.none
-                    )
+        ( EnterName name gameid, RequestGameFromServer ) ->
+            ( model, joinGame gameid name )
 
-                ReceivedGameFromServer (Err httpError) ->
-                    ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+        ( EnterName name gameid, ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ) ->
+            let
+                newgame =
+                    Game.setupNewGame cards
+                        (if name == player_black then
+                            Black
 
-                _ ->
-                    ( model, Cmd.none )
+                         else
+                            White
+                        )
+                        White
 
-        Playing name gameid game history_ ->
-            case msg of
-                GameMsg gamemsg ->
-                    let
-                        game_after =
-                            Game.update gamemsg game
-                    in
-                    ( { model | state = Playing name gameid game_after history_ }
-                    , case game_after.state of
-                        MoveDone gameMove ->
-                            postNewGameMove gameid <| transformGameMove gameMove
+                -- ToDo: White is not always the first player!
+                finalgame =
+                    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame history
+            in
+            ( { model
+                | state = Playing name gameid finalgame history
+                , errorMessage = Nothing
+              }
+            , Cmd.none
+            )
 
-                        _ ->
-                            Cmd.none
-                    )
+        ( EnterName _ _, ReceivedGameFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
 
-                ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ->
-                    Maybe.withDefault ( model, Cmd.none ) <|
-                        Maybe.map
-                            (\gameMove ->
-                                ( { model
-                                    | state =
-                                        Playing name
-                                            gameid
-                                            (game |> Game.update (NewGameMove <| transformGameMove gameMove))
-                                            (if List.head history /= Just gameMove then
-                                                gameMove :: history
-
-                                             else
-                                                history
-                                            )
-                                  }
-                                , Cmd.none
-                                )
-                            )
-                            (List.head history)
-
-                ReceivedPostCreatedFromServer (Ok gameMove) ->
-                    ( { model
-                        | state = Playing name gameid (game |> Game.update (NewGameMove <| transformGameMove gameMove)) (gameMove :: history_)
-                      }
-                    , Cmd.none
-                    )
-
-                RequestGameFromServer ->
-                    ( model, getGameFromServer gameid )
-
-                ReceivedPostCreatedFromServer (Err httpError) ->
-                    ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
-
-                ReceivedGameFromServer (Err httpError) ->
-                    ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+        ( Playing name gameid game history_, GameMsg gamemsg ) ->
+            let
+                game_after =
+                    Game.update gamemsg game
+            in
+            ( { model | state = Playing name gameid game_after history_ }
+            , case game_after.state of
+                MoveDone gameMove ->
+                    postNewGameMove gameid <| transformGameMove gameMove
 
                 _ ->
-                    ( model, Cmd.none )
+                    Cmd.none
+            )
 
+        ( Playing name gameid game _, ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ) ->
+            Maybe.withDefault ( model, Cmd.none ) <|
+                Maybe.map
+                    (\gameMove ->
+                        ( { model
+                            | state =
+                                Playing name
+                                    gameid
+                                    (game |> Game.update (NewGameMove <| transformGameMove gameMove))
+                                    (if List.head history /= Just gameMove then
+                                        gameMove :: history
 
+                                     else
+                                        history
+                                    )
+                          }
+                        , Cmd.none
+                        )
+                    )
+                    (List.head history)
 
-{-
-      WssIncome _ ->
-          Debug.todo "branch 'Recv _' not implemented"
+        ( Playing name gameid game history_, ReceivedPostCreatedFromServer (Ok gameMove) ) ->
+            ( { model
+                | state = Playing name gameid (game |> Game.update (NewGameMove <| transformGameMove gameMove)) (gameMove :: history_)
+              }
+            , Cmd.none
+            )
 
-   send : msg -> Cmd msg
-   send msg =
-       Task.succeed msg
-           |> Task.perform identity
--}
+        ( Playing _ gameid _ _, RequestGameFromServer ) ->
+            ( model, getGameFromServer gameid )
+
+        ( Playing _ _ _ _, ReceivedPostCreatedFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+
+        ( Playing _ _ _ _, ReceivedGameFromServer (Err httpError) ) ->
+            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
 
 
 transformGameMove : Game.GameMove -> Game.GameMove
@@ -490,6 +479,7 @@ buildErrorMessage httpError =
 init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
 init _ url key =
     ( { state = Lobby []
+      , url = url
       , navkey = key
       , errorMessage = Nothing
       }
@@ -497,10 +487,9 @@ init _ url key =
     )
 
 
-
 main : Program () Model Msg
 main =
-    application -- Browser.application
+    Browser.application
         { init = init
         , view = view
         , update = update
@@ -508,32 +497,3 @@ main =
         , onUrlRequest = ClickedLink
         , onUrlChange = ChangedUrl
         }
-
---Browser.Navigation.pushUrl
-
-
-{-
-   main =
-       TimeTravel.document Debug.toString
-           Debug.toString
-           defaultConfig
-           { init = init
-           , view = view
-           , update = update
-           , subscriptions = \_ -> Sub.none
-           }
--}
-{-
-   -- PORTS
-   port sendMessage : String -> Cmd msg
-   port messageReceiver : (String -> msg) -> Sub msg
-
-   -- SUBSCRIPTIONS
-   -- Subscribe to the `messageReceiver` port to hear about messages coming in
-   -- from JS. Check out the index.html file to see how this is hooked up to a
-   -- WebSocket.
-   --
-   subscriptions : Model -> Sub Msg
-   subscriptions _ =
-     messageReceiver WssIncome
--}
