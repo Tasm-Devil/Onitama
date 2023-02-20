@@ -1,5 +1,5 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 
 module App where
 

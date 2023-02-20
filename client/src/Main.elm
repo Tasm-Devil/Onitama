@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Browser.Navigation as Nav
+import Browser.Navigation as Nav exposing (Key)
 import Game.Card exposing (Card)
 import Game.Figure exposing (Color(..), colorToString)
 import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
@@ -13,31 +13,31 @@ import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import Url exposing (Url)
+import Lobby exposing (GameId, Model, Status(..), Msg(..))
 
 
--- MODEL
 
-
-type alias GameId =
-    String
+-- TYPES
 
 
 type alias PlayerName =
     String
 
 
-type AppState
-    = Lobby (List GameId)
-    | EnterName PlayerName GameId
-    | Playing PlayerName GameId Game (List Game.GameMove)
+
+-- MODEL
 
 
-type alias Model =
-    { state : AppState
-    , url : Url
-    , navkey : Nav.Key
-    , errorMessage : Maybe String
-    }
+type Model
+    = Redirect Url Key
+    | Lobby Lobby.Model
+    | EnterName PlayerName GameId Key
+    | Playing PlayerName GameId Game (List Game.GameMove) Key
+
+
+init : () -> Url -> Key -> ( Model, Cmd Msg )
+init _ url key =
+    ( Redirect url key, getGamesIdsFromServer )
 
 
 
@@ -45,44 +45,20 @@ type alias Model =
 
 
 view : Model -> Browser.Document Msg
-view ({ state } as model) =
+view model =
     Browser.Document
         "Onitama"
-        [ case state of
-            Lobby ids ->
+        [ case model of 
+            Redirect url _ ->
                 Html.div [ HtmlA.class "lobby" ]
                     [ Html.h1 []
-                        [ Html.text "ONITAMA" ]
-                    , Html.p []
-                        [ Html.text "Onitama is a two player abstract board game. You can play it online here! Below is a list of in-progress games. To start a new game click the \"new game\" button and distribute the url to another player to join." ]
-                    , Html.p []
-                        [ Html.text "Be sure to read "
-                        , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf" ]
-                            [ Html.text "the rules" ]
-                        , Html.text "if you haven't played before."
-                        ]
-                    , Html.a [ HtmlA.class "new-game", onClick RequestNewGameFromServer ]
-                        [ Html.text "New Game" ]
-                    , Html.table [ HtmlA.id "game-table" ]
-                        (Html.thead []
-                            [ Html.tr []
-                                [ Html.td []
-                                    [ Html.text "Game" ]
-                                , Html.td []
-                                    [ Html.text "Last Action" ]
-                                , Html.td []
-                                    [ Html.text "State" ]
-                                , Html.td []
-                                    [ Html.text "Spectators" ]
-                                , Html.td []
-                                    []
-                                ]
-                            ]
-                            :: List.map createGameTableRow ids
-                        )
+                        [ Html.text url.path ]
                     ]
+            Lobby m -> 
+                Lobby.view m
+                |> Html.map GotLobbyMsg
 
-            EnterName player _ ->
+            EnterName player _ _ ->
                 Html.div [ HtmlA.class "landing-screen" ]
                     --, HtmlA.style "display" "none" ]
                     [ Html.form [ HtmlA.id "name-form" ]
@@ -95,72 +71,57 @@ view ({ state } as model) =
                             ]
 
                         {-
-                           , Html.div [ HtmlA.class "rejoin", HtmlA.attribute "style" "display: block" ]
-                               [ Html.span [] [ Html.text "You appear to have a rejoin code for this room. Click the button below if you want to rejoin as the player you were previously.          " ]
-                               , Html.button [ HtmlA.id "rejoin-button", HtmlA.type_ "button" ] [ Html.text "Rejoin" ]
-                               ]
+                            , Html.div [ HtmlA.class "rejoin", HtmlA.attribute "style" "display: block" ]
+                                [ Html.span [] [ Html.text "You appear to have a rejoin code for this room. Click the button below if you want to rejoin as the player you were previously.          " ]
+                                , Html.button [ HtmlA.id "rejoin-button", HtmlA.type_ "button" ] [ Html.text "Rejoin" ]
+                                ]
                         -}
                         ]
                     ]
-
-            Playing _ _ game _ ->
+            Playing _ _ game history _ ->
                 Html.div [ HtmlA.class "game-container", HtmlA.style "display" "flex" ]
                     ((game
                         |> Game.view
-                        |> List.map (Html.map GameMsg)
+                        |> List.map (Html.map GotGameMsg)
                      )
                         ++ [ Html.div []
                                 [ Html.input [ HtmlA.type_ "button", HtmlA.value "Update", onClick RequestGameFromServer ] []
-                                , viewHistoryOrError model
+                                , viewHistory history
                                 ]
+                                
                            ]
                     )
+
         ]
 
 
-createGameTableRow : GameId -> Html Msg
-createGameTableRow id =
-    Html.tr [ HtmlA.class "game-row" ]
-        [ Html.td []
-            [ Html.text "Wendy vs. Bob" ]
-        , Html.td []
-            [ Html.text "N/A" ]
-        , Html.td []
-            [ Html.text "done, WHITE won" ]
-        , Html.td []
-            [ Html.text "0" ]
-        , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href id ]
-                [ Html.text "Join" ]
-            ]
-        ]
 
+{-
 
 viewHistoryOrError : Model -> Html Msg
-viewHistoryOrError ({ state } as model) =
-    case model.errorMessage of
-        Just message ->
-            viewError message
+viewHistoryOrError model =
+    --    case model.errorMessage of
+    --        Just message ->
+    --            viewError message
+    --        Nothing ->
+    case model of
+        Playing _ _ _ history _ ->
+            viewHistory history
 
-        Nothing ->
-            case state of
-                Playing _ _ _ history ->
-                    viewHistory history
+        _ ->
+            Html.text "Das sollten Sie nicht sehen"
 
-                _ ->
-                    Html.text "Das sollten Sie nicht sehen"
-
-
-viewError : String -> Html Msg
-viewError errorMessage =
-    let
-        errorHeading =
-            "Couldn't fetch data at this time."
-    in
-    Html.div []
-        [ Html.h3 [] [ Html.text errorHeading ]
-        , Html.text ("Error: " ++ errorMessage)
-        ]
+   viewError : String -> Html Msg
+   viewError errorMessage =
+       let
+           errorHeading =
+               "Couldn't fetch data at this time."
+       in
+       Html.div []
+           [ Html.h3 [] [ Html.text errorHeading ]
+           , Html.text ("Error: " ++ errorMessage)
+           ]
+-}
 
 
 viewHistory : List GameMove -> Html Msg
@@ -210,12 +171,12 @@ type alias ServerGame =
 
 
 type Msg
-    = GameMsg Game.Msg
-    | ChangedUrl Url
+    = ChangedUrl Url
     | ClickedLink Browser.UrlRequest
-    | RequestNewGameFromServer
-    | TypingName String
-    | RequestGameFromServer
+    | GotGameMsg Game.Msg
+    | GotLobbyMsg Lobby.Msg
+    | TypingName String                 -- EnterName
+    | RequestGameFromServer             -- EnterName
     | ReceivedGameIdsFromServer (Result Http.Error (List GameId)) -- all current game ids
     | ReceivedGameIdFromServer (Result Http.Error GameId) -- the game id of the new game
     | ReceivedGameFromServer (Result Http.Error ServerGame)
@@ -223,81 +184,46 @@ type Msg
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
-update msg ({ state } as model) =
-    case ( state, msg ) of
-        ( Lobby gamesids, ChangedUrl url ) ->
-            let gameid = String.dropLeft 1 url.path
+update msg model =
+    case ( msg , model ) of
+
+        ( ChangedUrl url , Lobby lobby) ->
+            let
+                gameid = String.dropLeft 1 url.path
             in
-            if List.member gameid gamesids then
-                -- this never happens
-                ( { model | state = EnterName "Charlie" gameid }, Cmd.none )
-            else
-                ( model , Cmd.none )
-        ( _ , ChangedUrl url ) ->
-            let gameid = String.dropLeft 1 url.path
-            in
-            if String.isEmpty gameid then
-                ( { model | state = Lobby [] }, getGamesIdsFromServer )
-            else
-                ( model , Cmd.none )
 
-        ( Lobby _, ReceivedGameIdsFromServer (Ok gamesids) ) ->
-            let gameid = String.dropLeft 1 model.url.path
-            in
-            if List.member gameid gamesids then
-                ( { model | state = EnterName "Alice" gameid }, Cmd.none )
+            case lobby.status of
+                Home gamesids -> 
+                    if List.member gameid gamesids then
+                        -- this happens only on url change
+                        ( EnterName "Wendy" gameid lobby.key, Cmd.none )               
+                    else
+                        ( model, Cmd.none )
 
-            else if String.isEmpty gameid then
-                ( { model | state = Lobby gamesids }, Cmd.none )
 
-            else
-                ( { model | state = Lobby gamesids }, Nav.pushUrl model.navkey <| "/" )
+        ( ChangedUrl url , EnterName _ _ key) ->
+            ( Redirect url key, getGamesIdsFromServer )
 
-        ( Lobby _, RequestNewGameFromServer ) ->
-            ( model
-            , getGameIdFromServer
-            )
+        ( ChangedUrl url , Playing _ _ _ _ key) ->
+            ( Redirect url key, getGamesIdsFromServer )
 
-        ( Lobby _, ClickedLink urlRequest ) ->
+
+        ( ClickedLink urlRequest , Lobby lobby) ->
+            -- user clicked on a Join link in the table
             case urlRequest of
                 Browser.Internal url ->
-                    ( { model | state = EnterName "Bob" <| String.dropLeft 1 url.path }
-                    , Nav.pushUrl model.navkey <| Url.toString url
-                    )
-
+                    ( Lobby lobby , Nav.pushUrl lobby.key <| Url.toString url )
                 _ ->
-                    ( model, Cmd.none )
+                    ( model , Cmd.none )
 
-        ( Lobby _, ReceivedGameIdFromServer (Ok gameId) ) ->
-            ( { model | state = EnterName "Wendy" gameId }
-            , Nav.pushUrl model.navkey <| "/" ++ gameId
-            )
-
-        ( EnterName _ gameid, TypingName newname ) ->
-            ( { model | state = EnterName newname gameid } , Cmd.none  )
-
-        ( EnterName name gameid, RequestGameFromServer ) ->
-            ( model, joinGame gameid name )
-
-        ( EnterName name gameid, ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ) ->
-            let newgame = Game.setupNewGame cards (if name == player_black then Black else White ) White
-                -- ToDo: White is not always the first player!
-                finalgame =
-                    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame history
-            in
-            ( { model
-                | state = Playing name gameid finalgame history
-                , errorMessage = Nothing
-              }
-            , Cmd.none
-            )
-
-        ( Playing name gameid game history_, GameMsg gamemsg ) ->
+        ( GotGameMsg gamemsg , Playing name gameid game history_ key) ->
+            -- game signals a new gamemove to this update function by MoveDone
+            -- let the server know by invoking postNewGameMove
             let
                 game_after =
                     Game.update gamemsg game
             in
-            ( { model | state = Playing name gameid game_after history_ }
+            ( Playing name gameid game_after history_ key
             , case game_after.state of
                 MoveDone gameMove ->
                     postNewGameMove gameid <| transformGameMove gameMove
@@ -306,50 +232,85 @@ update msg ({ state } as model) =
                     Cmd.none
             )
 
-        ( Playing name gameid game _, ReceivedGameFromServer (Ok { player_white, player_black, cards, history }) ) ->
+        ( GotLobbyMsg RequestNewGameFromServer , Lobby _) ->
+            -- User clicked on 'New Game' button
+            ( model , getGameIdFromServer )
+
+        ( TypingName newname , EnterName _ gameid key) ->
+            ( EnterName newname gameid key, Cmd.none )
+
+        ( RequestGameFromServer , EnterName name gameid _ ) ->
+            -- User completed entering name and clicked the join button
+            ( model, joinGame gameid name )
+
+        ( RequestGameFromServer , Playing _ gameid _ _ _) ->
+            -- fetch latest gamemove from server
+            ( model, getGameFromServer gameid )
+
+        ( ReceivedGameIdsFromServer (Ok gamesids) , Redirect url key) ->
+            -- all the games succesfully fetched from server
+            let
+                gameid = String.dropLeft 1 url.path
+            in
+            if List.member gameid gamesids then
+                -- enter a game directly by URL and not by pressing the new game button
+                ( EnterName "Bob" gameid key, Cmd.none )
+
+            else if String.isEmpty gameid then
+                -- the default way to enter the lobby
+                ( Lobby { status = Home gamesids, key = key}, Cmd.none )
+
+            else
+                -- The URL points to an nonexisting gameid
+                ( Lobby { status = Home gamesids, key = key}, Nav.pushUrl key <| "/" )
+
+        ( ReceivedGameIdsFromServer (Err _) , _ ) ->
+            Debug.todo "branch 'ReceivedGameIdsFromServer (Err httpError)' not implemented"
+
+        ( ReceivedGameIdFromServer (Ok gameId) , Lobby lobby) ->
+            -- getGameIdFromServer was succesfull. Created a new game on the server.
+            -- Append new game id to the list, change the URL and let ( ChangedUrl url , Lobby lobby) handle it.
+            case lobby.status of
+                Home gamesids ->
+                    ( Lobby { lobby | status = Home (gameId :: gamesids) }, Nav.pushUrl lobby.key <| "/" ++ gameId )
+
+        ( ReceivedGameFromServer (Ok servergame) , EnterName name gameid key) ->
+            -- joinGame was succesfull. Now create a new game in Browser
+            let 
+                newgame = Game.setupNewGame servergame.cards (if name == servergame.player_black then Black else White ) White
+                -- ToDo: White is not always the first player!
+                finalgame =
+                    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
+            in
+            ( Playing name gameid finalgame servergame.history key, Cmd.none )
+
+        ( ReceivedGameFromServer (Ok servergame) , Playing name gameid game _ key) ->
+            -- getGameFromServer was succesfull. Append the last gamemove from opponent to the history.
             Maybe.withDefault ( model, Cmd.none ) <|
                 Maybe.map
                     (\gameMove ->
-                        ( { model
-                            | state =
-                                Playing name
-                                    gameid
-                                    (game |> Game.update (NewGameMove <| transformGameMove gameMove))
-                                    (if List.head history /= Just gameMove then
-                                        gameMove :: history
+                        ( Playing name
+                            gameid
+                            (game |> Game.update (NewGameMove <| transformGameMove gameMove))
+                            (if List.head servergame.history /= Just gameMove then
+                                gameMove :: servergame.history
 
-                                     else
-                                        history
-                                    )
-                          }
+                             else
+                                servergame.history
+                            )
+                            key
                         , Cmd.none
                         )
                     )
-                    (List.head history)
+                    (List.head servergame.history)
 
-        ( Playing name gameid game history_, ReceivedPostCreatedFromServer (Ok gameMove) ) ->
-            ( { model
-                | state = Playing name gameid (game |> Game.update (NewGameMove <| transformGameMove gameMove)) (gameMove :: history_)
-              }
+        ( ReceivedPostCreatedFromServer (Ok gameMove) , Playing name gameid game history_ key) ->
+            ( Playing name gameid (game |> Game.update (NewGameMove <| transformGameMove gameMove)) (gameMove :: history_) key
             , Cmd.none
             )
 
-        ( Playing _ gameid _ _, RequestGameFromServer ) ->
-            ( model, getGameFromServer gameid )
-
-        ( Lobby _, ReceivedGameIdsFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
-
-        ( Lobby _, ReceivedGameIdFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
-
-        ( _ , ReceivedGameFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
-
-        ( Playing _ _ _ _, ReceivedPostCreatedFromServer (Err httpError) ) ->
-            ( { model | errorMessage = Just (buildErrorMessage httpError) }, Cmd.none )
-
-        _ ->
+        ( _, _ ) ->
+            -- Disregard messages that arrived for the wrong page.
             ( model, Cmd.none )
 
 
@@ -446,38 +407,27 @@ enecodergameMove gameMove =
         ]
 
 
-buildErrorMessage : Http.Error -> String
-buildErrorMessage httpError =
-    case httpError of
-        Http.BadUrl message ->
-            message
 
-        Http.Timeout ->
-            "Server is taking too long to respond. Please try again later."
+{-
+   buildErrorMessage : Http.Error -> String
+   buildErrorMessage httpError =
+       case httpError of
+           Http.BadUrl message ->
+               message
 
-        Http.NetworkError ->
-            "Unable to reach server."
+           Http.Timeout ->
+               "Server is taking too long to respond. Please try again later."
 
-        Http.BadStatus statusCode ->
-            "Request failed with status code: " ++ String.fromInt statusCode
+           Http.NetworkError ->
+               "Unable to reach server."
 
-        Http.BadBody message ->
-            message
+           Http.BadStatus statusCode ->
+               "Request failed with status code: " ++ String.fromInt statusCode
 
-
-
--- INIT
-
-
-init : () -> Url -> Nav.Key -> ( Model, Cmd Msg )
-init _ url key =
-    ( { state = Lobby []
-      , url = url
-      , navkey = key
-      , errorMessage = Nothing
-      }
-    , getGamesIdsFromServer
-    )
+           Http.BadBody message ->
+               message
+-}
+-- MAIN
 
 
 main : Program () Model Msg
