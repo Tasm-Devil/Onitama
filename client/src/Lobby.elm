@@ -1,4 +1,4 @@
-module Lobby exposing (GameId, Model, Status(..), view, Msg(..))
+module Lobby exposing (GameId, Model, Msg(..), Status(..), view)
 
 import Browser.Navigation exposing (Key)
 import Html exposing (Html)
@@ -13,16 +13,19 @@ import Html.Events exposing (onClick)
 type alias GameId =
     String
 
+
 type alias Model =
     { key : Key
     , status : Status
     }
 
+
 type Status
     = Home (List GameId)
+
+
+
 -- ToDo: Refactor this in the model
-
-
 -- VIEW
 
 
@@ -63,9 +66,6 @@ view model =
                 ]
 
 
-
-
-
 createGameTableRow : GameId -> Html Msg
 createGameTableRow id =
     Html.tr [ HtmlA.class "game-row" ]
@@ -82,7 +82,6 @@ createGameTableRow id =
                 [ Html.text "Join" ]
             ]
         ]
-
 
 
 type Msg

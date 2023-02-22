@@ -35,7 +35,7 @@ This is on purpose because I want to use it for demonstration.
 Feel free to play the older [non-multiplayer version here ](https://tasm-devil.github.io/Onitama/) since it doesn't want you to setup a backend server.
 
 ### Thanks
-- Inspiration came from [here](http://onitama.lannysport.net/)
+- Inspiration came from [here](https://github.com/Lanny/Onitama)
 - Http-Server HowTo from [here](https://elmprogramming.com/decoding-json-part-1.html)
 
 ## Server
