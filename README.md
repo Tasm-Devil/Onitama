@@ -7,7 +7,7 @@ There's a `Makefile` included with the following targets:
 - `setup` -- Set up everything: install ghc and dependencies. (Needs `stack`, `elm`
   and `elm-test`.)
 - `build` -- Build the server and the client.
-- `server-start` -- Calls `build` and then starts the server. Open <http://localhost:3000/> in your Browser. Requests sent to this server will trigger a recompilation (via make) of the client code (if its changed).
+- `server-start` -- Calls `build` and then starts the server. Open <http://localhost:8080/> in your Browser. Requests sent to this server will trigger a recompilation (via make) of the client code (if its changed).
 
 ## JSON API
 JSON Message from Server to Client after two game moves. Last move comes first, thats fp style (Head of the List).
@@ -47,19 +47,19 @@ You can easily test the API with some simple curl commands.
 
 ```
 New Game:
-curl -X POST http://localhost:3000/game -w "\n"
+curl -X POST http://localhost:8080/game -w "\n"
 
 Get all Game Ids:
-curl http://localhost:3000/game -w "\n"
+curl http://localhost:8080/game -w "\n"
 
 Join Game
-curl -X PUT http://localhost:3000/game/1?name=Wendy -w "\n"
+curl -X PUT http://localhost:8080/game/1?name=Wendy -w "\n"
 
 Get Game with Id 1
-curl http://localhost:3000/game/1 -w "\n"
+curl http://localhost:8080/game/1 -w "\n"
 
 Post new GameMove to Game 1
-curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:3000/game/1 -w "\n"
+curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:8080/game/1 -w "\n"
 ```
 
 ## ToDos

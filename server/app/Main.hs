@@ -21,5 +21,5 @@ policy =
 
 main :: IO ()
 main = do
-    let port = 3000
+    let port = 8080
     run port . logStdoutDev . cors (const $ Just policy) =<< app
