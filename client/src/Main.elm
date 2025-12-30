@@ -46,13 +46,30 @@ type Model
     | Rejoining GameId String SessionToken Key (List StoredSession) -- Rejoining state to track which game
 
 
+
+-- MAIN
+
+
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    let
-        _ =
-            String.dropLeft 1 url.path
-    in
     ( Redirect url key [], Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Ports.loadSession SessionLoadedFromStorage
+
+
+main : Program () Model Msg
+main =
+    Browser.application
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        , onUrlRequest = ClickedLink
+        , onUrlChange = ChangedUrl
+        }
 
 
 
@@ -403,7 +420,7 @@ update msg model =
         ( GotServerMsg (ReceivedGameIdFromServer (Ok gameId)), Lobby lobby sessions ) ->
             -- getGameIdFromServer was succesfull. Created a new game on the server.
             -- Refresh the game list from server to get updated summaries
-            ( Lobby lobby sessions, Cmd.batch [ Nav.pushUrl lobby.key <| "/" ++ String.fromInt gameId, Cmd.map GotServerMsg Api.getGameSummariesFromServer ] )
+            ( Lobby lobby sessions, Nav.pushUrl lobby.key <| "/" ++ String.fromInt gameId )
 
         ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), EnterName name gameid key _ sessions ) ->
             -- joinGame was succesfull. Now create a new game in Browser
@@ -568,11 +585,11 @@ update msg model =
 
                         Nothing ->
                             -- No session for this game, proceed normally
-                            ( Redirect url key loadedSessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+                            ( Redirect url key loadedSessions, Cmd.none )
 
                 Nothing ->
                     -- Not navigating to a game, just load summaries
-                    ( Redirect url key loadedSessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+                    ( Redirect url key loadedSessions, Cmd.none )
 
         ( _, _ ) ->
             -- Disregard messages that arrived for the wrong page.
@@ -627,21 +644,3 @@ buildGame name servergame =
            Http.BadBody message ->
                message
 -}
--- MAIN
-
-
-subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Ports.loadSession SessionLoadedFromStorage
-
-
-main : Program () Model Msg
-main =
-    Browser.application
-        { init = init
-        , view = view
-        , update = update
-        , subscriptions = subscriptions
-        , onUrlRequest = ClickedLink
-        , onUrlChange = ChangedUrl
-        }
