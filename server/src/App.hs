@@ -3,24 +3,11 @@
 
 module App where
 
-import Api (API, GameId (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
-import Control.Concurrent.STM
-  ( TVar,
-    atomically,
-    modifyTVar,
-    newTVarIO,
-    readTVar,
-    readTVarIO,
-    writeTVar,
-  )
+import Api (API, GameId (..), GameSummary, api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
-import Data.Map (Map, empty)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (fromJust, fromMaybe, isNothing)
-import Data.UUID (UUID)
+import Data.Maybe (fromJust, isNothing)
 import Data.UUID.V4 (nextRandom)
-import GHC.Generics ()
 import Game (Game (Game), GameMove, give5Cards)
 import Network.Wai (Application)
 import Servant
@@ -33,16 +20,23 @@ import Servant
     Tagged (Tagged),
     hoistServer,
     serve,
-    serveDirectoryWebApp,
     type (:<|>) (..),
   )
-import Data.ByteString.Lazy as Lazy ( ByteString, readFile )
-import Network.Wai.Application.Static
-    ( staticApp, defaultFileServerSettings )
+import Data.ByteString.Lazy as Lazy (ByteString, readFile)
+import Network.Wai.Application.Static (staticApp, defaultFileServerSettings)
 
-type Games = Map GameId Game
-
-newtype DB = DB (TVar Games)
+-- Import our new Database module
+import Database
+  ( DB,
+    initDB,
+    markDBChanged,
+    logDBState,
+    getGameById,
+    insertGame,
+    updateGame,
+    getAllGameSummaries,
+    forceSave
+  )
 
 app :: IO Application
 app = serve apiWithAssets <$> server
@@ -51,8 +45,10 @@ type AppM = ReaderT DB Handler
 
 server :: IO (Server APIWithAssets)
 server = do
+  putStrLn "Starting server..."
   let assets = staticApp $ defaultFileServerSettings "assets/"
-  db <- DB <$> newTVarIO empty
+  db <- initDB
+  putStrLn "Server initialized successfully"
   return (readerServer db :<|> Tagged assets)
   where
     readerToHandler :: DB -> AppM a -> Handler a
@@ -61,68 +57,79 @@ server = do
     readerServer db = hoistServer api (readerToHandler db) apiServer
 
 apiServer :: ServerT API AppM
-apiServer = newGame :<|> getAllGames :<|> joinGame :<|> getGame :<|> newMove :<|> getIndexHtml
+apiServer = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMove :<|> getIndexHtml
 
 newGame :: AppM GameId
 newGame = do
-  DB db <- ask
+  db <- ask
   newCards <- liftIO give5Cards
   newUuid <- liftIO nextRandom
-  let insNewGame = Map.insert (GameId newUuid) (Game "" "" newCards [])
-  liftIO . atomically $ do
-    modifyTVar db insNewGame
-  games <- liftIO $ readTVarIO db
-  return $ GameId newUuid
+  let gameId = GameId newUuid
+  liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
+  
+  -- Create a new game and insert it into the database
+  liftIO $ insertGame db gameId (Game "" "" newCards [])
+  
+  liftIO $ do
+    putStrLn "Game created, logging state"
+    logDBState "After creating game" db
+    -- Force an immediate save for testing
+    forceSave db
+  
+  return gameId
+getGameSummaries :: AppM [GameSummary]
+getGameSummaries = do
+  db <- ask
+  liftIO $ getAllGameSummaries db
 
-getAllGames :: AppM [GameId]
-getAllGames = do
-  DB db <- ask
-  games <- liftIO $ readTVarIO db
-  return $ Map.keys games
-
-joinGame :: GameId -> Maybe String -> AppM (Maybe Game) -- adds playername to game of id
+joinGame :: GameId -> Maybe String -> AppM (Maybe Game)
 joinGame gameId name = do
-  DB db <- ask
-  games <- liftIO $ readTVarIO db
-  if Map.notMember gameId games || isNothing name
-    then do return Nothing
+  db <- ask
+  if isNothing name
+    then return Nothing
     else do
-      liftIO . atomically $ do
-        modifyTVar db $ updateDb (fromJust name) gameId
-      games <- liftIO $ readTVarIO db
-      return $ Map.lookup gameId games
-  where
-    updateDb :: String -> GameId -> Games -> Games
-    updateDb name =
-      let insertPlayNameToGame name (Game "" "" cards history) = Just $ Game name "" cards history
-          insertPlayNameToGame name (Game "" p2 cards history) = Just $ Game name p2 cards history
-          insertPlayNameToGame name (Game p1 "" cards history) = Just $ Game p1 name cards history
-          insertPlayNameToGame name (Game p1 p2 cards history) = Just $ Game p1 p2 cards history
-       in Map.update (insertPlayNameToGame name)
+      -- Get the current game
+      maybeGame <- liftIO $ getGameById db gameId
+      case maybeGame of
+        Nothing -> return Nothing
+        Just game -> do
+          -- Update the game with the player's name
+          let playerName = fromJust name
+          let updateGameFn :: Game -> Maybe Game
+              updateGameFn (Game "" "" cards history) = Just $ Game playerName "" cards history
+              updateGameFn (Game "" p2 cards history) = Just $ Game playerName p2 cards history
+              updateGameFn (Game p1 "" cards history) = Just $ Game p1 playerName cards history
+              updateGameFn (Game p1 p2 cards history) = Just $ Game p1 p2 cards history
+          
+          success <- liftIO $ updateGame db gameId updateGameFn
+          if success
+            then liftIO $ getGameById db gameId
+            else return Nothing
 
 getGame :: GameId -> AppM (Maybe Game)
 getGame gameId = do
-  DB db <- ask
-  games <- liftIO $ readTVarIO db
-  return $ Map.lookup gameId games
+  db <- ask
+  liftIO $ getGameById db gameId
 
 newMove :: GameId -> GameMove -> AppM (Maybe GameMove)
 newMove gameId move = do
-  DB db <- ask
-  games <- liftIO $ readTVarIO db
-  if Map.notMember gameId games
-    then do return Nothing
-    else do
-      liftIO . atomically $ do
-        modifyTVar db $ updateDb move gameId
-      return (Just move)
-  where
-    updateDb :: GameMove -> GameId -> Games -> Games
-    updateDb move =
-      let insertMoveToGame m (Game p1 p2 cards history) = Just $ Game p1 p2 cards (m : history)
-       in Map.update (insertMoveToGame move)
+  db <- ask
+  -- Check if the game exists
+  maybeGame <- liftIO $ getGameById db gameId
+  case maybeGame of
+    Nothing -> return Nothing
+    Just game -> do
+      -- Update the game with the new move
+      let updateGameFn (Game p1 p2 cards history) = Just $ Game p1 p2 cards (move : history)
+      success <- liftIO $ updateGame db gameId updateGameFn
+      if success
+        then return (Just move)
+        else return Nothing
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml gameId = do
   bs <- liftIO $ Lazy.readFile "assets/index.html"
   return $ RawHtml bs
+
+
+

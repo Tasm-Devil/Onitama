@@ -1,4 +1,4 @@
-module Lobby exposing (GameId, Model, Msg(..), Status(..), view)
+module Lobby exposing (GameId, Model, Msg(..), Status(..), GameSummary, GameStatus(..), view)
 
 import Browser.Navigation exposing (Key)
 import Html exposing (Html)
@@ -21,8 +21,21 @@ type alias Model =
 
 
 type Status
-    = Home (List GameId)
+    = Home (List GameSummary)
 
+type GameStatus
+    = WaitingForPlayers
+    | InProgress
+    | Completed
+
+
+type alias GameSummary =
+    { summaryId : GameId
+    , summaryPlayer1 : String
+    , summaryPlayer2 : String
+    , summaryMoveCount : Int
+    , summaryStatus : GameStatus
+    }
 
 
 -- ToDo: Refactor this in the model
@@ -32,7 +45,7 @@ type Status
 view : Model -> Html Msg
 view model =
     case model.status of
-        Home ids ->
+        Home summaries ->
             Html.div [ HtmlA.class "lobby" ]
                 [ Html.h1 []
                     [ Html.text "ONITAMA" ]
@@ -52,36 +65,65 @@ view model =
                             [ Html.td []
                                 [ Html.text "Game" ]
                             , Html.td []
-                                [ Html.text "Last Action" ]
+                                [ Html.text "Moves" ]
                             , Html.td []
                                 [ Html.text "State" ]
                             , Html.td []
-                                [ Html.text "Spectators" ]
-                            , Html.td []
-                                []
+                                [ Html.text "" ]
                             ]
                         ]
-                        :: List.map createGameTableRow ids
+                        :: List.map createGameTableRow summaries
                     )
                 ]
 
 
-createGameTableRow : GameId -> Html Msg
-createGameTableRow id =
+createGameTableRow : GameSummary -> Html Msg
+createGameTableRow summary =
+    let
+        player1Display =
+            if String.isEmpty summary.summaryPlayer1 then
+                "(waiting)"
+            else
+                summary.summaryPlayer1
+
+        player2Display =
+            if String.isEmpty summary.summaryPlayer2 then
+                "(waiting)"
+            else
+                summary.summaryPlayer2
+
+        gameDisplay =
+            player1Display ++ " vs. " ++ player2Display
+
+        statusDisplay =
+            case summary.summaryStatus of
+                WaitingForPlayers ->
+                    "Waiting for players"
+
+                InProgress ->
+                    "In progress"
+
+                Completed ->
+                    "Completed"
+
+        movesDisplay =
+            String.fromInt summary.summaryMoveCount
+    in
     Html.tr [ HtmlA.class "game-row" ]
         [ Html.td []
-            [ Html.text "Wendy vs. Bob" ]
+            [ Html.text gameDisplay ]
         , Html.td []
-            [ Html.text "N/A" ]
+            [ Html.text movesDisplay ]
         , Html.td []
-            [ Html.text "done, WHITE won" ]
+            [ Html.text statusDisplay ]
         , Html.td []
-            [ Html.text "0" ]
-        , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href id ]
+            [ Html.a [ HtmlA.class "join-game", HtmlA.href summary.summaryId ]
                 [ Html.text "Join" ]
             ]
         ]
+
+
+
 
 
 type Msg

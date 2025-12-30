@@ -48,28 +48,42 @@ You can easily test the API with some simple curl commands.
 ```
 New Game:
 curl -X POST http://localhost:8080/game -w "\n"
+New API:
+curl -X POST http://localhost:8080/1/onitama/new -w "\n"
 
-Get all Game Ids:
-curl http://localhost:8080/game -w "\n"
+Get all Games:
+curl http://localhost:8080/games/summary -w "\n"
+New API:
+curl http://localhost:8080/1/onitama/summary -w "\n"
 
-Join Game
+
+Join Game:
 curl -X PUT http://localhost:8080/game/1?name=Wendy -w "\n"
+New API:
+curl -X PUT http://localhost:8080/1/onitama/?table=1?name=Wendy -w "\n"
 
 Get Game with Id 1
 curl http://localhost:8080/game/1 -w "\n"
+New API:
+curl http://localhost:8080/1/onitama/?table=1 -w "\n"
+
 
 Post new GameMove to Game 1
 curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:8080/game/1 -w "\n"
+New API:
+curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' http://localhost:8080/1/onitama/?table=1 -w "\n"
 ```
 
 ## ToDos
 In the order in which I would like to tackle them.
 
-- [ ] GetGame with UUID in the URL should work to
+- [X] GetGame with UUID in the URL should work to
+- [X] GetGames should also return all playernames with gameids.
+- [ ] GameIds from 1 to infinity instead of UUID
+- [ ] Change API to /VERSION/GAMENAME?table=GEMEID
 - [ ] The Server should check the player names on NewMove
 - [ ] Authetification by player name using sessions
 - [ ] Implement http polling temporarily.
-- [ ] GetGames should also return all playernames with gameids.
 - [ ] The common card should determine, which player starts the game.
 - [ ] Check for checkmate!
 - [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`

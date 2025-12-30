@@ -7,7 +7,7 @@
 
 module Api where
 
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
@@ -34,11 +34,30 @@ import Servant
 import Servant.API (Accept (..), Raw)
 
 newtype GameId = GameId UUID
-  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
+  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
+
+-- Lightweight game summary for listing games
+data GameSummary = GameSummary
+  { summaryId :: GameId
+  , summaryPlayer1 :: String
+  , summaryPlayer2 :: String
+  , summaryMoveCount :: Int
+  , summaryStatus :: GameStatus
+  } deriving (Show, Eq, Generic)
+
+data GameStatus = WaitingForPlayers | InProgress | Completed
+  deriving (Show, Eq, Generic)
+
+instance ToJSON GameSummary
+instance FromJSON GameSummary
+instance ToJSON GameStatus
+instance FromJSON GameStatus
+
+type Games = Map GameId Game
 
 type NewGame = "game" :> Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
 
-type GetGames = "game" :> Get '[JSON] [GameId] -- Get all GameIds
+type GetGameSummaries = "games" :> "summary" :> Get '[JSON] [GameSummary] -- Get lightweight game summaries
 
 type JoinGame = "game" :> Capture "gameid" GameId :> QueryParam "name" String :> Put '[JSON] (Maybe Game)
 
@@ -48,7 +67,7 @@ type NewMove = "game" :> Capture "gameid" GameId :> ReqBody '[JSON] GameMove :> 
 
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
-type API = NewGame :<|> GetGames :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Index
+type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Index
 
 api :: Proxy API
 api = Proxy

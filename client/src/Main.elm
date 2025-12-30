@@ -33,7 +33,7 @@ type Model
 
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( Redirect url key, Cmd.map GotServerMsg Api.getGamesIdsFromServer )
+    ( Redirect url key, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
 
 
@@ -176,20 +176,27 @@ update msg model =
                 gameid =
                     String.dropLeft 1 url.path
             in
-            case lobby.status of
-                Home gamesids ->
-                    if List.member gameid gamesids then
-                        -- this happens only on url change
-                        ( EnterName "Wendy" gameid lobby.key, Cmd.none )
+            if String.isEmpty gameid then
+                -- Stay in lobby if URL is just "/"
+                ( model, Cmd.none )
+            else
+                -- Navigate to the game (even if not in summaries list yet)
+                ( EnterName "Wendy" gameid lobby.key, Cmd.none )
 
-                    else
-                        ( model, Cmd.none )
-
-        ( ChangedUrl url, EnterName _ _ key ) ->
-            ( Redirect url key, Cmd.map GotServerMsg Api.getGamesIdsFromServer )
+        ( ChangedUrl url, EnterName name currentGameId key ) ->
+            let
+                newGameId =
+                    String.dropLeft 1 url.path
+            in
+            if newGameId == currentGameId then
+                -- Stay in EnterName state if the URL matches the current game
+                ( EnterName name currentGameId key, Cmd.none )
+            else
+                -- Different game, redirect and fetch summaries
+                ( Redirect url key, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         ( ChangedUrl url, Playing _ _ _ _ key ) ->
-            ( Redirect url key, Cmd.map GotServerMsg Api.getGamesIdsFromServer )
+            ( Redirect url key, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         ( ClickedLink urlRequest, Lobby lobby ) ->
             -- user clicked on a Join link in the table
@@ -233,11 +240,14 @@ update msg model =
             -- fetch latest gamemove from server
             ( model, Cmd.map GotServerMsg <| Api.getGameFromServer gameid )
 
-        ( GotServerMsg (ReceivedGameIdsFromServer (Ok gamesids)), Redirect url key ) ->
-            -- all the games succesfully fetched from server
+        ( GotServerMsg (ReceivedGameSummariesFromServer (Ok summaries)), Redirect url key ) ->
+            -- all the game summaries successfully fetched from server
             let
                 gameid =
                     String.dropLeft 1 url.path
+
+                gamesids =
+                    List.map .summaryId summaries
             in
             if List.member gameid gamesids then
                 -- enter a game directly by URL and not by pressing the new game button
@@ -245,25 +255,31 @@ update msg model =
 
             else if String.isEmpty gameid then
                 -- the default way to enter the lobby
-                ( Lobby { status = Home gamesids, key = key }, Cmd.none )
+                ( Lobby { status = Home summaries, key = key }, Cmd.none )
 
             else
                 -- The URL points to an nonexisting gameid
-                ( Lobby { status = Home gamesids, key = key }, Nav.pushUrl key <| "/" )
+                ( Lobby { status = Home summaries, key = key }, Nav.pushUrl key <| "/" )
 
-        ( GotServerMsg (ReceivedGameIdsFromServer (Err _)), _ ) ->
-            Debug.todo "branch 'ReceivedGameIdsFromServer (Err httpError)' not implemented"
+        ( GotServerMsg (ReceivedGameSummariesFromServer (Err _)), Redirect _ key ) ->
+            -- If fetching summaries fails, show an empty lobby
+            ( Lobby { status = Home [], key = key }, Cmd.none )
+
+        ( GotServerMsg (ReceivedGameSummariesFromServer (Err _)), _ ) ->
+            -- For other states, just ignore the error
+            ( model, Cmd.none )
 
         ( GotServerMsg (ReceivedGameIdFromServer (Ok gameId)), Lobby lobby ) ->
             -- getGameIdFromServer was succesfull. Created a new game on the server.
-            -- Append new game id to the list, change the URL and let ( ChangedUrl url , Lobby lobby) handle it.
-            case lobby.status of
-                Home gamesids ->
-                    ( Lobby { lobby | status = Home (gameId :: gamesids) }, Nav.pushUrl lobby.key <| "/" ++ gameId )
+            -- Refresh the game list from server to get updated summaries
+            ( Lobby lobby, Cmd.batch [ Nav.pushUrl lobby.key <| "/" ++ gameId, Cmd.map GotServerMsg Api.getGameSummariesFromServer ] )
 
         ( GotServerMsg (ReceivedGameFromServer (Ok servergame)), EnterName name gameid key ) ->
             -- joinGame was succesfull. Now create a new game in Browser
             let
+                _ =
+                    Debug.log "Successfully joined game" ( name, gameid )
+
                 newgame =
                     Game.setupNewGame servergame.cards
                         (if name == servergame.player_black then
@@ -279,6 +295,15 @@ update msg model =
                     List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
             in
             ( Playing name gameid finalgame servergame.history key, Cmd.none )
+
+        ( GotServerMsg (ReceivedGameFromServer (Err httpError)), EnterName name gameid key ) ->
+            -- joinGame failed
+            let
+                _ =
+                    Debug.log "Failed to join game" httpError
+            in
+            -- Stay in EnterName state so user can try again
+            ( EnterName name gameid key, Cmd.none )
 
         ( GotServerMsg (ReceivedGameFromServer (Ok servergame)), Playing name gameid game _ key ) ->
             -- getGameFromServer was succesfull. Append the last gamemove from opponent to the history.

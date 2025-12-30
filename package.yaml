@@ -21,6 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/Tasm
 dependencies:
 - base >= 4.7 && < 5
 - aeson
+- aeson-pretty  # Add this
 - containers
 - random
 - random-shuffle
@@ -42,6 +43,7 @@ dependencies:
 - shake              # for wai-make-assets
 - http-types         # for wai-make-assets
 - directory          # for wai-make-assets
+- text
 
 
 library:
