@@ -1,144 +1,132 @@
 {
   "dbGames": {
-    "2da64855-a0ad-471e-9745-0230435d80ac": {
+    "1": {
       "cards": [
-        "Tiger",
+        "Crab",
+        "Rooster",
         "Goose",
-        "Ox",
-        "Horse",
-        "Rabbit"
+        "Rabbit",
+        "Dragon"
       ],
       "history": [
         {
-          "card": "Rabbit",
-          "color": "Black",
-          "from": [
-            1,
-            4
-          ],
-          "move": [
-            -1,
-            -1
-          ]
-        },
-        {
-          "card": "Ox",
-          "color": "White",
-          "from": [
-            0,
-            1
-          ],
-          "move": [
-            0,
-            1
-          ]
-        },
-        {
-          "card": "Horse",
-          "color": "Black",
-          "from": [
-            4,
-            4
-          ],
-          "move": [
-            0,
-            -1
-          ]
-        },
-        {
-          "card": "Rabbit",
-          "color": "White",
-          "from": [
-            2,
-            0
-          ],
-          "move": [
-            1,
-            1
-          ]
-        },
-        {
-          "card": "Ox",
-          "color": "Black",
-          "from": [
-            2,
-            4
-          ],
-          "move": [
-            0,
-            -1
-          ]
-        },
-        {
           "card": "Goose",
+          "color": "Black",
+          "from": [
+            2,
+            4
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Rabbit",
           "color": "White",
           "from": [
+            3,
+            1
+          ],
+          "move": [
             1,
+            1
+          ]
+        },
+        {
+          "card": "Crab",
+          "color": "Black",
+          "from": [
+            2,
+            3
+          ],
+          "move": [
+            0,
+            -1
+          ]
+        },
+        {
+          "card": "Dragon",
+          "color": "White",
+          "from": [
+            2,
             0
           ],
           "move": [
+            2,
+            1
+          ]
+        },
+        {
+          "card": "Rabbit",
+          "color": "Black",
+          "from": [
+            3,
+            4
+          ],
+          "move": [
             -1,
+            -1
+          ]
+        },
+        {
+          "card": "Crab",
+          "color": "White",
+          "from": [
+            3,
+            0
+          ],
+          "move": [
+            0,
             1
           ]
         }
       ],
-      "player_black": "Bohr",
-      "player_white": "Albert"
+      "player_black": "Bob",
+      "player_white": "Alice"
     },
-    "5495df8c-afd1-4876-a3fe-dff00840a6b3": {
+    "2": {
       "cards": [
-        "Cobra",
-        "Tiger",
-        "Boar",
+        "Monkey",
+        "Horse",
+        "Frog",
         "Rooster",
-        "Crab"
-      ],
-      "history": [],
-      "player_black": "",
-      "player_white": "Wendy"
-    },
-    "6b2b99bb-fcae-4895-ad89-164988ec64b5": {
-      "cards": [
-        "Eel",
-        "Rooster",
-        "Ox",
-        "Dragon",
-        "Rabbit"
+        "Eel"
       ],
       "history": [
         {
-          "card": "Dragon",
+          "card": "Eel",
           "color": "Black",
           "from": [
             1,
-            4
+            3
           ],
           "move": [
-            2,
+            1,
             -1
           ]
         },
         {
-          "card": "Rabbit",
+          "card": "Horse",
           "color": "White",
           "from": [
-            1,
-            0
+            3,
+            1
           ],
           "move": [
-            1,
+            0,
             1
           ]
         },
         {
-          "card": "Ox",
+          "card": "Monkey",
           "color": "Black",
           "from": [
-            2,
+            0,
             4
           ],
           "move": [
-            0,
+            1,
             -1
           ]
         },
@@ -146,56 +134,19 @@
           "card": "Eel",
           "color": "White",
           "from": [
-            2,
+            4,
             0
           ],
           "move": [
             -1,
             1
           ]
-        }
-      ],
-      "player_black": "Bob",
-      "player_white": "Wendy"
-    },
-    "6ca2ebef-07d0-43f1-888c-dc5588a1c9cd": {
-      "cards": [
-        "Ox",
-        "Rooster",
-        "Goose",
-        "Frog",
-        "Tiger"
-      ],
-      "history": [
+        },
         {
-          "card": "Ox",
+          "card": "Frog",
           "color": "Black",
           "from": [
             1,
-            4
-          ],
-          "move": [
-            0,
-            -1
-          ]
-        },
-        {
-          "card": "Rooster",
-          "color": "White",
-          "from": [
-            1,
-            0
-          ],
-          "move": [
-            1,
-            0
-          ]
-        },
-        {
-          "card": "Goose",
-          "color": "Black",
-          "from": [
-            2,
             4
           ],
           "move": [
@@ -204,71 +155,52 @@
           ]
         },
         {
-          "card": "Ox",
+          "card": "Monkey",
           "color": "White",
           "from": [
-            2,
+            1,
             0
           ],
           "move": [
-            0,
+            1,
             1
           ]
         }
       ],
-      "player_black": "Peter",
-      "player_white": "Pascal"
-    },
-    "cee72b5f-468a-4c57-bc69-021ec256f313": {
-      "cards": [
-        "Frog",
-        "Horse",
-        "Elephant",
-        "Crab",
-        "Rabbit"
-      ],
-      "history": [
-        {
-          "card": "Horse",
-          "color": "White",
-          "from": [
-            2,
-            0
-          ],
-          "move": [
-            0,
-            1
-          ]
-        }
-      ],
-      "player_black": "",
-      "player_white": "Wendy2"
-    },
-    "f6bc0249-f4a8-4d8d-acd9-b2c42e7b1c75": {
-      "cards": [
-        "Boar",
-        "Crab",
-        "Tiger",
-        "Elephant",
-        "Dragon"
-      ],
-      "history": [
-        {
-          "card": "Boar",
-          "color": "White",
-          "from": [
-            2,
-            0
-          ],
-          "move": [
-            0,
-            1
-          ]
-        }
-      ],
-      "player_black": "Bob",
-      "player_white": "Berta"
+      "player_black": "Albert",
+      "player_white": "Bohr"
     }
   },
-  "dbHasChanged": true
+  "dbHasChanged": true,
+  "dbNextId": 3,
+  "dbSessions": [
+    [
+      [
+        1,
+        "Player1"
+      ],
+      "a4cd5ddc-71a3-41a2-bff2-0c516df006d3"
+    ],
+    [
+      [
+        1,
+        "Player2"
+      ],
+      "f5ea6fb0-2527-46d8-b0ab-9e861cf55395"
+    ],
+    [
+      [
+        2,
+        "Player1"
+      ],
+      "57cd3220-11b7-44e0-a075-2b6b86bab9a3"
+    ],
+    [
+      [
+        2,
+        "Player2"
+      ],
+      "15e3abc3-994d-4b23-97c0-1912605cf5e3"
+    ]
+  ]
 }

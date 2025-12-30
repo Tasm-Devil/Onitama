@@ -18,9 +18,20 @@ type alias ServerGame =
     }
 
 
+type alias SessionToken =
+    String
+
+
+type alias JoinGameResponse =
+    { responseGame : ServerGame
+    , responseToken : SessionToken
+    }
+
+
 
 type Msg
     = ReceivedGameIdFromServer (Result Http.Error GameId) -- the game id of the new game
+    | ReceivedJoinGameResponse (Result Http.Error JoinGameResponse)
     | ReceivedGameFromServer (Result Http.Error ServerGame)
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
     | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary)) -- lightweight game summaries
@@ -33,7 +44,7 @@ type Msg
 getGameSummariesFromServer : Cmd Msg
 getGameSummariesFromServer =
     Http.get
-        { url = "/games/summary"
+        { url = "/1/onitama/summary"
         , expect = Http.expectJson ReceivedGameSummariesFromServer (Decode.list decodeGameSummary)
         }
 
@@ -41,23 +52,32 @@ getGameSummariesFromServer =
 getGameIdFromServer : Cmd Msg
 getGameIdFromServer =
     Http.post
-        { url = "/game"
+        { url = "/1/onitama/new"
         , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedGameIdFromServer Decode.string
+        , expect = Http.expectJson ReceivedGameIdFromServer Decode.int
         }
 
 
-joinGame : GameId -> String -> Cmd Msg
-joinGame gameid name =
+joinGame : GameId -> String -> Maybe SessionToken -> Cmd Msg
+joinGame gameid name maybeToken =
+    let
+        tokenParam =
+            case maybeToken of
+                Just token ->
+                    "&token=" ++ token
+                
+                Nothing ->
+                    ""
+    in
     Http.request
         { method = "PUT"
         , headers = []
-        , url = "/game/" ++ gameid ++ "?name=" ++ name
+        , url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&name=" ++ name ++ tokenParam
         , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedGameFromServer (Decode.nullable decodeGame |> Decode.andThen (\maybeGame -> 
-            case maybeGame of
-                Just game -> Decode.succeed game
-                Nothing -> Decode.fail "Server returned null - game not found or name rejected"
+        , expect = Http.expectJson ReceivedJoinGameResponse (Decode.nullable decodeJoinGameResponse |> Decode.andThen (\maybeResponse -> 
+            case maybeResponse of
+                Just response -> Decode.succeed response
+                Nothing -> Decode.fail "Server returned null - game not found or full"
             ))
         , timeout = Nothing
         , tracker = Nothing
@@ -67,16 +87,16 @@ joinGame gameid name =
 getGameFromServer : GameId -> Cmd Msg
 getGameFromServer gameid =
     Http.get
-        { url = "/game/" ++ gameid
+        { url = "/1/onitama?table=" ++ String.fromInt gameid
         , expect =
             Http.expectJson ReceivedGameFromServer decodeGame
         }
 
 
-postNewGameMove : GameId -> Game.GameMove -> Cmd Msg
-postNewGameMove gameid gameMove =
+postNewGameMove : GameId -> SessionToken -> Game.GameMove -> Cmd Msg
+postNewGameMove gameid token gameMove =
     Http.post
-        { url = "/game/" ++ gameid
+        { url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&token=" ++ token
         , body = Http.jsonBody (enecodergameMove gameMove)
         , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
         }
@@ -109,7 +129,7 @@ decodeGameStatus =
 decodeGameSummary : Decoder GameSummary
 decodeGameSummary =
     Decode.succeed GameSummary
-        |> required "summaryId" Decode.string
+        |> required "summaryId" Decode.int
         |> required "summaryPlayer1" Decode.string
         |> required "summaryPlayer2" Decode.string
         |> required "summaryMoveCount" Decode.int
@@ -142,6 +162,13 @@ decodeGame =
         |> required "player_black" Decode.string
         |> required "cards" (Decode.list (Decode.map Game.Card.cardByName Decode.string))
         |> required "history" (Decode.list decodeGameMove)
+
+
+decodeJoinGameResponse : Decoder JoinGameResponse
+decodeJoinGameResponse =
+    Decode.succeed JoinGameResponse
+        |> required "responseGame" decodeGame
+        |> required "responseToken" Decode.string
 
 
 enecodergameMove : Game.GameMove -> Encode.Value

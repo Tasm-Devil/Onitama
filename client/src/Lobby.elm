@@ -11,7 +11,7 @@ import Html.Events exposing (onClick)
 
 
 type alias GameId =
-    String
+    Int
 
 
 type alias Model =
@@ -117,7 +117,7 @@ createGameTableRow summary =
         , Html.td []
             [ Html.text statusDisplay ]
         , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href summary.summaryId ]
+            [ Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
                 [ Html.text "Join" ]
             ]
         ]

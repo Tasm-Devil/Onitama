@@ -4,7 +4,7 @@
 
 module Database where
 
-import Api (GameId (..), Games, GameSummary (..), GameStatus (..))
+import Api (GameId (..), Games, GameSummary (..), GameStatus (..), SessionToken (..))
 import Control.Concurrent.STM
   ( TVar,
     atomically,
@@ -19,21 +19,34 @@ import Control.Monad (forever, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
-import Data.UUID (UUID, toString, fromString)
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
 import Game (Game (Game))
 import Data.ByteString.Lazy as Lazy (ByteString, readFile, writeFile)
 import qualified Data.ByteString.Lazy as Lazy (length)
-import Data.Aeson (FromJSON, ToJSON, decode, encode, FromJSONKey(..), ToJSONKey(..))
-import Data.Aeson.Types (toJSONKeyText, FromJSONKeyFunction(..))
+import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.Aeson.Encode.Pretty as Pretty
 import System.Directory (doesFileExist)
+import Data.Text (Text)
 import qualified Data.Text as T
+import Data.UUID.V4 (nextRandom)
+import Data.UUID (toText)
 
+
+-- Player slot identifier: which position in the game
+data PlayerSlot = Player1 | Player2
+  deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON PlayerSlot
+instance FromJSON PlayerSlot
+
+-- Session key: (GameId, PlayerSlot)
+type SessionKey = (GameId, PlayerSlot)
 
 data DBState = DBState
   { dbGames :: Games
+  , dbNextId :: Int
+  , dbSessions :: Map SessionKey SessionToken
   , dbHasChanged :: Bool
   } deriving (Generic)
 
@@ -62,10 +75,10 @@ loadDB = do
           return db
         Nothing -> do
           putStrLn "Failed to parse database file, starting with empty DB"
-          return $ DBState empty False
+          return $ DBState empty 1 empty False
     else do
       putStrLn "Database file not found, starting with empty DB"
-      return $ DBState empty False
+      return $ DBState empty 1 empty False
   newTVarIO initialDB
 
 -- Save database to file with pretty printing
@@ -141,6 +154,21 @@ getGameById (DB dbVar) gameId = do
   state <- readTVarIO dbVar
   return $ Map.lookup gameId (dbGames state)
 
+-- Generate next game ID and insert game
+insertGameWithNewId :: DB -> Game -> IO GameId
+insertGameWithNewId (DB dbVar) game = do
+  gameId <- atomically $ do
+    state <- readTVar dbVar
+    let newId = GameId (dbNextId state)
+    modifyTVar dbVar $ \s ->
+      s { dbGames = Map.insert newId game (dbGames s)
+        , dbNextId = dbNextId s + 1
+        , dbHasChanged = True
+        }
+    return newId
+  markDBChanged (DB dbVar)
+  return gameId
+
 insertGame :: DB -> GameId -> Game -> IO ()
 insertGame (DB dbVar) gameId game = do
   atomically $ modifyTVar dbVar $ \state ->
@@ -192,3 +220,108 @@ getAllGameSummaries (DB dbVar) = do
   state <- readTVarIO dbVar
   let games = dbGames state
   return $ map (uncurry gameToSummary) (Map.toList games)
+
+-- Generate a new session token
+generateToken :: IO SessionToken
+generateToken = do
+  uuid <- nextRandom
+  return $ SessionToken (toText uuid)
+
+-- Create a session for a player joining a game
+createSession :: DB -> GameId -> PlayerSlot -> IO SessionToken
+createSession (DB dbVar) gameId slot = do
+  token <- generateToken
+  atomically $ modifyTVar dbVar $ \state ->
+    state { dbSessions = Map.insert (gameId, slot) token (dbSessions state)
+          , dbHasChanged = True }
+  markDBChanged (DB dbVar)
+  putStrLn $ "Created session for game " ++ show gameId ++ ", slot " ++ show slot
+  return token
+
+-- Validate that a token is valid for making a move in a game
+validateToken :: DB -> GameId -> SessionToken -> PlayerSlot -> IO Bool
+validateToken (DB dbVar) gameId token expectedSlot = do
+  state <- readTVarIO dbVar
+  let sessions = dbSessions state
+  case Map.lookup (gameId, expectedSlot) sessions of
+    Just storedToken -> return $ storedToken == token
+    Nothing -> return False
+
+-- Determine which player slot should make the next move based on game history
+getCurrentPlayerSlot :: Game -> PlayerSlot
+getCurrentPlayerSlot (Game _ _ _ history) =
+  if even (Prelude.length history) then Player1 else Player2
+
+-- Join a game and get a session token (or retrieve existing session with validation)
+joinGameWithToken :: DB -> GameId -> String -> Maybe SessionToken -> IO (Maybe (Game, SessionToken))
+joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
+  maybeGame <- getGameById db gameId
+  case maybeGame of
+    Nothing -> return Nothing
+    Just game@(Game p1 p2 cards history) -> do
+      state <- readTVarIO dbVar
+      let sessions = dbSessions state
+      
+      -- Check if player is already in the game
+      if p1 == playerName then do
+        -- Player1 slot is taken by this name
+        case Map.lookup (gameId, Player1) sessions of
+          Just existingToken -> do
+            -- Token exists for Player1
+            case maybeProvidedToken of
+              Just providedToken | providedToken == existingToken -> do
+                -- Valid token provided, allow rejoin
+                putStrLn $ "Player " ++ playerName ++ " rejoining as Player1 with valid token"
+                return $ Just (game, existingToken)
+              _ -> do
+                -- No token or wrong token - reject to prevent impersonation
+                putStrLn $ "Rejecting join: " ++ playerName ++ " already exists as Player1 but wrong/no token provided"
+                return Nothing
+          Nothing -> do
+            -- No token exists yet (shouldn't happen, but handle it)
+            putStrLn $ "Warning: Player1 exists but no token found, creating new session"
+            token <- createSession db gameId Player1
+            return $ Just (game, token)
+            
+      else if p2 == playerName then do
+        -- Player2 slot is taken by this name
+        case Map.lookup (gameId, Player2) sessions of
+          Just existingToken -> do
+            case maybeProvidedToken of
+              Just providedToken | providedToken == existingToken -> do
+                putStrLn $ "Player " ++ playerName ++ " rejoining as Player2 with valid token"
+                return $ Just (game, existingToken)
+              _ -> do
+                putStrLn $ "Rejecting join: " ++ playerName ++ " already exists as Player2 but wrong/no token provided"
+                return Nothing
+          Nothing -> do
+            putStrLn $ "Warning: Player2 exists but no token found, creating new session"
+            token <- createSession db gameId Player2
+            return $ Just (game, token)
+            
+      else do
+        -- New player, find empty slot
+        let (slot, updatedGame) = 
+              if null p1 && null p2 then
+                (Player1, Game playerName "" cards history)
+              else if null p1 then
+                (Player1, Game playerName p2 cards history)
+              else if null p2 then
+                (Player2, Game p1 playerName cards history)
+              else
+                -- Game is full, reject
+                (Player1, game)  -- dummy, will return Nothing
+        
+        if game == updatedGame then do
+          -- Game was full, couldn't join
+          putStrLn $ "Game is full, rejecting join for " ++ playerName
+          return Nothing
+        else do
+          -- Update game and create session
+          atomically $ modifyTVar dbVar $ \state ->
+            state { dbGames = Map.insert gameId updatedGame (dbGames state)
+                  , dbHasChanged = True }
+          markDBChanged db
+          token <- createSession db gameId slot
+          putStrLn $ "New player " ++ playerName ++ " joined as " ++ show slot
+          return $ Just (updatedGame, token)

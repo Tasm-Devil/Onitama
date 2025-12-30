@@ -3,11 +3,11 @@
 
 module App where
 
-import Api (API, GameId (..), GameSummary, api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
+import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.Maybe (fromJust, isNothing)
-import Data.UUID.V4 (nextRandom)
+
 import Game (Game (Game), GameMove, give5Cards)
 import Network.Wai (Application)
 import Servant
@@ -28,14 +28,19 @@ import Network.Wai.Application.Static (staticApp, defaultFileServerSettings)
 -- Import our new Database module
 import Database
   ( DB,
+    PlayerSlot (..),
     initDB,
     markDBChanged,
     logDBState,
     getGameById,
     insertGame,
+    insertGameWithNewId,
     updateGame,
     getAllGameSummaries,
-    forceSave
+    forceSave,
+    joinGameWithToken,
+    validateToken,
+    getCurrentPlayerSlot
   )
 
 app :: IO Application
@@ -63,14 +68,12 @@ newGame :: AppM GameId
 newGame = do
   db <- ask
   newCards <- liftIO give5Cards
-  newUuid <- liftIO nextRandom
-  let gameId = GameId newUuid
-  liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
   
-  -- Create a new game and insert it into the database
-  liftIO $ insertGame db gameId (Game "" "" newCards [])
+  -- Create a new game with auto-incrementing ID
+  gameId <- liftIO $ insertGameWithNewId db (Game "" "" newCards [])
   
   liftIO $ do
+    putStrLn $ "Creating new game with ID: " ++ show gameId
     putStrLn "Game created, logging state"
     logDBState "After creating game" db
     -- Force an immediate save for testing
@@ -82,49 +85,66 @@ getGameSummaries = do
   db <- ask
   liftIO $ getAllGameSummaries db
 
-joinGame :: GameId -> Maybe String -> AppM (Maybe Game)
-joinGame gameId name = do
+joinGame :: Maybe GameId -> Maybe String -> Maybe SessionToken -> AppM (Maybe JoinGameResponse)
+joinGame maybeGameId name maybeToken = do
   db <- ask
-  if isNothing name
+  if isNothing name || isNothing maybeGameId
     then return Nothing
     else do
-      -- Get the current game
+      let gameId = fromJust maybeGameId
+      let playerName = fromJust name
+      
+      liftIO $ putStrLn $ "Player " ++ playerName ++ " attempting to join game " ++ show gameId
+      
+      -- Join game and get token (with optional existing token for rejoin)
+      result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
+      case result of
+        Nothing -> do
+          liftIO $ putStrLn "Join failed: game not found, full, or invalid token for rejoin"
+          return Nothing
+        Just (game, token) -> do
+          liftIO $ putStrLn $ "Join successful, token generated/retrieved"
+          return $ Just $ JoinGameResponse game token
+
+getGame :: Maybe GameId -> AppM (Maybe Game)
+getGame maybeGameId = do
+  case maybeGameId of
+    Nothing -> return Nothing
+    Just gameId -> do
+      db <- ask
+      liftIO $ getGameById db gameId
+
+newMove :: Maybe GameId -> Maybe SessionToken -> GameMove -> AppM (Maybe GameMove)
+newMove maybeGameId maybeToken move = do
+  case (maybeGameId, maybeToken) of
+    (Just gameId, Just token) -> do
+      db <- ask
+      -- Check if the game exists
       maybeGame <- liftIO $ getGameById db gameId
       case maybeGame of
-        Nothing -> return Nothing
+        Nothing -> do
+          liftIO $ putStrLn "Move rejected: game not found"
+          return Nothing
         Just game -> do
-          -- Update the game with the player's name
-          let playerName = fromJust name
-          let updateGameFn :: Game -> Maybe Game
-              updateGameFn (Game "" "" cards history) = Just $ Game playerName "" cards history
-              updateGameFn (Game "" p2 cards history) = Just $ Game playerName p2 cards history
-              updateGameFn (Game p1 "" cards history) = Just $ Game p1 playerName cards history
-              updateGameFn (Game p1 p2 cards history) = Just $ Game p1 p2 cards history
+          -- Determine whose turn it is
+          let currentSlot = getCurrentPlayerSlot game
           
-          success <- liftIO $ updateGame db gameId updateGameFn
-          if success
-            then liftIO $ getGameById db gameId
+          -- Validate token
+          isValid <- liftIO $ validateToken db gameId token currentSlot
+          
+          if not isValid then do
+            liftIO $ putStrLn $ "Move rejected: invalid token or not your turn (expected " ++ show currentSlot ++ ")"
+            return Nothing
+          else do
+            -- Token is valid, process the move
+            let updateGameFn (Game p1 p2 cards history) = Just $ Game p1 p2 cards (move : history)
+            success <- liftIO $ updateGame db gameId updateGameFn
+            if success then do
+              liftIO $ putStrLn "Move accepted"
+              return (Just move)
             else return Nothing
+    _ -> return Nothing
 
-getGame :: GameId -> AppM (Maybe Game)
-getGame gameId = do
-  db <- ask
-  liftIO $ getGameById db gameId
-
-newMove :: GameId -> GameMove -> AppM (Maybe GameMove)
-newMove gameId move = do
-  db <- ask
-  -- Check if the game exists
-  maybeGame <- liftIO $ getGameById db gameId
-  case maybeGame of
-    Nothing -> return Nothing
-    Just game -> do
-      -- Update the game with the new move
-      let updateGameFn (Game p1 p2 cards history) = Just $ Game p1 p2 cards (move : history)
-      success <- liftIO $ updateGame db gameId updateGameFn
-      if success
-        then return (Just move)
-        else return Nothing
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml gameId = do

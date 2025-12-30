@@ -11,7 +11,7 @@ import Data.Aeson (FromJSON, ToJSON, FromJSONKey, ToJSONKey)
 import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
-import Data.UUID (UUID)
+import Data.Text (Text)
 import GHC.Generics (Generic)
 import Game (Game, GameMove)
 import Network.HTTP.Media ((//), (/:))
@@ -33,8 +33,20 @@ import Servant
   )
 import Servant.API (Accept (..), Raw)
 
-newtype GameId = GameId UUID
-  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
+newtype GameId = GameId Int
+  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON, ToJSONKey, FromJSONKey, Num)
+
+newtype SessionToken = SessionToken Text
+  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
+
+-- Response when joining a game includes both game state and session token
+data JoinGameResponse = JoinGameResponse
+  { responseGame :: Game
+  , responseToken :: SessionToken
+  } deriving (Show, Generic)
+
+instance ToJSON JoinGameResponse
+instance FromJSON JoinGameResponse
 
 -- Lightweight game summary for listing games
 data GameSummary = GameSummary
@@ -55,15 +67,16 @@ instance FromJSON GameStatus
 
 type Games = Map GameId Game
 
-type NewGame = "game" :> Post '[JSON] GameId -- Creat new Game with shuffle Cards and return gameId
+-- New API structure: /1/onitama/...
+type NewGame = "1" :> "onitama" :> "new" :> Post '[JSON] GameId
 
-type GetGameSummaries = "games" :> "summary" :> Get '[JSON] [GameSummary] -- Get lightweight game summaries
+type GetGameSummaries = "1" :> "onitama" :> "summary" :> Get '[JSON] [GameSummary]
 
-type JoinGame = "game" :> Capture "gameid" GameId :> QueryParam "name" String :> Put '[JSON] (Maybe Game)
+type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> QueryParam "token" SessionToken :> Put '[JSON] (Maybe JoinGameResponse)
 
-type GetGame = "game" :> Capture "gameid" GameId :> Get '[JSON] (Maybe Game) -- Get Current Game from gameId
+type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (Maybe Game)
 
-type NewMove = "game" :> Capture "gameid" GameId :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
+type NewMove = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
 
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
