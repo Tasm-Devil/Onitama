@@ -1,4 +1,5 @@
 client/elm-stuff/
 .stack-work/
-assets/*.js
+assets/elm.js
+assets/elm.min.js
 *.cabal

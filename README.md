@@ -43,23 +43,39 @@ The Server is my first haskell project. So don't expect very much. I still do no
 
 ### Test with curl
 
-You can easily test the API with some simple curl commands.
+You can easily test the API with some simple curl commands. The 1 before /onitama is the API Version.
 
 ```
-New Game:
-curl -X POST http://localhost:8080/1/onitama/new -w "\n"
-
 Get all Games:
 curl http://localhost:8080/1/onitama/summary -w "\n"
 
-Join Game (table 1):
-curl -X PUT "http://localhost:8080/1/onitama?table=1&name=Wendy" -w "\n"
+Alice posts a new Game and gets a table-number (= game-number):
+curl -X POST http://localhost:8080/1/onitama/new -w "\n"
 
-Get Game with Id 1:
-curl "http://localhost:8080/1/onitama?table=1" -w "\n"
+Response: ID (ID is table/game id e.g: 3)
 
-Post new GameMove to Game 1:
-curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' "http://localhost:8080/1/onitama?table=1" -w "\n"
+Alice joins her new table 3:
+curl -X PUT "http://localhost:8080/1/onitama?table=3&name=Alice" -w "\n"
+
+Response: responseGame, responseToken (e.g.: a4cd5ddc-71a3-41a2-bff2-0c516df006d3)
+
+Bob joins table 3 as black Player (and leaves it):
+curl -X PUT "http://localhost:8080/1/onitama?table=3&name=Bob" -w "\n"
+
+Response: responseGame, responseToken (e.g.: f5ea6fb0-2527-46d8-b0ab-9e861cf55395)
+
+Bob rejoins table 3:
+curl -X PUT "http://localhost:8080/1/onitama?table=3&name=Bob&token=f5ea6fb0-2527-46d8-b0ab-9e861cf55395" -w "\n"
+
+Response: responseGame and old responseToken (e.g.: f5ea6fb0-2527-46d8-b0ab-9e861cf55395)
+
+Bob posts a new GameMove to Game 3:
+curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' "http://localhost:8080/1/onitama?table=3&token=a4cd5ddc-71a3-41a2-bff2-0c516df006d3" -w "\n"
+
+Response: {"color": "White","card": "Ox","from": [3,0],"move": [0,1]}
+
+Alice fetches Game 3 to see Bobs last move:
+curl "http://localhost:8080/1/onitama?table=3" -w "\n"
 ```
 
 ## ToDos
@@ -71,7 +87,6 @@ In the order in which I would like to tackle them.
 - [X] Change API to /VERSION/GAMENAME?table=GAMEID
 - [X] Authetification by player name using sessions-ids
 - [X] Save sessions in local storage
-- [ ] The Server should check the player names on NewMove
 - [ ] Implement http polling temporarily.
 - [ ] The common card should determine, which player starts the game.
 - [ ] Check for checkmate!

@@ -1,19 +1,18 @@
 module Main exposing (main)
 
-import Api exposing (Msg(..))
+import Api exposing (Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
+import Game.Figure exposing (Color(..))
 import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import Html.Events exposing (onClick, onInput)
-import Lobby exposing (GameId, Model, Msg(..), Status(..))
-import Url exposing (Url)
-import Ports
-import Json.Encode as Encode
 import Json.Decode as Decode
-import Game.Figure
-import Game.Figure exposing (Color(..))
+import Json.Encode as Encode
+import Lobby exposing (GameId, Model, Msg(..), Status(..))
+import Ports
+import Url exposing (Url)
 
 
 
@@ -44,8 +43,7 @@ type Model
     | Lobby Lobby.Model (List StoredSession)
     | EnterName PlayerName GameId Key (Maybe StoredSession) (List StoredSession)
     | Playing PlayerName GameId SessionToken Game (List Game.GameMove) Key (List StoredSession)
-    | SwitchPlayer GameId (List StoredSession) Key (List StoredSession)
-    | Rejoining GameId String SessionToken Key (List StoredSession)  -- Rejoining state to track which game
+    | Rejoining GameId String SessionToken Key (List StoredSession) -- Rejoining state to track which game
 
 
 init : () -> Url -> Key -> ( Model, Cmd Msg )
@@ -102,11 +100,6 @@ view model =
                                 ]
                            ]
                     )
-
-            SwitchPlayer _ _ _ _ ->
-                Html.div [ HtmlA.class "landing-screen" ]
-                    [ Html.h2 [] [ Html.text "Switch Player (Feature Coming Soon)" ]
-                    ]
 
             Rejoining _ playerName _ _ _ ->
                 Html.div [ HtmlA.class "landing-screen" ]
@@ -181,9 +174,9 @@ viewGameMove gameMove =
 
 
 -- HELPERS
-
-
 -- Add or update a session in the session list
+
+
 updateSessionStorage : StoredSession -> List StoredSession -> List StoredSession
 updateSessionStorage newSession sessions =
     let
@@ -193,7 +186,7 @@ updateSessionStorage newSession sessions =
             List.filter
                 (\s -> not (s.gameId == newSession.gameId && s.token == newSession.token))
                 sessions
-        
+
         -- Also remove any session with same gameId but empty playerName
         cleanedUp =
             List.filter
@@ -203,14 +196,20 @@ updateSessionStorage newSession sessions =
     newSession :: cleanedUp
 
 
+
 -- Find a session for a specific game and player
+
+
 findSession : GameId -> String -> List StoredSession -> Maybe StoredSession
 findSession gameId playerName sessions =
     List.filter (\s -> s.gameId == gameId && s.playerName == playerName) sessions
         |> List.head
 
 
+
 -- Encode a session for localStorage
+
+
 encodeSession : StoredSession -> Encode.Value
 encodeSession session =
     Encode.object
@@ -220,7 +219,10 @@ encodeSession session =
         ]
 
 
+
 -- Decode sessions from localStorage
+
+
 decodeSessions : Encode.Value -> List StoredSession
 decodeSessions value =
     let
@@ -229,16 +231,17 @@ decodeSessions value =
                 (Decode.field "gameId" Decode.int)
                 (Decode.field "playerName" Decode.string)
                 (Decode.field "token" Decode.string)
-        
+
         result =
             Decode.decodeValue (Decode.list sessionDecoder) value
     in
     case result of
         Ok sessions ->
             sessions
-        
+
         Err _ ->
             []
+
 
 
 -- UPDATE
@@ -266,6 +269,7 @@ update msg model =
             if String.isEmpty gameidStr then
                 -- Stay in lobby if URL is just "/"
                 ( model, Cmd.none )
+
             else
                 case String.toInt gameidStr of
                     Just gameid ->
@@ -280,11 +284,11 @@ update msg model =
                                 ( Rejoining gameid session.playerName session.token lobby.key sessions
                                 , Cmd.map GotServerMsg <| Api.joinGame gameid session.playerName (Just session.token)
                                 )
-                            
+
                             Nothing ->
                                 -- No session, go to name entry
                                 ( EnterName "" gameid lobby.key Nothing sessions, Cmd.none )
-                    
+
                     Nothing ->
                         -- Invalid game ID, stay in lobby
                         ( model, Cmd.none )
@@ -293,19 +297,20 @@ update msg model =
             let
                 newGameIdStr =
                     String.dropLeft 1 url.path
-                    
+
                 newGameId =
                     String.toInt newGameIdStr
             in
             if newGameId == Just currentGameId then
                 -- Stay in EnterName state if the URL matches the current game
                 ( EnterName name currentGameId key storedSession sessions, Cmd.none )
+
             else
                 -- Different game, redirect and fetch summaries
                 ( Redirect url key sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         ( ChangedUrl url, Playing _ _ _ _ _ key sessions ) ->
-                            ( Redirect url key sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+            ( Redirect url key sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         ( ClickedLink urlRequest, Lobby lobby sessions ) ->
             -- user clicked on a Join link in the table
@@ -329,6 +334,7 @@ update msg model =
                     transformGameMove gameMove
                         |> Api.postNewGameMove gameid token
                         |> Cmd.map GotServerMsg
+
                 _ ->
                     Cmd.none
             )
@@ -346,10 +352,10 @@ update msg model =
                 -- Look for a session for this game and player
                 maybeStoredSession =
                     findSession gameid name sessions
-                
+
                 maybeToken =
                     Maybe.map .token maybeStoredSession
-                
+
                 _ =
                     Debug.log "Joining with token" ( name, gameid, maybeToken )
             in
@@ -376,14 +382,16 @@ update msg model =
                     if List.member gameid gamesids then
                         -- enter a game directly by URL
                         ( EnterName "" gameid key Nothing sessions, Cmd.none )
+
                     else
                         -- The URL points to an nonexisting gameid
                         ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key <| "/" )
-                
+
                 Nothing ->
                     if String.isEmpty gameidStr then
                         -- the default way to enter the lobby
                         ( Lobby { status = Home summaries, key = key } sessions, Cmd.none )
+
                     else
                         -- Invalid game ID format
                         ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key <| "/" )
@@ -391,10 +399,6 @@ update msg model =
         ( GotServerMsg (ReceivedGameSummariesFromServer (Err _)), Redirect _ key sessions ) ->
             -- If fetching summaries fails, show an empty lobby
             ( Lobby { status = Home [], key = key } sessions, Cmd.none )
-
-        ( GotServerMsg (ReceivedGameSummariesFromServer (Err _)), _ ) ->
-            -- For other states, just ignore the error
-            ( model, Cmd.none )
 
         ( GotServerMsg (ReceivedGameIdFromServer (Ok gameId)), Lobby lobby sessions ) ->
             -- getGameIdFromServer was succesfull. Created a new game on the server.
@@ -413,37 +417,28 @@ update msg model =
                 _ =
                     Debug.log "Successfully joined game with token" ( name, gameid, token )
 
-                newgame =
-                    Game.setupNewGame servergame.cards
-                        (if name == servergame.player_black then
-                            Black
-
-                         else
-                            White
-                        )
-                        White
-
-                -- ToDo: White is not always the first player!
                 finalgame =
-                    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
-                    
+                    buildGame name servergame
+
                 -- Create stored session for this player
                 newStoredSession =
                     { gameId = gameid
                     , playerName = name
                     , token = token
                     }
-                    
+
                 -- Add to session storage (only if playerName is not empty)
                 updatedSessions =
                     if String.isEmpty name then
                         sessions
+
                     else
                         updateSessionStorage newStoredSession sessions
-                
+
                 saveCmd =
                     if String.isEmpty name then
                         Cmd.none
+
                     else
                         Ports.saveSession (encodeSession newStoredSession)
             in
@@ -452,7 +447,7 @@ update msg model =
             )
 
         ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), Rejoining gameId playerName _ key sessions ) ->
-        -- Auto-rejoin succeeded from Rejoining state
+            -- Auto-rejoin succeeded from Rejoining state
             let
                 servergame =
                     joinResponse.responseGame
@@ -463,20 +458,11 @@ update msg model =
                 _ =
                     Debug.log "Auto-rejoin successful" ( playerName, gameId, token )
 
-                newgame =
-                    Game.setupNewGame servergame.cards
-                        (if playerName == servergame.player_black then
-                            Black
-                         else
-                            White
-                        )
-                        White
-
                 finalgame =
-                    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
+                    buildGame playerName servergame
             in
             ( Playing playerName gameId token finalgame servergame.history key sessions, Cmd.none )
-        
+
         ( GotServerMsg (ReceivedJoinGameResponse (Err httpError)), Rejoining gameId playerName _ key sessions ) ->
             -- Auto-rejoin failed, show EnterName
             let
@@ -493,12 +479,12 @@ update msg model =
 
                 token =
                     joinResponse.responseToken
-                    
+
                 gameid =
                     String.dropLeft 1 url.path
                         |> String.toInt
                         |> Maybe.withDefault 0
-                
+
                 -- Figure out the player name from the game state
                 playerName =
                     -- Find which player we are by checking sessions
@@ -510,30 +496,20 @@ update msg model =
                 _ =
                     Debug.log "Auto-rejoin successful" ( playerName, gameid, token )
 
-                newgame =
-                    Game.setupNewGame servergame.cards
-                        (if playerName == servergame.player_black then
-                            Black
-
-                         else
-                            White
-                        )
-                        White
-
                 finalgame =
-                    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
+                    buildGame playerName servergame
             in
             ( Playing playerName gameid token finalgame servergame.history key sessions, Cmd.none )
-        
+
         ( GotServerMsg (ReceivedJoinGameResponse (Err httpError)), Redirect url key sessions ) ->
             -- Auto-rejoin failed from Redirect state, show EnterName
             let
                 gameidStr =
                     String.dropLeft 1 url.path
-                
+
                 gameId =
                     String.toInt gameidStr |> Maybe.withDefault 0
-                
+
                 _ =
                     Debug.log "Auto-rejoin failed, showing name entry" httpError
             in
@@ -569,13 +545,10 @@ update msg model =
             let
                 loadedSessions =
                     decodeSessions value
-                
-                _ =
-                    Debug.log "Loaded sessions from storage" (List.length loadedSessions)
-                
+
                 gameidStr =
                     String.dropLeft 1 url.path
-                
+
                 maybeGameId =
                     String.toInt gameidStr
             in
@@ -590,20 +563,17 @@ update msg model =
                                     Debug.log "Auto-rejoining with stored session" session.playerName
                             in
                             ( Redirect url key loadedSessions
-                            , Cmd.batch
-                                [ Cmd.map GotServerMsg Api.getGameSummariesFromServer
-                                , Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token)
-                                ]
+                            , Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token)
                             )
-                        
+
                         Nothing ->
                             -- No session for this game, proceed normally
                             ( Redirect url key loadedSessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
-                
+
                 Nothing ->
                     -- Not navigating to a game, just load summaries
                     ( Redirect url key loadedSessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
-        
+
         ( _, _ ) ->
             -- Disregard messages that arrived for the wrong page.
             ( model, Cmd.none )
@@ -617,6 +587,24 @@ transformGameMove g =
 
         White ->
             g
+
+
+buildGame : String -> ServerGame -> Game
+buildGame name servergame =
+    let
+        newgame =
+            Game.setupNewGame servergame.cards
+                (if name == servergame.player_black then
+                    Black
+
+                 else
+                    White
+                )
+                White
+
+        -- ToDo: White is not always the first player!
+    in
+    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
 
 
 
