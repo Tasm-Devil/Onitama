@@ -1,0 +1,18 @@
+FROM haskell:9.6.7
+
+WORKDIR /app
+
+# Copy configuration files
+COPY package.yaml stack.yaml stack.yaml.lock* ./
+COPY README.md ./
+
+# Copy source directories
+COPY server ./server
+COPY assets ./assets
+
+# Build dependencies and application
+RUN stack setup && stack build --only-dependencies
+RUN stack build
+
+EXPOSE 8080
+CMD ["stack", "exec", "server"]
