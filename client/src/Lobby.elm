@@ -55,7 +55,7 @@ view model =
                     [ Html.text "Be sure to read "
                     , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf" ]
                         [ Html.text "the rules" ]
-                    , Html.text "if you haven't played before."
+                    , Html.text " if you haven't played before."
                     ]
                 , Html.a [ HtmlA.class "new-game", onClick RequestNewGameFromServer ]
                     [ Html.text "New Game" ]

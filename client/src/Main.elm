@@ -16,15 +16,11 @@ import Url exposing (Url)
 
 
 
--- TYPES
+-- TYPES AND MODEL
 
 
 type alias PlayerName =
     String
-
-
-
--- MODEL
 
 
 type alias SessionToken =
@@ -93,7 +89,6 @@ view model =
 
             EnterName player _ _ _ _ ->
                 Html.div [ HtmlA.class "landing-screen" ]
-                    --, HtmlA.style "display" "none" ]
                     [ Html.form [ HtmlA.id "name-form" ]
                         [ Html.h1 []
                             [ Html.text "Onitama" ]
@@ -124,35 +119,6 @@ view model =
                     , Html.p [] [ Html.text ("Rejoining as " ++ playerName) ]
                     ]
         ]
-
-
-
-{-
-
-   viewHistoryOrError : Model -> Html Msg
-   viewHistoryOrError model =
-       --    case model.errorMessage of
-       --        Just message ->
-       --            viewError message
-       --        Nothing ->
-       case model of
-           Playing _ _ _ history _ ->
-               viewHistory history
-
-           _ ->
-               Html.text "Das sollten Sie nicht sehen"
-
-      viewError : String -> Html Msg
-      viewError errorMessage =
-          let
-              errorHeading =
-                  "Couldn't fetch data at this time."
-          in
-          Html.div []
-              [ Html.h3 [] [ Html.text errorHeading ]
-              , Html.text ("Error: " ++ errorMessage)
-              ]
--}
 
 
 viewHistory : List GameMove -> Html Msg
@@ -260,6 +226,34 @@ decodeSessions value =
             []
 
 
+transformGameMove : Game.GameMove -> Game.GameMove
+transformGameMove g =
+    case g.color of
+        Black ->
+            Game.rotateGameMove g
+
+        White ->
+            g
+
+
+buildGame : String -> ServerGame -> Game
+buildGame name servergame =
+    let
+        newgame =
+            Game.setupNewGame servergame.cards
+                (if name == servergame.player_black then
+                    Black
+
+                 else
+                    White
+                )
+                White
+
+        -- ToDo: White is not always the first player!
+    in
+    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
+
+
 
 -- UPDATE
 
@@ -294,10 +288,6 @@ update msg model =
                         case List.filter (\s -> s.gameId == gameid) sessions |> List.head of
                             Just session ->
                                 -- We have a session! Auto-join
-                                let
-                                    _ =
-                                        Debug.log "Found stored session, auto-joining" ( gameid, session.playerName, session.token )
-                                in
                                 ( Rejoining gameid session.playerName session.token lobby.key sessions
                                 , Cmd.map GotServerMsg <| Api.joinGame gameid session.playerName (Just session.token)
                                 )
@@ -372,9 +362,6 @@ update msg model =
 
                 maybeToken =
                     Maybe.map .token maybeStoredSession
-
-                _ =
-                    Debug.log "Joining with token" ( name, gameid, maybeToken )
             in
             ( model, Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken )
 
@@ -431,9 +418,6 @@ update msg model =
                 token =
                     joinResponse.responseToken
 
-                _ =
-                    Debug.log "Successfully joined game with token" ( name, gameid, token )
-
                 finalgame =
                     buildGame name servergame
 
@@ -463,6 +447,10 @@ update msg model =
             , saveCmd
             )
 
+        ( GotServerMsg (ReceivedJoinGameResponse (Err _)), EnterName name gameid key storedSession sessions ) ->
+            -- joinGame failed. Stay in EnterName state so user can try again
+            ( EnterName name gameid key storedSession sessions, Cmd.none )
+
         ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), Rejoining gameId playerName _ key sessions ) ->
             -- Auto-rejoin succeeded from Rejoining state
             let
@@ -472,20 +460,13 @@ update msg model =
                 token =
                     joinResponse.responseToken
 
-                _ =
-                    Debug.log "Auto-rejoin successful" ( playerName, gameId, token )
-
                 finalgame =
                     buildGame playerName servergame
             in
             ( Playing playerName gameId token finalgame servergame.history key sessions, Cmd.none )
 
-        ( GotServerMsg (ReceivedJoinGameResponse (Err httpError)), Rejoining gameId playerName _ key sessions ) ->
+        ( GotServerMsg (ReceivedJoinGameResponse (Err _)), Rejoining gameId playerName _ key sessions ) ->
             -- Auto-rejoin failed, show EnterName
-            let
-                _ =
-                    Debug.log "Auto-rejoin failed, showing name entry" httpError
-            in
             ( EnterName playerName gameId key Nothing sessions, Cmd.none )
 
         ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), Redirect url key sessions ) ->
@@ -510,15 +491,12 @@ update msg model =
                         |> Maybe.map .playerName
                         |> Maybe.withDefault "Unknown"
 
-                _ =
-                    Debug.log "Auto-rejoin successful" ( playerName, gameid, token )
-
                 finalgame =
                     buildGame playerName servergame
             in
             ( Playing playerName gameid token finalgame servergame.history key sessions, Cmd.none )
 
-        ( GotServerMsg (ReceivedJoinGameResponse (Err httpError)), Redirect url key sessions ) ->
+        ( GotServerMsg (ReceivedJoinGameResponse (Err _)), Redirect url key sessions ) ->
             -- Auto-rejoin failed from Redirect state, show EnterName
             let
                 gameidStr =
@@ -526,20 +504,8 @@ update msg model =
 
                 gameId =
                     String.toInt gameidStr |> Maybe.withDefault 0
-
-                _ =
-                    Debug.log "Auto-rejoin failed, showing name entry" httpError
             in
             ( EnterName "" gameId key Nothing sessions, Cmd.none )
-
-        ( GotServerMsg (ReceivedJoinGameResponse (Err httpError)), EnterName name gameid key storedSession sessions ) ->
-            -- joinGame failed
-            let
-                _ =
-                    Debug.log "Failed to join game" httpError
-            in
-            -- Stay in EnterName state so user can try again
-            ( EnterName name gameid key storedSession sessions, Cmd.none )
 
         ( GotServerMsg (ReceivedGameFromServer (Ok servergame)), Playing name gameid token game _ key sessions ) ->
             -- getGameFromServer was succesfull. Append the last gamemove from opponent to the history.
@@ -575,13 +541,7 @@ update msg model =
                     case List.filter (\s -> s.gameId == gameId) loadedSessions |> List.head of
                         Just session ->
                             -- We have a session! Auto-rejoin
-                            let
-                                _ =
-                                    Debug.log "Auto-rejoining with stored session" session.playerName
-                            in
-                            ( Redirect url key loadedSessions
-                            , Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token)
-                            )
+                            ( Redirect url key loadedSessions, Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token) )
 
                         Nothing ->
                             -- No session for this game, proceed normally
@@ -594,53 +554,3 @@ update msg model =
         ( _, _ ) ->
             -- Disregard messages that arrived for the wrong page.
             ( model, Cmd.none )
-
-
-transformGameMove : Game.GameMove -> Game.GameMove
-transformGameMove g =
-    case g.color of
-        Black ->
-            Game.rotateGameMove g
-
-        White ->
-            g
-
-
-buildGame : String -> ServerGame -> Game
-buildGame name servergame =
-    let
-        newgame =
-            Game.setupNewGame servergame.cards
-                (if name == servergame.player_black then
-                    Black
-
-                 else
-                    White
-                )
-                White
-
-        -- ToDo: White is not always the first player!
-    in
-    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
-
-
-
-{-
-   buildErrorMessage : Http.Error -> String
-   buildErrorMessage httpError =
-       case httpError of
-           Http.BadUrl message ->
-               message
-
-           Http.Timeout ->
-               "Server is taking too long to respond. Please try again later."
-
-           Http.NetworkError ->
-               "Unable to reach server."
-
-           Http.BadStatus statusCode ->
-               "Request failed with status code: " ++ String.fromInt statusCode
-
-           Http.BadBody message ->
-               message
--}

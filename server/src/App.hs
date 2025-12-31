@@ -103,7 +103,7 @@ joinGame maybeGameId name maybeToken = do
           liftIO $ putStrLn "Join failed: game not found, full, or invalid token for rejoin"
           return Nothing
         Just (game, token) -> do
-          liftIO $ putStrLn $ "Join successful, token generated/retrieved"
+          liftIO $ putStrLn "Join successful, token generated/retrieved"
           return $ Just $ JoinGameResponse game token
 
 getGame :: Maybe GameId -> AppM (Maybe Game)
