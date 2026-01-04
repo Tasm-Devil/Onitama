@@ -4,28 +4,7 @@
 module App where
 
 import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
-import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
-import Data.Maybe (fromJust, isNothing)
-
 import Game (Game (Game), GameMove, give5Cards)
-import Network.Wai (Application)
-import Servant
-  ( Application,
-    Handler,
-    HasServer (ServerT),
-    Proxy (..),
-    Raw,
-    Server,
-    Tagged (Tagged),
-    hoistServer,
-    serve,
-    type (:<|>) (..),
-  )
-import Data.ByteString.Lazy as Lazy (ByteString, readFile)
-import Network.Wai.Application.Static (staticApp, defaultFileServerSettings)
-
--- Import our new Database module
 import Database
   ( DB,
     PlayerSlot (..),
@@ -41,6 +20,24 @@ import Database
     joinGameWithToken,
     validateToken,
     getCurrentPlayerSlot
+  )
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Data.ByteString.Lazy as Lazy (ByteString, readFile)
+import Data.Maybe (fromJust, isNothing)
+import Network.Wai (Application)
+import Network.Wai.Application.Static (staticApp, defaultFileServerSettings)
+import Servant
+  ( Application,
+    Handler,
+    HasServer (ServerT),
+    Proxy (..),
+    Raw,
+    Server,
+    Tagged (Tagged),
+    hoistServer,
+    serve,
+    type (:<|>) (..),
   )
 
 app :: IO Application
@@ -67,14 +64,9 @@ apiServer = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMov
 newGame :: AppM GameId
 newGame = do
   db <- ask
-  newCards <- liftIO give5Cards
-  
-  -- Create a new game with auto-incrementing ID
-  gameId <- liftIO $ insertGameWithNewId db (Game "" "" newCards [])
-  
+  gameId <- liftIO $ insertGameWithNewId db
   liftIO $ do
     putStrLn $ "Creating new game with ID: " ++ show gameId
-    putStrLn "Game created, logging state"
     logDBState "After creating game" db
     -- Force an immediate save for testing
     forceSave db
@@ -102,9 +94,9 @@ joinGame maybeGameId name maybeToken = do
         Nothing -> do
           liftIO $ putStrLn "Join failed: game not found, full, or invalid token for rejoin"
           return Nothing
-        Just (game, token) -> do
+        Just joingameresponse -> do
           liftIO $ putStrLn "Join successful, token generated/retrieved"
-          return $ Just $ JoinGameResponse game token
+          return $ Just joingameresponse
 
 getGame :: Maybe GameId -> AppM (Maybe Game)
 getGame maybeGameId = do

@@ -2,7 +2,7 @@
 
 module Database where
 
-import Api (GameId (..), GameStatus (..), GameSummary (..), Games, SessionToken (..))
+import Api (GameId (..), GameStatus (..), GameSummary (..), Games, SessionToken (..), JoinGameResponse (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM
   ( TVar,
@@ -27,11 +27,11 @@ import qualified Data.Text as T
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
-import Game (Game (Game))
+import Game (Game (Game), give5Cards)
 import System.Directory (doesFileExist)
 
 -- Player slot identifier: which position in the game
-data PlayerSlot = Player1 | Player2
+data PlayerSlot = PlayerWhite | PlayerBlack
   deriving (Show, Eq, Ord, Generic)
 
 instance ToJSON PlayerSlot
@@ -157,14 +157,15 @@ getGameById (DB dbVar) gameId = do
   return $ Map.lookup gameId (dbGames state)
 
 -- Generate next game ID and insert game
-insertGameWithNewId :: DB -> Game -> IO GameId
-insertGameWithNewId (DB dbVar) game = do
+insertGameWithNewId :: DB -> IO GameId
+insertGameWithNewId (DB dbVar) = do
+  newCards <- liftIO give5Cards
   gameId <- atomically $ do
     state <- readTVar dbVar
     let newId = GameId (dbNextId state)
     modifyTVar dbVar $ \s ->
       s
-        { dbGames = Map.insert newId game (dbGames s),
+        { dbGames = Map.insert newId (Game "" "" newCards []) (dbGames s),
           dbNextId = dbNextId s + 1,
           dbHasChanged = True
         }
@@ -201,22 +202,6 @@ forceSave :: DB -> IO ()
 forceSave (DB dbVar) = do
   putStrLn "Forcing immediate database save"
   saveDB dbVar
-
--- Create a game summary from a full game
-gameToSummary :: GameId -> Game -> GameSummary
-gameToSummary gameId (Game p1 p2 cards history) =
-  GameSummary
-    { summaryId = gameId,
-      summaryPlayer1 = p1,
-      summaryPlayer2 = p2,
-      summaryMoveCount = Prelude.length history,
-      summaryStatus = determineStatus p1 p2
-    }
-  where
-    determineStatus "" "" = WaitingForPlayers
-    determineStatus "" _ = WaitingForPlayers
-    determineStatus _ "" = WaitingForPlayers
-    determineStatus _ _ = InProgress -- Could add more logic for completed games
 
 -- Get all game summaries
 getAllGameSummaries :: DB -> IO [GameSummary]
@@ -255,10 +240,10 @@ validateToken (DB dbVar) gameId token expectedSlot = do
 -- Determine which player slot should make the next move based on game history
 getCurrentPlayerSlot :: Game -> PlayerSlot
 getCurrentPlayerSlot (Game _ _ _ history) =
-  if even (Prelude.length history) then Player1 else Player2
+  if even (Prelude.length history) then PlayerWhite else PlayerBlack
 
 -- Join a game and get a session token (or retrieve existing session with validation)
-joinGameWithToken :: DB -> GameId -> String -> Maybe SessionToken -> IO (Maybe (Game, SessionToken))
+joinGameWithToken :: DB -> GameId -> String -> Maybe SessionToken -> IO (Maybe JoinGameResponse)
 joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
   maybeGame <- getGameById db gameId
   case maybeGame of
@@ -271,14 +256,14 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
       if p1 == playerName
         then do
           -- Player1 slot is taken by this name
-          case Map.lookup (gameId, Player1) sessions of
+          case Map.lookup (gameId, PlayerWhite) sessions of
             Just existingToken -> do
               -- Token exists for Player1
               case maybeProvidedToken of
                 Just providedToken | providedToken == existingToken -> do
                   -- Valid token provided, allow rejoin
                   putStrLn $ "Player " ++ playerName ++ " rejoining as Player1 with valid token"
-                  return $ Just (game, existingToken)
+                  return $ Just (JoinGameResponse { responseGame = game, responseToken = existingToken })
                 _ -> do
                   -- No token or wrong token - reject to prevent impersonation
                   putStrLn $ "Rejecting join: " ++ playerName ++ " already exists as Player1 but wrong/no token provided"
@@ -286,32 +271,32 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
             Nothing -> do
               -- No token exists yet (shouldn't happen, but handle it)
               putStrLn "Warning: Player1 exists but no token found, creating new session"
-              token <- createSession db gameId Player1
-              return $ Just (game, token)
+              token <- createSession db gameId PlayerWhite
+              return $ Just (JoinGameResponse { responseGame = game, responseToken = token})
         else
           if p2 == playerName
             then do
               -- Player2 slot is taken by this name
-              case Map.lookup (gameId, Player2) sessions of
+              case Map.lookup (gameId, PlayerBlack) sessions of
                 Just existingToken -> do
                   case maybeProvidedToken of
                     Just providedToken | providedToken == existingToken -> do
                       putStrLn $ "Player " ++ playerName ++ " rejoining as Player2 with valid token"
-                      return $ Just (game, existingToken)
+                      return $ Just (JoinGameResponse { responseGame = game, responseToken = existingToken })
                     _ -> do
                       putStrLn $ "Rejecting join: " ++ playerName ++ " already exists as Player2 but wrong/no token provided"
                       return Nothing
                 Nothing -> do
                   putStrLn "Warning: Player2 exists but no token found, creating new session"
-                  token <- createSession db gameId Player2
-                  return $ Just (game, token)
+                  token <- createSession db gameId PlayerBlack
+                  return $ Just (JoinGameResponse { responseGame = game, responseToken = token})
             else do
               -- New player, find empty slot
               let (slot, updatedGame)
-                    | null p1 && null p2 = (Player1, Game playerName "" cards history)
-                    | null p1 = (Player1, Game playerName p2 cards history)
-                    | null p2 = (Player2, Game p1 playerName cards history)
-                    | otherwise = (Player1, game) -- dummy, will return Nothing
+                    | null p1 && null p2 = (PlayerWhite, Game playerName "" cards history)
+                    | null p1 = (PlayerWhite, Game playerName p2 cards history)
+                    | null p2 = (PlayerBlack, Game p1 playerName cards history)
+                    | otherwise = (PlayerWhite, game) -- dummy, will return Nothing
               if game == updatedGame
                 then do
                   -- Game was full, couldn't join
@@ -327,4 +312,4 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
                   markDBChanged db
                   token <- createSession db gameId slot
                   putStrLn $ "New player " ++ playerName ++ " joined as " ++ show slot
-                  return $ Just (updatedGame, token)
+                  return $ Just (JoinGameResponse {responseGame = updatedGame, responseToken = token})

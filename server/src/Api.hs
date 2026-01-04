@@ -13,7 +13,7 @@ import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Game (Game, GameMove)
+import Game (Game (..), GameMove)
 import Network.HTTP.Media ((//), (/:))
 import Servant
   ( Accept (contentType),
@@ -45,9 +45,6 @@ data JoinGameResponse = JoinGameResponse
   , responseToken :: SessionToken
   } deriving (Show, Generic)
 
-instance ToJSON JoinGameResponse
-instance FromJSON JoinGameResponse
-
 -- Lightweight game summary for listing games
 data GameSummary = GameSummary
   { summaryId :: GameId
@@ -60,10 +57,28 @@ data GameSummary = GameSummary
 data GameStatus = WaitingForPlayers | InProgress | Completed
   deriving (Show, Eq, Generic)
 
+instance ToJSON JoinGameResponse
+instance FromJSON JoinGameResponse
 instance ToJSON GameSummary
 instance FromJSON GameSummary
 instance ToJSON GameStatus
 instance FromJSON GameStatus
+
+-- Create a game summary from a full game
+gameToSummary :: GameId -> Game -> GameSummary
+gameToSummary gameId (Game p1 p2 cards history) =
+  GameSummary
+    { summaryId = gameId,
+      summaryPlayer1 = p1,
+      summaryPlayer2 = p2,
+      summaryMoveCount = Prelude.length history,
+      summaryStatus = determineStatus p1 p2
+    }
+  where
+    determineStatus "" "" = WaitingForPlayers
+    determineStatus "" _ = WaitingForPlayers
+    determineStatus _ "" = WaitingForPlayers
+    determineStatus _ _ = InProgress -- Could add more logic for completed games
 
 type Games = Map GameId Game
 
