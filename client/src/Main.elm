@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import Api exposing (JoinGameResponse, Msg(..), ServerGame)
+import Api exposing (Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
 import Game.Figure exposing (Color(..))
