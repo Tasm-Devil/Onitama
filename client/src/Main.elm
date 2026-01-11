@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import Api exposing (Msg(..), ServerGame)
+import Api exposing (JoinGameResponse, Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
 import Game.Figure exposing (Color(..))
@@ -8,6 +8,7 @@ import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import Html.Events exposing (onClick, onInput)
+import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Lobby exposing (GameId, Model, Msg(..), Status(..))
@@ -287,56 +288,84 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case ( msg, model ) of
-        ( ChangedUrl url, Lobby lobby sessions ) ->
-            let
-                gameidStr =
-                    String.dropLeft 1 url.path
-            in
+    case msg of
+        ChangedUrl url ->
+            handleUrlChange url model
+
+        ClickedLink urlRequest ->
+            handleClickedLink urlRequest model
+
+        GotGameMsg gamemsg ->
+            handleGameMsg gamemsg model
+
+        GotLobbyMsg lobbymsg ->
+            handleLobbyMsg lobbymsg model
+
+        TypingName newname ->
+            handleTypingName newname model
+
+        RequestGameFromServer ->
+            handleRequestGame model
+
+        SessionLoadedFromStorage value ->
+            handleSessionLoaded value model
+
+        GotServerMsg servermsg ->
+            handleServerMsg servermsg model
+
+
+
+-- URL CHANGE HANDLERS
+
+
+handleUrlChange : Url -> Model -> ( Model, Cmd Msg )
+handleUrlChange url model =
+    let
+        gameidStr =
+            String.dropLeft 1 url.path
+    in
+    case model of
+        Lobby lobby sessions ->
             if String.isEmpty gameidStr then
-                -- Stay in lobby if URL is just "/"
                 ( model, Cmd.none )
 
             else
                 case String.toInt gameidStr of
                     Just gameid ->
-                        -- Check if we have a stored session for this game
                         case List.filter (\s -> s.gameId == gameid) sessions |> List.head of
                             Just session ->
-                                -- We have a session! Auto-join
                                 ( Rejoining lobby.key gameid session.playerName session.token sessions
                                 , Cmd.map GotServerMsg <| Api.joinGame gameid session.playerName (Just session.token)
                                 )
 
                             Nothing ->
-                                -- No session, go to name entry
                                 ( EnterName lobby.key gameid "" Nothing sessions, Cmd.none )
 
                     Nothing ->
-                        -- Invalid game ID, stay in lobby
                         ( model, Cmd.none )
 
-        ( ChangedUrl url, EnterName key currentGameId name storedSession sessions ) ->
-            let
-                newGameIdStr =
-                    String.dropLeft 1 url.path
-
-                newGameId =
-                    String.toInt newGameIdStr
-            in
-            if newGameId == Just currentGameId then
-                -- Stay in EnterName state if the URL matches the current game
+        EnterName key currentGameId name storedSession sessions ->
+            if String.toInt gameidStr == Just currentGameId then
                 ( EnterName key currentGameId name storedSession sessions, Cmd.none )
 
             else
-                -- Different game, redirect and fetch summaries
                 ( Redirect key url sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
-        ( ChangedUrl url, Playing key _ _ _ _ _ sessions ) ->
+        Playing key _ _ _ _ _ sessions ->
             ( Redirect key url sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
-        ( ClickedLink urlRequest, Lobby lobby sessions ) ->
-            -- user clicked on a Join link in the table
+        _ ->
+            ( model, Cmd.none )
+
+
+
+-- LINK CLICK HANDLERS
+
+
+handleClickedLink : Browser.UrlRequest -> Model -> ( Model, Cmd Msg )
+handleClickedLink urlRequest model =
+    case model of
+        Lobby lobby sessions ->
             case urlRequest of
                 Browser.Internal url ->
                     ( Lobby lobby sessions, Nav.pushUrl lobby.key <| Url.toString url )
@@ -344,35 +373,71 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
-        ( GotGameMsg gamemsg, Playing key gameid name token game history_ sessions ) ->
-            -- game signals a new gamemove to this update function by MoveDone
-            -- let the server know by invoking postNewGameMove
+        _ ->
+            ( model, Cmd.none )
+
+
+
+-- GAME MESSAGE HANDLERS
+
+
+handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
+handleGameMsg gamemsg model =
+    case model of
+        Playing key gameid name token game history_ sessions ->
             let
                 game_after =
                     Game.update gamemsg game
+
+                cmd =
+                    case game_after.state of
+                        MoveDone gameMove ->
+                            transformGameMove gameMove
+                                |> Api.postNewGameMove gameid token
+                                |> Cmd.map GotServerMsg
+
+                        _ ->
+                            Cmd.none
             in
-            ( Playing key gameid name token game_after history_ sessions
-            , case game_after.state of
-                MoveDone gameMove ->
-                    transformGameMove gameMove
-                        |> Api.postNewGameMove gameid token
-                        |> Cmd.map GotServerMsg
+            ( Playing key gameid name token game_after history_ sessions, cmd )
 
-                _ ->
-                    Cmd.none
-            )
+        _ ->
+            ( model, Cmd.none )
 
-        ( GotLobbyMsg RequestNewGameFromServer, Lobby _ _ ) ->
-            -- User clicked on 'New Game' button
+
+
+-- LOBBY MESSAGE HANDLERS
+
+
+handleLobbyMsg : Lobby.Msg -> Model -> ( Model, Cmd Msg )
+handleLobbyMsg lobbymsg model =
+    case ( lobbymsg, model ) of
+        ( RequestNewGameFromServer, Lobby _ _ ) ->
             ( model, Cmd.map GotServerMsg Api.getGameIdFromServer )
 
-        ( TypingName newname, EnterName key gameid _ storedSession sessions ) ->
+        _ ->
+            ( model, Cmd.none )
+
+
+
+-- USER INPUT HANDLERS
+
+
+handleTypingName : String -> Model -> ( Model, Cmd Msg )
+handleTypingName newname model =
+    case model of
+        EnterName key gameid _ storedSession sessions ->
             ( EnterName key gameid newname storedSession sessions, Cmd.none )
 
-        ( RequestGameFromServer, EnterName _ gameid name _ sessions ) ->
-            -- User completed entering name and clicked the join button
+        _ ->
+            ( model, Cmd.none )
+
+
+handleRequestGame : Model -> ( Model, Cmd Msg )
+handleRequestGame model =
+    case model of
+        EnterName _ gameid name _ sessions ->
             let
-                -- Look for a session for this game and player
                 maybeStoredSession =
                     findSession gameid name sessions
 
@@ -381,12 +446,79 @@ update msg model =
             in
             ( model, Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken )
 
-        ( RequestGameFromServer, Playing _ gameid _ _ _ _ _ ) ->
-            -- fetch latest gamemove from server
+        Playing _ gameid _ _ _ _ _ ->
             ( model, Cmd.map GotServerMsg <| Api.getGameFromServer gameid )
 
-        ( GotServerMsg (ReceivedGameSummariesFromServer (Ok summaries)), Redirect key url sessions ) ->
-            -- all the game summaries successfully fetched from server
+        _ ->
+            ( model, Cmd.none )
+
+
+
+-- SESSION HANDLERS
+
+
+handleSessionLoaded : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleSessionLoaded value model =
+    case model of
+        Redirect key url _ ->
+            let
+                loadedSessions =
+                    decodeSessions value
+
+                gameidStr =
+                    String.dropLeft 1 url.path
+
+                maybeGameId =
+                    String.toInt gameidStr
+            in
+            case maybeGameId of
+                Just gameId ->
+                    case List.filter (\s -> s.gameId == gameId) loadedSessions |> List.head of
+                        Just session ->
+                            ( Rejoining key gameId session.playerName session.token loadedSessions
+                            , Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token)
+                            )
+
+                        Nothing ->
+                            ( Redirect key url loadedSessions, Cmd.none )
+
+                Nothing ->
+                    ( Redirect key url loadedSessions, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
+
+
+
+-- SERVER MESSAGE HANDLERS
+
+
+handleServerMsg : Api.Msg -> Model -> ( Model, Cmd Msg )
+handleServerMsg servermsg model =
+    case servermsg of
+        ReceivedGameSummariesFromServer result ->
+            handleGameSummaries result model
+
+        ReceivedGameIdFromServer result ->
+            handleNewGameId result model
+
+        ReceivedJoinGameResponse result ->
+            handleJoinResponse result model
+
+        ReceivedGameFromServer result ->
+            handleGameUpdate result model
+
+        ReceivedPostCreatedFromServer result ->
+            handleMoveConfirmation result model
+
+        ReceivedConcedeResponse _ ->
+            ( model, Cmd.none )
+
+
+handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
+handleGameSummaries result model =
+    case ( result, model ) of
+        ( Ok summaries, Redirect key url sessions ) ->
             let
                 gameidStr =
                     String.dropLeft 1 url.path
@@ -394,152 +526,133 @@ update msg model =
                 maybeGameId =
                     String.toInt gameidStr
 
-                gamesids =
+                gameIds =
                     List.map .summaryId summaries
             in
             case maybeGameId of
                 Just gameid ->
-                    if List.member gameid gamesids then
-                        -- enter a game directly by URL
+                    if List.member gameid gameIds then
                         ( EnterName key gameid "" Nothing sessions, Cmd.none )
 
                     else
-                        -- The URL points to an nonexisting gameid
-                        ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key <| "/" )
+                        ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key "/" )
 
                 Nothing ->
                     if String.isEmpty gameidStr then
-                        -- the default way to enter the lobby
                         ( Lobby { status = Home summaries, key = key } sessions, Cmd.none )
 
                     else
-                        -- Invalid game ID format
-                        ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key <| "/" )
+                        ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key "/" )
 
-        ( GotServerMsg (ReceivedGameSummariesFromServer (Err _)), Redirect key _ sessions ) ->
-            -- If fetching summaries fails, show an empty lobby
+        ( Err _, Redirect key _ sessions ) ->
             ( Lobby { status = Home [], key = key } sessions, Cmd.none )
 
-        ( GotServerMsg (ReceivedGameIdFromServer (Ok gameId)), Lobby lobby sessions ) ->
-            -- getGameIdFromServer was succesfull. Created a new game on the server.
-            -- Refresh the game list from server to get updated summaries
+        _ ->
+            ( model, Cmd.none )
+
+
+handleNewGameId : Result Http.Error GameId -> Model -> ( Model, Cmd Msg )
+handleNewGameId result model =
+    case ( result, model ) of
+        ( Ok gameId, Lobby lobby sessions ) ->
             ( Lobby lobby sessions, Nav.pushUrl lobby.key <| "/" ++ String.fromInt gameId )
 
-        ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), EnterName key gameid name _ sessions ) ->
-            -- joinGame was succesfull. Now create a new game in Browser
-            let
-                servergame =
-                    joinResponse.responseGame
+        _ ->
+            ( model, Cmd.none )
 
-                token =
-                    joinResponse.responseToken
 
-                finalgame =
-                    buildGame name servergame
+handleJoinResponse : Result Http.Error Api.JoinGameResponse -> Model -> ( Model, Cmd Msg )
+handleJoinResponse result model =
+    case ( result, model ) of
+        ( Ok joinResponse, EnterName key gameid name _ sessions ) ->
+            joinGameSuccess key gameid name joinResponse sessions True
 
-                -- Create stored session for this player
-                newStoredSession =
-                    { gameId = gameid
-                    , playerName = name
-                    , token = token
-                    }
-
-                -- Add to session storage (only if playerName is not empty)
-                updatedSessions =
-                    if String.isEmpty name then
-                        sessions
-
-                    else
-                        updateSessionStorage newStoredSession sessions
-
-                saveCmd =
-                    if String.isEmpty name then
-                        Cmd.none
-
-                    else
-                        Ports.saveSession (encodeSession newStoredSession)
-
-                -- Check if we joined a finished game and need to concede
-                concedeCmd =
-                    checkAndConcede finalgame gameid token
-            in
-            ( Playing key gameid name token finalgame servergame.history updatedSessions
-            , Cmd.batch [ saveCmd, concedeCmd ]
-            )
-
-        ( GotServerMsg (ReceivedJoinGameResponse (Err _)), EnterName key gameid name storedSession sessions ) ->
-            -- joinGame failed. Stay in EnterName state so user can try again
+        ( Err _, EnterName key gameid name storedSession sessions ) ->
             ( EnterName key gameid name storedSession sessions, Cmd.none )
 
-        ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), Rejoining key gameId playerName _ sessions ) ->
-            -- Auto-rejoin succeeded from Rejoining state
-            let
-                servergame =
-                    joinResponse.responseGame
+        ( Ok joinResponse, Rejoining key gameId playerName _ sessions ) ->
+            joinGameSuccess key gameId playerName joinResponse sessions False
 
-                token =
-                    joinResponse.responseToken
-
-                finalgame =
-                    buildGame playerName servergame
-
-                -- Check if we rejoined a finished game and need to concede
-                concedeCmd =
-                    checkAndConcede finalgame gameId token
-            in
-            ( Playing key gameId playerName token finalgame servergame.history sessions, concedeCmd )
-
-        ( GotServerMsg (ReceivedJoinGameResponse (Err _)), Rejoining key gameId playerName _ sessions ) ->
-            -- Auto-rejoin failed, show EnterName
+        ( Err _, Rejoining key gameId playerName _ sessions ) ->
             ( EnterName key gameId playerName Nothing sessions, Cmd.none )
 
-        ( GotServerMsg (ReceivedJoinGameResponse (Ok joinResponse)), Redirect key url sessions ) ->
-            -- Auto-rejoin succeeded from Redirect state
+        ( Ok joinResponse, Redirect key url sessions ) ->
             let
-                servergame =
-                    joinResponse.responseGame
-
-                token =
-                    joinResponse.responseToken
-
                 gameid =
                     String.dropLeft 1 url.path
                         |> String.toInt
                         |> Maybe.withDefault 0
 
-                -- Figure out the player name from the game state
+                token =
+                    joinResponse.responseToken
+
                 playerName =
-                    -- Find which player we are by checking sessions
                     List.filter (\s -> s.gameId == gameid && s.token == token) sessions
                         |> List.head
                         |> Maybe.map .playerName
                         |> Maybe.withDefault "Unknown"
-
-                finalgame =
-                    buildGame playerName servergame
-
-                -- Check if we rejoined a finished game and need to concede
-                concedeCmd =
-                    checkAndConcede finalgame gameid token
             in
-            ( Playing key gameid playerName token finalgame servergame.history sessions, concedeCmd )
+            joinGameSuccess key gameid playerName joinResponse sessions False
 
-        ( GotServerMsg (ReceivedJoinGameResponse (Err _)), Redirect key url sessions ) ->
-            -- Auto-rejoin failed from Redirect state, show EnterName
+        ( Err _, Redirect key url sessions ) ->
             let
-                gameidStr =
-                    String.dropLeft 1 url.path
-
                 gameId =
-                    String.toInt gameidStr |> Maybe.withDefault 0
+                    String.dropLeft 1 url.path
+                        |> String.toInt
+                        |> Maybe.withDefault 0
             in
             ( EnterName key gameId "" Nothing sessions, Cmd.none )
 
-        ( GotServerMsg (ReceivedGameFromServer (Ok servergame)), Playing key gameid name token game _ sessions ) ->
-            -- getGameFromServer was succesfull. Append the last gamemove from opponent to the history.
+        _ ->
+            ( model, Cmd.none )
+
+
+joinGameSuccess : Key -> GameId -> String -> Api.JoinGameResponse -> List StoredSession -> Bool -> ( Model, Cmd Msg )
+joinGameSuccess key gameid name joinResponse sessions shouldSaveSession =
+    let
+        servergame =
+            joinResponse.responseGame
+
+        token =
+            joinResponse.responseToken
+
+        finalgame =
+            buildGame name servergame
+
+        newStoredSession =
+            { gameId = gameid
+            , playerName = name
+            , token = token
+            }
+
+        updatedSessions =
+            if shouldSaveSession && not (String.isEmpty name) then
+                updateSessionStorage newStoredSession sessions
+
+            else
+                sessions
+
+        saveCmd =
+            if shouldSaveSession && not (String.isEmpty name) then
+                Ports.saveSession (encodeSession newStoredSession)
+
+            else
+                Cmd.none
+
+        concedeCmd =
+            checkAndConcede finalgame gameid token
+    in
+    ( Playing key gameid name token finalgame servergame.history updatedSessions
+    , Cmd.batch [ saveCmd, concedeCmd ]
+    )
+
+
+handleGameUpdate : Result Http.Error Api.ServerGame -> Model -> ( Model, Cmd Msg )
+handleGameUpdate result model =
+    case ( result, model ) of
+        ( Ok servergame, Playing key gameid name token game _ sessions ) ->
             case game.state of
                 GameOver _ ->
-                    -- Game is already over, don't apply more moves
                     ( Playing key gameid name token game servergame.history sessions, Cmd.none )
 
                 _ ->
@@ -559,7 +672,14 @@ update msg model =
                             )
                         |> Maybe.withDefault ( model, Cmd.none )
 
-        ( GotServerMsg (ReceivedPostCreatedFromServer (Ok gameMove)), Playing key gameid name token game history_ sessions ) ->
+        _ ->
+            ( model, Cmd.none )
+
+
+handleMoveConfirmation : Result Http.Error Game.GameMove -> Model -> ( Model, Cmd Msg )
+handleMoveConfirmation result model =
+    case ( result, model ) of
+        ( Ok gameMove, Playing key gameid name token game history_ sessions ) ->
             let
                 updatedGame =
                     game |> Game.update (NewGameMove <| transformGameMove gameMove)
@@ -571,38 +691,5 @@ update msg model =
             , concedeCmd
             )
 
-        ( GotServerMsg (ReceivedConcedeResponse _), _ ) ->
-            -- Concession was acknowledged by server, nothing to do
-            ( model, Cmd.none )
-
-        ( SessionLoadedFromStorage value, Redirect key url _ ) ->
-            -- Sessions loaded from localStorage on startup
-            let
-                loadedSessions =
-                    decodeSessions value
-
-                gameidStr =
-                    String.dropLeft 1 url.path
-
-                maybeGameId =
-                    String.toInt gameidStr
-            in
-            case maybeGameId of
-                Just gameId ->
-                    -- Check if we have a session for this game
-                    case List.filter (\s -> s.gameId == gameId) loadedSessions |> List.head of
-                        Just session ->
-                            -- We have a session! Auto-rejoin using Rejoining state to preserve playerName
-                            ( Rejoining key gameId session.playerName session.token loadedSessions, Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token) )
-
-                        Nothing ->
-                            -- No session for this game, proceed normally
-                            ( Redirect key url loadedSessions, Cmd.none )
-
-                Nothing ->
-                    -- Not navigating to a game, just load summaries
-                    ( Redirect key url loadedSessions, Cmd.none )
-
-        ( _, _ ) ->
-            -- Disregard messages that arrived for the wrong page.
+        _ ->
             ( model, Cmd.none )

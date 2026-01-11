@@ -1,4 +1,4 @@
-module Api exposing (Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede)
+module Api exposing (JoinGameResponse, Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede)
 
 import Game.Card exposing (Card)
 import Game.Figure exposing (Color(..))

@@ -357,9 +357,9 @@ concedeGame db@(DB dbVar) gameId token = do
           return Nothing
   where
     findSlotByToken :: GameId -> SessionToken -> Map SessionKey SessionToken -> Maybe PlayerSlot
-    findSlotByToken gid tok sessions =
-      if Map.lookup (gid, PlayerWhite) sessions == Just tok
-        then Just PlayerWhite
-        else if Map.lookup (gid, PlayerBlack) sessions == Just tok
-          then Just PlayerBlack
-          else Nothing
+    findSlotByToken gid tok sessions
+      | Map.lookup (gid, PlayerWhite) sessions == Just tok
+      = Just PlayerWhite
+      | Map.lookup (gid, PlayerBlack) sessions == Just tok
+      = Just PlayerBlack
+      | otherwise = Nothing
