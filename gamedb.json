@@ -8,9 +8,251 @@
         "Eel",
         "Elephant"
       ],
-      "history": [],
-      "player_black": "",
-      "player_white": "Alice"
+      "history": [
+        {
+          "card": "Mantis",
+          "color": "Black",
+          "from": [
+            3,
+            1
+          ],
+          "move": [
+            -1,
+            -1
+          ]
+        },
+        {
+          "card": "Eel",
+          "color": "White",
+          "from": [
+            1,
+            2
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        },
+        {
+          "card": "Tiger",
+          "color": "Black",
+          "from": [
+            3,
+            3
+          ],
+          "move": [
+            0,
+            -2
+          ]
+        },
+        {
+          "card": "Mantis",
+          "color": "White",
+          "from": [
+            3,
+            1
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        },
+        {
+          "card": "Eel",
+          "color": "Black",
+          "from": [
+            2,
+            4
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "White",
+          "from": [
+            2,
+            3
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        },
+        {
+          "card": "Mantis",
+          "color": "Black",
+          "from": [
+            3,
+            2
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Eel",
+          "color": "White",
+          "from": [
+            1,
+            1
+          ],
+          "move": [
+            1,
+            0
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "Black",
+          "from": [
+            0,
+            4
+          ],
+          "move": [
+            1,
+            0
+          ]
+        },
+        {
+          "card": "Mantis",
+          "color": "White",
+          "from": [
+            0,
+            0
+          ],
+          "move": [
+            1,
+            1
+          ]
+        },
+        {
+          "card": "Eel",
+          "color": "Black",
+          "from": [
+            3,
+            3
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "White",
+          "from": [
+            2,
+            0
+          ],
+          "move": [
+            1,
+            1
+          ]
+        },
+        {
+          "card": "Mantis",
+          "color": "Black",
+          "from": [
+            4,
+            4
+          ],
+          "move": [
+            -1,
+            -1
+          ]
+        },
+        {
+          "card": "Tiger",
+          "color": "White",
+          "from": [
+            2,
+            1
+          ],
+          "move": [
+            0,
+            2
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "Black",
+          "from": [
+            4,
+            3
+          ],
+          "move": [
+            -1,
+            -1
+          ]
+        },
+        {
+          "card": "Mantis",
+          "color": "White",
+          "from": [
+            0,
+            1
+          ],
+          "move": [
+            1,
+            1
+          ]
+        },
+        {
+          "card": "Goose",
+          "color": "Black",
+          "from": [
+            3,
+            4
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "White",
+          "from": [
+            1,
+            0
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        },
+        {
+          "card": "Mantis",
+          "color": "Black",
+          "from": [
+            1,
+            4
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Goose",
+          "color": "White",
+          "from": [
+            3,
+            0
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        }
+      ],
+      "player_black": "Bob",
+      "player_white": "Alice",
+      "winner": "Black"
     },
     "2": {
       "cards": [
@@ -20,13 +262,283 @@
         "Frog",
         "Tiger"
       ],
-      "history": [],
-      "player_black": "",
-      "player_white": "Albert"
+      "history": [
+        {
+          "card": "Tiger",
+          "color": "White",
+          "from": [
+            3,
+            1
+          ],
+          "move": [
+            0,
+            2
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "Black",
+          "from": [
+            2,
+            4
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Boar",
+          "color": "White",
+          "from": [
+            3,
+            0
+          ],
+          "move": [
+            0,
+            1
+          ]
+        },
+        {
+          "card": "Goose",
+          "color": "Black",
+          "from": [
+            3,
+            4
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "White",
+          "from": [
+            1,
+            0
+          ],
+          "move": [
+            1,
+            1
+          ]
+        }
+      ],
+      "player_black": "Bohr",
+      "player_white": "Albert",
+      "winner": "White"
+    },
+    "3": {
+      "cards": [
+        "Crab",
+        "Frog",
+        "Elephant",
+        "Boar",
+        "Dragon"
+      ],
+      "history": [
+        {
+          "card": "Elephant",
+          "color": "Black",
+          "from": [
+            4,
+            4
+          ],
+          "move": [
+            -1,
+            -1
+          ]
+        },
+        {
+          "card": "Crab",
+          "color": "White",
+          "from": [
+            0,
+            0
+          ],
+          "move": [
+            0,
+            1
+          ]
+        },
+        {
+          "card": "Frog",
+          "color": "Black",
+          "from": [
+            2,
+            2
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "White",
+          "from": [
+            2,
+            0
+          ],
+          "move": [
+            1,
+            1
+          ]
+        },
+        {
+          "card": "Crab",
+          "color": "Black",
+          "from": [
+            2,
+            3
+          ],
+          "move": [
+            0,
+            -1
+          ]
+        },
+        {
+          "card": "Frog",
+          "color": "White",
+          "from": [
+            1,
+            1
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        },
+        {
+          "card": "Elephant",
+          "color": "Black",
+          "from": [
+            3,
+            4
+          ],
+          "move": [
+            -1,
+            -1
+          ]
+        },
+        {
+          "card": "Crab",
+          "color": "White",
+          "from": [
+            1,
+            0
+          ],
+          "move": [
+            0,
+            1
+          ]
+        }
+      ],
+      "player_black": "Benny",
+      "player_white": "Alex",
+      "winner": "Black"
+    },
+    "4": {
+      "cards": [
+        "Frog",
+        "Boar",
+        "Eel",
+        "Horse",
+        "Monkey"
+      ],
+      "history": [
+        {
+          "card": "Boar",
+          "color": "White",
+          "from": [
+            3,
+            1
+          ],
+          "move": [
+            0,
+            1
+          ]
+        },
+        {
+          "card": "Eel",
+          "color": "Black",
+          "from": [
+            2,
+            3
+          ],
+          "move": [
+            1,
+            -1
+          ]
+        },
+        {
+          "card": "Monkey",
+          "color": "White",
+          "from": [
+            2,
+            0
+          ],
+          "move": [
+            1,
+            1
+          ]
+        },
+        {
+          "card": "Boar",
+          "color": "Black",
+          "from": [
+            2,
+            4
+          ],
+          "move": [
+            0,
+            -1
+          ]
+        },
+        {
+          "card": "Frog",
+          "color": "White",
+          "from": [
+            1,
+            1
+          ],
+          "move": [
+            -1,
+            1
+          ]
+        },
+        {
+          "card": "Horse",
+          "color": "Black",
+          "from": [
+            1,
+            4
+          ],
+          "move": [
+            0,
+            -1
+          ]
+        },
+        {
+          "card": "Boar",
+          "color": "White",
+          "from": [
+            1,
+            0
+          ],
+          "move": [
+            0,
+            1
+          ]
+        }
+      ],
+      "player_black": "Bashar",
+      "player_white": "Abdulah",
+      "winner": "White"
     }
   },
   "dbHasChanged": true,
-  "dbNextId": 3,
+  "dbNextId": 5,
   "dbSessions": [
     [
       [
@@ -37,10 +549,52 @@
     ],
     [
       [
+        1,
+        "PlayerBlack"
+      ],
+      "8fcea5ae-ba46-4b81-8b68-852bcf5d70e0"
+    ],
+    [
+      [
         2,
         "PlayerWhite"
       ],
       "555b9275-d841-4b45-a052-f31917ab82d6"
+    ],
+    [
+      [
+        2,
+        "PlayerBlack"
+      ],
+      "3e7c720b-3b51-46cf-983b-7bc2364eabb9"
+    ],
+    [
+      [
+        3,
+        "PlayerWhite"
+      ],
+      "ab6cf5d5-00f5-4121-856b-604305146ba5"
+    ],
+    [
+      [
+        3,
+        "PlayerBlack"
+      ],
+      "6022f525-d812-43e7-b6db-51395ff71462"
+    ],
+    [
+      [
+        4,
+        "PlayerWhite"
+      ],
+      "0dda815a-8c0a-466c-96dc-93aa0b4ceeca"
+    ],
+    [
+      [
+        4,
+        "PlayerBlack"
+      ],
+      "2a3009bb-c86b-4082-8667-1c6146e4f18b"
     ]
   ]
 }
