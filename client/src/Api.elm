@@ -1,4 +1,4 @@
-module Api exposing (Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove)
+module Api exposing (Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede)
 
 import Game.Card exposing (Card)
 import Game.Figure exposing (Color(..))
@@ -35,6 +35,7 @@ type Msg
     | ReceivedGameFromServer (Result Http.Error ServerGame)
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
     | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary)) -- lightweight game summaries
+    | ReceivedConcedeResponse (Result Http.Error (Maybe Color))
 
 
 
@@ -43,9 +44,17 @@ type Msg
 
 getGameSummariesFromServer : Cmd Msg
 getGameSummariesFromServer =
-    Http.get
-        { url = "/1/onitama/summary"
+    Http.request
+        { method = "GET"
+        , headers =
+            [ Http.header "Cache-Control" "no-cache, no-store, must-revalidate"
+            , Http.header "Pragma" "no-cache"
+            ]
+        , url = "/1/onitama/summary"
+        , body = Http.emptyBody
         , expect = Http.expectJson ReceivedGameSummariesFromServer (Decode.list decodeGameSummary)
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
@@ -86,10 +95,17 @@ joinGame gameid name maybeToken =
 
 getGameFromServer : GameId -> Cmd Msg
 getGameFromServer gameid =
-    Http.get
-        { url = "/1/onitama?table=" ++ String.fromInt gameid
-        , expect =
-            Http.expectJson ReceivedGameFromServer decodeGame
+    Http.request
+        { method = "GET"
+        , headers =
+            [ Http.header "Cache-Control" "no-cache, no-store, must-revalidate"
+            , Http.header "Pragma" "no-cache"
+            ]
+        , url = "/1/onitama?table=" ++ String.fromInt gameid
+        , body = Http.emptyBody
+        , expect = Http.expectJson ReceivedGameFromServer decodeGame
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
@@ -102,8 +118,33 @@ postNewGameMove gameid token gameMove =
         }
 
 
+concede : GameId -> SessionToken -> Cmd Msg
+concede gameid token =
+    Http.post
+        { url = "/1/onitama/concede?table=" ++ String.fromInt gameid ++ "&token=" ++ token
+        , body = Http.emptyBody
+        , expect = Http.expectJson ReceivedConcedeResponse (Decode.nullable decodeColor)
+        }
+
 
 -- DECODERS
+
+
+decodeColor : Decoder Color
+decodeColor =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "White" ->
+                        Decode.succeed White
+
+                    "Black" ->
+                        Decode.succeed Black
+
+                    _ ->
+                        Decode.fail ("Unknown color: " ++ str)
+            )
 
 
 decodeGameStatus : Decoder GameStatus

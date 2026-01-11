@@ -28,7 +28,8 @@ data Game = Game
   { player_white :: String,
     player_black :: String,
     cards :: [Card],
-    history :: [GameMove]
+    history :: [GameMove],
+    winner :: Maybe Color
   }
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 

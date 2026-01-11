@@ -13,7 +13,7 @@ import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import GHC.Generics (Generic)
-import Game (Game (..), GameMove)
+import Game (Game (..), GameMove, Color)
 import Network.HTTP.Media ((//), (/:))
 import Servant
   ( Accept (contentType),
@@ -66,19 +66,20 @@ instance FromJSON GameStatus
 
 -- Create a game summary from a full game
 gameToSummary :: GameId -> Game -> GameSummary
-gameToSummary gameId (Game p1 p2 cards history) =
+gameToSummary gameId (Game p1 p2 _ history maybeWinner) =
   GameSummary
     { summaryId = gameId,
       summaryPlayer1 = p1,
       summaryPlayer2 = p2,
       summaryMoveCount = Prelude.length history,
-      summaryStatus = determineStatus p1 p2
+      summaryStatus = determineStatus p1 p2 maybeWinner
     }
   where
-    determineStatus "" "" = WaitingForPlayers
-    determineStatus "" _ = WaitingForPlayers
-    determineStatus _ "" = WaitingForPlayers
-    determineStatus _ _ = InProgress -- Could add more logic for completed games
+    determineStatus _ _ (Just _) = Completed
+    determineStatus "" "" Nothing = WaitingForPlayers
+    determineStatus "" _ Nothing = WaitingForPlayers
+    determineStatus _ "" Nothing = WaitingForPlayers
+    determineStatus _ _ Nothing = InProgress
 
 type Games = Map GameId Game
 
@@ -93,9 +94,11 @@ type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (May
 
 type NewMove = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
 
+type Concede = "1" :> "onitama" :> "concede" :> QueryParam "table" GameId :> QueryParam "token" SessionToken :> Post '[JSON] (Maybe Color)
+
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
-type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Index
+type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> Index
 
 api :: Proxy API
 api = Proxy

@@ -19,6 +19,7 @@ type GameState
     | FigureSelected ( Int, Int )
     | ChosingCard ( ( Int, Int ), ( Int, Int ) )
     | MoveDone GameMove
+    | GameOver Color
 
 
 type alias Game =
@@ -45,6 +46,47 @@ type alias GameMove =
     , from : ( Int, Int )
     , move : ( Int, Int )
     }
+
+
+hasKing : List Figure -> Bool
+hasKing figures =
+    List.any (\f -> f.kind == King) figures
+
+
+kingPosition : List Figure -> Maybe ( Int, Int )
+kingPosition figures =
+    figures
+        |> List.filter (\f -> f.kind == King)
+        |> List.head
+        |> Maybe.map .pos
+
+
+opponentTemple : ( Int, Int )
+opponentTemple =
+    ( 2, 4 )
+
+
+myTemple : ( Int, Int )
+myTemple =
+    ( 2, 0 )
+
+
+checkWinCondition : Game -> Game
+checkWinCondition game =
+    if not (hasKing game.opFigures) then
+        { game | state = GameOver game.myColor }
+
+    else if kingPosition game.myFigures == Just opponentTemple then
+        { game | state = GameOver game.myColor }
+
+    else if not (hasKing game.myFigures) then
+        { game | state = GameOver (invert game.myColor) }
+
+    else if kingPosition game.opFigures == Just myTemple then
+        { game | state = GameOver (invert game.myColor) }
+
+    else
+        game
 
 
 
@@ -106,12 +148,22 @@ view game =
             (drawCardPrompt game.myCards UserChoseOneCard)
         , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "3", SvgA.textAnchor "end" ]
             [ Svg.text <|
-                case game.nextColor of
-                    White ->
-                        "white to move"
+                case game.state of
+                    GameOver winner ->
+                        case winner of
+                            White ->
+                                "White wins!"
 
-                    Black ->
-                        "black to move"
+                            Black ->
+                                "Black wins!"
+
+                    _ ->
+                        case game.nextColor of
+                            White ->
+                                "white to move"
+
+                            Black ->
+                                "black to move"
             ]
         ]
     ]
@@ -139,11 +191,16 @@ update msg game =
                     game
 
         UserClickedOnCell ( x, y ) ->
-            if game.myColor == game.nextColor then
-                handleClick ( x, y ) game
+            case game.state of
+                GameOver _ ->
+                    game
 
-            else
-                game
+                _ ->
+                    if game.myColor == game.nextColor then
+                        handleClick ( x, y ) game
+
+                    else
+                        game
 
         NewGameMove gm ->
             { game | state = MoveDone gm }
@@ -228,6 +285,7 @@ execGameMove game =
                     ( White, White ) ->
                         game
                             |> moveFigures gameMove
+                            |> checkWinCondition
 
                     ( White, Black ) ->
                         game
@@ -236,6 +294,7 @@ execGameMove game =
                             |> moveFigures (gameMove |> rotateGameMove)
                             |> flipFigures
                             |> flipCards
+                            |> checkWinCondition
 
                     ( Black, White ) ->
                         game
@@ -244,10 +303,12 @@ execGameMove game =
                             |> moveFigures (gameMove |> rotateGameMove)
                             |> flipFigures
                             |> flipCards
+                            |> checkWinCondition
 
                     ( Black, Black ) ->
                         game
                             |> moveFigures gameMove
+                            |> checkWinCondition
 
             else
                 { game | state = Thinking }

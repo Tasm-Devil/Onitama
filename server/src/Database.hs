@@ -27,7 +27,7 @@ import qualified Data.Text as T
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
-import Game (Game (Game), give5Cards)
+import Game (Game (Game), give5Cards, Color(..))
 import System.Directory (doesFileExist)
 
 -- Player slot identifier: which position in the game
@@ -165,7 +165,7 @@ insertGameWithNewId (DB dbVar) = do
     let newId = GameId (dbNextId state)
     modifyTVar dbVar $ \s ->
       s
-        { dbGames = Map.insert newId (Game "" "" newCards []) (dbGames s),
+        { dbGames = Map.insert newId (Game "" "" newCards [] Nothing) (dbGames s),
           dbNextId = dbNextId s + 1,
           dbHasChanged = True
         }
@@ -239,7 +239,7 @@ validateToken (DB dbVar) gameId token expectedSlot = do
 
 -- Determine which player slot should make the next move based on game history
 getCurrentPlayerSlot :: Game -> PlayerSlot
-getCurrentPlayerSlot (Game _ _ _ history) =
+getCurrentPlayerSlot (Game _ _ _ history _) =
   if even (Prelude.length history) then PlayerWhite else PlayerBlack
 
 -- Join a game and get a session token (or retrieve existing session with validation)
@@ -248,7 +248,7 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
   maybeGame <- getGameById db gameId
   case maybeGame of
     Nothing -> return Nothing
-    Just game@(Game p1 p2 cards history) -> do
+    Just game@(Game p1 p2 cards history _) -> do
       state <- readTVarIO dbVar
       let sessions = dbSessions state
 
@@ -293,9 +293,9 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
             else do
               -- New player, find empty slot
               let (slot, updatedGame)
-                    | null p1 && null p2 = (PlayerWhite, Game playerName "" cards history)
-                    | null p1 = (PlayerWhite, Game playerName p2 cards history)
-                    | null p2 = (PlayerBlack, Game p1 playerName cards history)
+                    | null p1 && null p2 = (PlayerWhite, Game playerName "" cards history Nothing)
+                    | null p1 = (PlayerWhite, Game playerName p2 cards history Nothing)
+                    | null p2 = (PlayerBlack, Game p1 playerName cards history Nothing)
                     | otherwise = (PlayerWhite, game) -- dummy, will return Nothing
               if game == updatedGame
                 then do
@@ -313,3 +313,53 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
                   token <- createSession db gameId slot
                   putStrLn $ "New player " ++ playerName ++ " joined as " ++ show slot
                   return $ Just (JoinGameResponse {responseGame = updatedGame, responseToken = token})
+
+-- Concede a game - the player with the given token admits defeat
+-- Returns the winner's color if successful
+concedeGame :: DB -> GameId -> SessionToken -> IO (Maybe Color)
+concedeGame db@(DB dbVar) gameId token = do
+  state <- readTVarIO dbVar
+  let sessions = dbSessions state
+
+  -- Find which slot this token belongs to
+  let maybeSlot = findSlotByToken gameId token sessions
+
+  case maybeSlot of
+    Nothing -> do
+      putStrLn $ "Concede failed: invalid token for game " ++ show gameId
+      return Nothing
+    Just loserSlot -> do
+      let winnerColor = case loserSlot of
+            PlayerWhite -> Black  -- White concedes, Black wins
+            PlayerBlack -> White  -- Black concedes, White wins
+
+      -- Update the game with the winner
+      success <- atomically $ do
+        currentState <- readTVar dbVar
+        case Map.lookup gameId (dbGames currentState) of
+          Nothing -> return False
+          Just (Game p1 p2 cards history _) -> do
+            let updatedGame = Game p1 p2 cards history (Just winnerColor)
+            writeTVar dbVar $
+              currentState
+                { dbGames = Map.insert gameId updatedGame (dbGames currentState),
+                  dbHasChanged = True
+                }
+            return True
+
+      if success
+        then do
+          markDBChanged db
+          putStrLn $ "Game " ++ show gameId ++ " ended: " ++ show winnerColor ++ " wins"
+          return $ Just winnerColor
+        else do
+          putStrLn $ "Concede failed: game " ++ show gameId ++ " not found"
+          return Nothing
+  where
+    findSlotByToken :: GameId -> SessionToken -> Map SessionKey SessionToken -> Maybe PlayerSlot
+    findSlotByToken gid tok sessions =
+      if Map.lookup (gid, PlayerWhite) sessions == Just tok
+        then Just PlayerWhite
+        else if Map.lookup (gid, PlayerBlack) sessions == Just tok
+          then Just PlayerBlack
+          else Nothing

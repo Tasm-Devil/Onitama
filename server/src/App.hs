@@ -4,7 +4,7 @@
 module App where
 
 import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
-import Game (Game (Game), GameMove, give5Cards)
+import Game (Game (Game), GameMove, give5Cards, Color)
 import Database
   ( DB,
     PlayerSlot (..),
@@ -19,7 +19,8 @@ import Database
     forceSave,
     joinGameWithToken,
     validateToken,
-    getCurrentPlayerSlot
+    getCurrentPlayerSlot,
+    concedeGame
   )
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
@@ -59,7 +60,7 @@ server = do
     readerServer db = hoistServer api (readerToHandler db) apiServer
 
 apiServer :: ServerT API AppM
-apiServer = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMove :<|> getIndexHtml
+apiServer = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMove :<|> concede :<|> getIndexHtml
 
 newGame :: AppM GameId
 newGame = do
@@ -129,7 +130,7 @@ newMove maybeGameId maybeToken move = do
             return Nothing
           else do
             -- Token is valid, process the move
-            let updateGameFn (Game p1 p2 cards history) = Just $ Game p1 p2 cards (move : history)
+            let updateGameFn (Game p1 p2 cards history w) = Just $ Game p1 p2 cards (move : history) w
             success <- liftIO $ updateGame db gameId updateGameFn
             if success then do
               liftIO $ putStrLn "Move accepted"
@@ -137,6 +138,13 @@ newMove maybeGameId maybeToken move = do
             else return Nothing
     _ -> return Nothing
 
+concede :: Maybe GameId -> Maybe SessionToken -> AppM (Maybe Color)
+concede maybeGameId maybeToken = do
+  case (maybeGameId, maybeToken) of
+    (Just gameId, Just token) -> do
+      db <- ask
+      liftIO $ concedeGame db gameId token
+    _ -> return Nothing
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml gameId = do
