@@ -130,12 +130,10 @@ SessionToken = Text (UUID)
 Color        = "White" | "Black"
 GameStatus   = "WaitingForPlayers" | "InProgress" | "Completed"
 
-GameMove = {
-  color: Color,
-  card:  String,
-  from:  [Int, Int],
-  move:  [Int, Int]
-}
+-- GameMove is a human-readable string: "<color>:<from><to>:<card>"
+-- Examples: "w:c1c3:tiger", "b:c5c4:crane"
+-- Positions use chess notation: columns a-e, rows 1-5
+GameMove = String
 
 GameSummary = {
   summaryId:        GameId,
@@ -166,10 +164,10 @@ curl -X PUT "localhost:8080/1/onitama?table=1&name=Alice"
 curl -X PUT "localhost:8080/1/onitama?table=1&name=Bob"
 # Returns: {"responseGame": {...}, "responseToken": "def-456..."}
 
-# Alice makes a move
+# Alice makes a move (format: "color:from+to:card")
 curl -X POST "localhost:8080/1/onitama?table=1&token=abc-123..." \
   -H "Content-Type: application/json" \
-  -d '{"color":"White","card":"Tiger","from":[2,0],"move":[0,2]}'
+  -d '"w:c1c3:tiger"'
 
 # Bob fetches the updated game state
 curl "localhost:8080/1/onitama?table=1"
@@ -180,16 +178,15 @@ curl "localhost:8080/1/onitama?table=1"
 ```json
 {
   "cards": ["Tiger", "Crab", "Monkey", "Crane", "Dragon"],
-  "history": [
-    {"color": "White", "card": "Tiger", "from": [2, 0], "move": [0, 2]}
-  ],
+  "history": ["b:c5c4:crane", "w:c1c3:tiger"],
   "player_white": "Alice",
   "player_black": "Bob",
   "winner": null
 }
 ```
 
-Cards order: `[White1, White2, Black1, Black2, Common]`
+- **Cards order**: `[White1, White2, Black1, Black2, Common]`
+- **History order**: Most recent move first (head of list = last move, FP style)
 
 The common card (5th) determines who moves first based on its color stamp.
 
@@ -224,7 +221,7 @@ docker run -p 8080:8080 onitama:latest
 - [x] Persist sessions in localStorage
 - [x] Win detection (capture King / reach Temple)
 - [x] Common card determines starting player
-- [ ] Simplify move format to `w:a1b2:tiger` (game-agnostic)
+- [x] Simplify move format to `w:c1c3:tiger` (game-agnostic)
 - [ ] Server sends random seed, client generates cards
 - [ ] Move token to HTTP header
 - [ ] Global auth system (email + 6-digit code)

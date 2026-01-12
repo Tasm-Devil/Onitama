@@ -24,13 +24,10 @@ instance FromJSON PlayerSlot
 
 type Card = String
 
-data GameMove = GameMove
-  { color :: Color,
-    card :: Card,
-    from :: (Integer, Integer),
-    move :: (Integer, Integer)
-  }
-  deriving (Eq, Show, Generic, ToJSON, FromJSON)
+-- GameMove is now a simple string like "w:c1c3:tiger"
+-- Format: <color>:<from><to>:<card>
+-- This makes the server game-agnostic
+type GameMove = String
 
 data Game = Game
   { player_white :: String,

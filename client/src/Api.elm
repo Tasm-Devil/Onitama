@@ -1,6 +1,6 @@
-module Api exposing (JoinGameResponse, Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede)
+module Api exposing (JoinGameResponse, Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede, gameMoveToString, stringToGameMove)
 
-import Game.Card exposing (Card)
+import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
 import Game.Game as Game exposing (GameState(..))
 import Http
@@ -8,6 +8,95 @@ import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import Lobby exposing (GameId, Status(..),GameSummary, GameStatus(..))
+
+
+-- MOVE STRING CONVERSION
+-- Format: "<color>:<from><to>:<card>" e.g., "w:c1c3:tiger"
+
+
+posToChess : ( Int, Int ) -> String
+posToChess ( x, y ) =
+    let
+        col = String.fromChar (Char.fromCode (Char.toCode 'a' + x))
+        row = String.fromInt (y + 1)
+    in
+    col ++ row
+
+
+chessToPos : String -> Maybe ( Int, Int )
+chessToPos str =
+    case String.toList str of
+        [ colChar, rowChar ] ->
+            let
+                x = Char.toCode colChar - Char.toCode 'a'
+                y = Char.toCode rowChar - Char.toCode '1'
+            in
+            if x >= 0 && x <= 4 && y >= 0 && y <= 4 then
+                Just ( x, y )
+            else
+                Nothing
+        _ ->
+            Nothing
+
+
+gameMoveToString : Game.GameMove -> String
+gameMoveToString { color, card, from, move } =
+    let
+        colorStr = case color of
+            White -> "w"
+            Black -> "b"
+        fromStr = posToChess from
+        toPos = ( Tuple.first from + Tuple.first move, Tuple.second from + Tuple.second move )
+        toStr = posToChess toPos
+        cardStr = String.toLower card.name
+    in
+    colorStr ++ ":" ++ fromStr ++ toStr ++ ":" ++ cardStr
+
+
+stringToGameMove : String -> Maybe Game.GameMove
+stringToGameMove str =
+    case String.split ":" str of
+        [ colorStr, positions, cardStr ] ->
+            let
+                maybeColor = case colorStr of
+                    "w" -> Just White
+                    "b" -> Just Black
+                    _ -> Nothing
+
+                maybeFromTo =
+                    if String.length positions == 4 then
+                        let
+                            fromStr = String.left 2 positions
+                            toStr = String.right 2 positions
+                        in
+                        Maybe.map2 Tuple.pair (chessToPos fromStr) (chessToPos toStr)
+                    else
+                        Nothing
+
+                card = cardByName (capitalizeFirst cardStr)
+            in
+            case ( maybeColor, maybeFromTo ) of
+                ( Just color, Just ( from, to ) ) ->
+                    let
+                        move = ( Tuple.first to - Tuple.first from, Tuple.second to - Tuple.second from )
+                    in
+                    Just { color = color, card = card, from = from, move = move }
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+capitalizeFirst : String -> String
+capitalizeFirst str =
+    case String.uncons str of
+        Just ( first, rest ) ->
+            String.cons (Char.toUpper first) rest
+
+        Nothing ->
+            str
 
 
 type alias ServerGame =
@@ -113,7 +202,7 @@ postNewGameMove : GameId -> SessionToken -> Game.GameMove -> Cmd Msg
 postNewGameMove gameid token gameMove =
     Http.post
         { url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&token=" ++ token
-        , body = Http.jsonBody (enecodergameMove gameMove)
+        , body = Http.jsonBody (encodeGameMove gameMove)
         , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
         }
 
@@ -177,23 +266,18 @@ decodeGameSummary =
         |> required "summaryStatus" decodeGameStatus
 
 
--- DECODERS
-
-
-decodeTuple : Decoder ( Int, Int )
-decodeTuple =
-    Decode.map2 Tuple.pair
-        (Decode.index 0 Decode.int)
-        (Decode.index 1 Decode.int)
-
-
 decodeGameMove : Decoder Game.GameMove
 decodeGameMove =
-    Decode.succeed Game.GameMove
-        |> required "color" (Decode.map Game.Figure.colorFromString Decode.string)
-        |> required "card" (Decode.map Game.Card.cardByName Decode.string)
-        |> required "from" decodeTuple
-        |> required "move" decodeTuple
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case stringToGameMove str of
+                    Just gameMove ->
+                        Decode.succeed gameMove
+
+                    Nothing ->
+                        Decode.fail ("Invalid game move format: " ++ str)
+            )
 
 
 decodeGame : Decoder ServerGame
@@ -212,11 +296,6 @@ decodeJoinGameResponse =
         |> required "responseToken" Decode.string
 
 
-enecodergameMove : Game.GameMove -> Encode.Value
-enecodergameMove gameMove =
-    Encode.object
-        [ ( "color", Encode.string (Game.Figure.colorToString gameMove.color) )
-        , ( "card", Encode.string gameMove.card.name )
-        , ( "from", Encode.list Encode.int [ Tuple.first gameMove.from, Tuple.second gameMove.from ] )
-        , ( "move", Encode.list Encode.int [ Tuple.first gameMove.move, Tuple.second gameMove.move ] )
-        ]
+encodeGameMove : Game.GameMove -> Encode.Value
+encodeGameMove gameMove =
+    Encode.string (gameMoveToString gameMove)
