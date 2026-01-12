@@ -1,6 +1,7 @@
 module Game.Card exposing (..)
 
 import Game.Cell exposing (CellType(..), drawSimpleCell, grid)
+import Game.Figure exposing (Color(..))
 import Global exposing (gridsize)
 import Svg
 import Svg.Attributes as SvgA
@@ -10,32 +11,33 @@ import Svg.Events as SvgE
 type alias Card =
     { name : String
     , moves : List ( Int, Int )
+    , startPlayer : Color
     }
 
 
 dummyCard : Card
 dummyCard =
-    { name = "Error", moves = [ ( 0, 1 ), ( 0, 2 ), ( 0, -1 ), ( 0, -2 ), ( -2, 0 ), ( -1, 0 ), ( 1, 0 ), ( 2, 0 ) ] }
+    { name = "Error", moves = [ ( 0, 1 ), ( 0, 2 ), ( 0, -1 ), ( 0, -2 ), ( -2, 0 ), ( -1, 0 ), ( 1, 0 ), ( 2, 0 ) ], startPlayer = White }
 
 
 allCards : List Card
 allCards =
-    [ { name = "Boar", moves = [ ( -1, 0 ), ( 1, 0 ), ( 0, 1 ) ] }
-    , { name = "Cobra", moves = [ ( 1, 1 ), ( 1, -1 ), ( -1, 0 ) ] }
-    , { name = "Crab", moves = [ ( -2, 0 ), ( 2, 0 ), ( 0, 1 ) ] }
-    , { name = "Crane", moves = [ ( 0, 1 ), ( -1, -1 ), ( 1, -1 ) ] }
-    , { name = "Dragon", moves = [ ( -2, 1 ), ( -1, -1 ), ( 2, 1 ), ( 1, -1 ) ] }
-    , { name = "Eel", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 0 ) ] }
-    , { name = "Elephant", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, 1 ) ] }
-    , { name = "Frog", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, -1 ) ] }
-    , { name = "Goose", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
-    , { name = "Horse", moves = [ ( -1, 0 ), ( 0, 1 ), ( 0, -1 ) ] }
-    , { name = "Mantis", moves = [ ( -1, 1 ), ( 1, 1 ), ( 0, -1 ) ] }
-    , { name = "Monkey", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 1 ), ( 1, -1 ) ] }
-    , { name = "Ox", moves = [ ( 1, 0 ), ( 0, 1 ), ( 0, -1 ) ] }
-    , { name = "Rabbit", moves = [ ( 2, 0 ), ( 1, 1 ), ( -1, -1 ) ] }
-    , { name = "Rooster", moves = [ ( -1, 0 ), ( -1, -1 ), ( 1, 0 ), ( 1, 1 ) ] }
-    , { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ] }
+    [ { name = "Boar", moves = [ ( -1, 0 ), ( 1, 0 ), ( 0, 1 ) ], startPlayer = White }
+    , { name = "Cobra", moves = [ ( 1, 1 ), ( 1, -1 ), ( -1, 0 ) ], startPlayer = White }
+    , { name = "Crab", moves = [ ( -2, 0 ), ( 2, 0 ), ( 0, 1 ) ], startPlayer = Black }
+    , { name = "Crane", moves = [ ( 0, 1 ), ( -1, -1 ), ( 1, -1 ) ], startPlayer = Black }
+    , { name = "Dragon", moves = [ ( -2, 1 ), ( -1, -1 ), ( 2, 1 ), ( 1, -1 ) ], startPlayer = White }
+    , { name = "Eel", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 0 ) ], startPlayer = Black }
+    , { name = "Elephant", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, 1 ) ], startPlayer = White }
+    , { name = "Frog", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, -1 ) ], startPlayer = White }
+    , { name = "Goose", moves = [ ( -1, 0 ), ( -1, 1 ), ( 1, 0 ), ( 1, -1 ) ], startPlayer = Black }
+    , { name = "Horse", moves = [ ( -1, 0 ), ( 0, 1 ), ( 0, -1 ) ], startPlayer = White }
+    , { name = "Mantis", moves = [ ( -1, 1 ), ( 1, 1 ), ( 0, -1 ) ], startPlayer = White }
+    , { name = "Monkey", moves = [ ( -1, 1 ), ( -1, -1 ), ( 1, 1 ), ( 1, -1 ) ], startPlayer = Black }
+    , { name = "Ox", moves = [ ( 1, 0 ), ( 0, 1 ), ( 0, -1 ) ], startPlayer = Black }
+    , { name = "Rabbit", moves = [ ( 2, 0 ), ( 1, 1 ), ( -1, -1 ) ], startPlayer = Black }
+    , { name = "Rooster", moves = [ ( -1, 0 ), ( -1, -1 ), ( 1, 0 ), ( 1, 1 ) ], startPlayer = White }
+    , { name = "Tiger", moves = [ ( 0, 2 ), ( 0, -1 ) ], startPlayer = Black }
     ]
 
 
@@ -43,22 +45,22 @@ allCards =
 {-
    moreCards : List Card -- Senseis Path
    moreCards =
-       [ { name = "bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
-       , { name = "dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ] }
-       , { name = "fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ] }
-       , { name = "giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ] }
-       , { name = "iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ] }
-       , { name = "kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ] }
-       , { name = "mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ] }
-       , { name = "otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ] }
-       , { name = "panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ] }
-       , { name = "phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ] }
-       , { name = "rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
-       , { name = "sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ] }
-       , { name = "sea_snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ] }
-       , { name = "tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ] }
-       , { name = "turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ] }
-       , { name = "viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ] }
+       [ { name = "bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = Black }
+       , { name = "dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ] , startPlayer = Black }
+       , { name = "fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ] , startPlayer = White }
+       , { name = "giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ] , startPlayer = Black }
+       , { name = "iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = White }
+       , { name = "kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ] , startPlayer = White }
+       , { name = "mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ] , startPlayer = Black }
+       , { name = "otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ] , startPlayer = White }
+       , { name = "panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ] , startPlayer = White }
+       , { name = "phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ] , startPlayer = Black }
+       , { name = "rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = White }
+       , { name = "sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ] , startPlayer = Black }
+       , { name = "sea_snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ] , startPlayer = Black }
+       , { name = "tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ] , startPlayer = Black }
+       , { name = "turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ] , startPlayer = White }
+       , { name = "viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = White }
        ]
 -}
 

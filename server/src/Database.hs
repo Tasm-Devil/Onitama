@@ -2,7 +2,7 @@
 
 module Database where
 
-import Api (GameId (..), GameStatus (..), GameSummary (..), Games, SessionToken (..), JoinGameResponse (..), gameToSummary)
+import Api (GameId (..), GameStatus (..), GameSummary (..), Games, JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM
   ( TVar,
@@ -27,16 +27,8 @@ import qualified Data.Text as T
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
-import Game (Game (Game), give5Cards, Color(..))
+import Game (Color (..), Game (Game), PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
 import System.Directory (doesFileExist)
-
--- Player slot identifier: which position in the game
-data PlayerSlot = PlayerWhite | PlayerBlack
-  deriving (Show, Eq, Ord, Generic)
-
-instance ToJSON PlayerSlot
-
-instance FromJSON PlayerSlot
 
 -- Session key: (GameId, PlayerSlot)
 type SessionKey = (GameId, PlayerSlot)
@@ -85,7 +77,6 @@ loadDB = do
 -- Save database to file with pretty printing
 saveDB :: TVar DBState -> IO ()
 saveDB dbVar = do
-  putStrLn "Checking if database needs to be saved..."
   dbState <- atomically $ do
     state <- readTVar dbVar
     let shouldSave = dbHasChanged state
@@ -108,15 +99,14 @@ saveDB dbVar = do
       putStrLn $ "JSON size: " ++ show (Lazy.length encodedDB) ++ " bytes"
       Lazy.writeFile dbFilePath encodedDB
       putStrLn "Database saved to file successfully (pretty-printed)"
-    else putStrLn $ "No changes to save. Current games: " ++ show gameCount
+    else return ()
 
 -- Start periodic saving of database
 startPeriodicSave :: TVar DBState -> IO ()
 startPeriodicSave dbVar = do
   putStrLn "Starting periodic database save thread"
-  -- Fork a thread that will save the database every 30 seconds for testing
+  -- Fork a thread that will save the database every 30 seconds
   _ <- forkIO $ forever $ do
-    putStrLn "Periodic save triggered"
     saveDB dbVar
     threadDelay (30 * 1000000) -- 30 seconds for testing (instead of 10 minutes)
   putStrLn "Periodic save thread started"
@@ -237,11 +227,6 @@ validateToken (DB dbVar) gameId token expectedSlot = do
     Just storedToken -> return $ storedToken == token
     Nothing -> return False
 
--- Determine which player slot should make the next move based on game history
-getCurrentPlayerSlot :: Game -> PlayerSlot
-getCurrentPlayerSlot (Game _ _ _ history _) =
-  if even (Prelude.length history) then PlayerWhite else PlayerBlack
-
 -- Join a game and get a session token (or retrieve existing session with validation)
 joinGameWithToken :: DB -> GameId -> String -> Maybe SessionToken -> IO (Maybe JoinGameResponse)
 joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
@@ -263,7 +248,7 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
                 Just providedToken | providedToken == existingToken -> do
                   -- Valid token provided, allow rejoin
                   putStrLn $ "Player " ++ playerName ++ " rejoining as Player1 with valid token"
-                  return $ Just (JoinGameResponse { responseGame = game, responseToken = existingToken })
+                  return $ Just (JoinGameResponse {responseGame = game, responseToken = existingToken})
                 _ -> do
                   -- No token or wrong token - reject to prevent impersonation
                   putStrLn $ "Rejecting join: " ++ playerName ++ " already exists as Player1 but wrong/no token provided"
@@ -272,7 +257,7 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
               -- No token exists yet (shouldn't happen, but handle it)
               putStrLn "Warning: Player1 exists but no token found, creating new session"
               token <- createSession db gameId PlayerWhite
-              return $ Just (JoinGameResponse { responseGame = game, responseToken = token})
+              return $ Just (JoinGameResponse {responseGame = game, responseToken = token})
         else
           if p2 == playerName
             then do
@@ -282,14 +267,14 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
                   case maybeProvidedToken of
                     Just providedToken | providedToken == existingToken -> do
                       putStrLn $ "Player " ++ playerName ++ " rejoining as Player2 with valid token"
-                      return $ Just (JoinGameResponse { responseGame = game, responseToken = existingToken })
+                      return $ Just (JoinGameResponse {responseGame = game, responseToken = existingToken})
                     _ -> do
                       putStrLn $ "Rejecting join: " ++ playerName ++ " already exists as Player2 but wrong/no token provided"
                       return Nothing
                 Nothing -> do
                   putStrLn "Warning: Player2 exists but no token found, creating new session"
                   token <- createSession db gameId PlayerBlack
-                  return $ Just (JoinGameResponse { responseGame = game, responseToken = token})
+                  return $ Just (JoinGameResponse {responseGame = game, responseToken = token})
             else do
               -- New player, find empty slot
               let (slot, updatedGame)
@@ -330,8 +315,8 @@ concedeGame db@(DB dbVar) gameId token = do
       return Nothing
     Just loserSlot -> do
       let winnerColor = case loserSlot of
-            PlayerWhite -> Black  -- White concedes, Black wins
-            PlayerBlack -> White  -- Black concedes, White wins
+            PlayerWhite -> Black -- White concedes, Black wins
+            PlayerBlack -> White -- Black concedes, White wins
 
       -- Update the game with the winner
       success <- atomically $ do
@@ -358,8 +343,8 @@ concedeGame db@(DB dbVar) gameId token = do
   where
     findSlotByToken :: GameId -> SessionToken -> Map SessionKey SessionToken -> Maybe PlayerSlot
     findSlotByToken gid tok sessions
-      | Map.lookup (gid, PlayerWhite) sessions == Just tok
-      = Just PlayerWhite
-      | Map.lookup (gid, PlayerBlack) sessions == Just tok
-      = Just PlayerBlack
+      | Map.lookup (gid, PlayerWhite) sessions == Just tok =
+          Just PlayerWhite
+      | Map.lookup (gid, PlayerBlack) sessions == Just tok =
+          Just PlayerBlack
       | otherwise = Nothing

@@ -14,6 +14,14 @@ data Color
   | Black
   deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
 
+-- Player slot identifier: which position in the game
+data PlayerSlot = PlayerWhite | PlayerBlack
+  deriving (Show, Eq, Ord, Generic)
+
+instance ToJSON PlayerSlot
+
+instance FromJSON PlayerSlot
+
 type Card = String
 
 data GameMove = GameMove
@@ -52,6 +60,37 @@ validCards =
     "Rooster",
     "Tiger"
   ]
+
+-- Which player starts when this card is the common card
+cardStartPlayer :: Card -> Color
+cardStartPlayer card = case card of
+  "Boar"     -> White
+  "Cobra"    -> White
+  "Crab"     -> Black
+  "Crane"    -> Black
+  "Dragon"   -> White
+  "Eel"      -> Black
+  "Elephant" -> White
+  "Frog"     -> White
+  "Goose"    -> Black
+  "Horse"    -> White
+  "Mantis"   -> White
+  "Monkey"   -> Black
+  "Ox"       -> Black
+  "Rabbit"   -> Black
+  "Rooster"  -> White
+  "Tiger"    -> Black
+  _          -> White  -- default fallback
+
+-- Determine which player slot should make the next move based on game history and common card
+getCurrentPlayerSlot :: Game -> PlayerSlot
+getCurrentPlayerSlot (Game _ _ cards history _) =
+  let commonCard = if length cards >= 5 then cards !! 4 else ""
+      startPlayer = cardStartPlayer commonCard
+      moveCount = length history
+  in case startPlayer of
+       White -> if even moveCount then PlayerWhite else PlayerBlack
+       Black -> if even moveCount then PlayerBlack else PlayerWhite
 
 {-
 moreCards :: [Card] -- Senseis Path

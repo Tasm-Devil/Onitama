@@ -1,104 +1,251 @@
-# Onitama Multiplayer Game made with ELM and Haskell
+# Onitama
 
-## Makefile
-There's a `Makefile` included with the following targets:
+A multiplayer web implementation of the elegant abstract strategy game [Onitama](https://www.arcanewonders.com/product/onitama/), built with **Elm** and **Haskell**.
 
-- `all`   -- Calls first `setup` and then `build`
-- `setup` -- Set up everything: install ghc and dependencies. (Needs `stack`, `elm`
-  and `elm-test`.)
-- `build` -- Build the server and the client.
-- `server-start` -- Calls `build` and then starts the server. Open <http://localhost:8080/> in your Browser. Requests sent to this server will trigger a recompilation (via make) of the client code (if its changed).
-
-## JSON API
-JSON Message from Server to Client after two game moves. Last move comes first, thats fp style (Head of the List).
 ```
-{
-  "cards": ["Eel", "Rabbit", "Tiger", "Rooster", "Horse"],
-  "history": [
-    { "color": "Black", "card": "Rooster", "from": [1, 4], "move": [-1, -1] },
-    { "color": "White", "card": "Eel", "from": [2, 0], "move": [-1, 1] }
-  ]
+       Black's Temple
+              v
+    +---+---+---+---+---+
+    | p | p | K | p | p |   Black
+    +---+---+---+---+---+
+    |   |   |   |   |   |
+    +---+---+---+---+---+
+    |   |   |   |   |   |
+    +---+---+---+---+---+
+    |   |   |   |   |   |
+    +---+---+---+---+---+
+    | P | P | K | P | P |   White
+    +---+---+---+---+---+
+              ^
+       White's Temple
+```
+
+Two players face off with 5 pieces each (1 King + 4 Pawns). Each turn, play a movement card to move one piece, then swap that card with the neutral card. Capture the opponent's King or move your King to their Temple to win.
+
+> **Play the single-player version**: [tasm-devil.github.io/Onitama](https://tasm-devil.github.io/Onitama/) (no server required)
+
+---
+
+## Quick Start
+
+```bash
+# Prerequisites: stack, elm, elm-test
+
+# Build everything
+make all
+
+# Start the server (includes hot-reload for client)
+make server-start
+
+# Open http://localhost:8080 in your browser
+```
+
+---
+
+## Architecture
+
+```
++------------------+          +------------------+
+|                  |   HTTP   |                  |
+|   Elm Client     | <------> |  Haskell Server  |
+|                  |          |                  |
+|  - Game rules    |          |  - State store   |
+|  - UI/UX         |          |  - Sessions      |
+|  - Win detection |          |  - Persistence   |
++------------------+          +------------------+
+```
+
+### Design Philosophy: Game-Agnostic Server
+
+The server intentionally knows **nothing about Onitama rules**. It's a pure "move broker":
+
+| Server Does | Server Does NOT |
+|------------|-----------------|
+| Store game state | Validate moves |
+| Manage sessions | Check win conditions |
+| Persist to JSON | Know card rules |
+| Route messages | Enforce turn order* |
+
+*Turn order is based on the common card's color stamp, which the server looks up.
+
+**Why?** This separation means:
+- Server code is reusable for any turn-based game
+- Game logic updates don't require server redeployment
+- A future "Referee" client could optionally validate moves for competitive play
+
+### Tech Stack
+
+| Layer | Technology | Pattern |
+|-------|------------|---------|
+| Frontend | Elm 0.19.1 | [TEA](https://guide.elm-lang.org/architecture/) (The Elm Architecture) |
+| Backend | Haskell + Servant | Type-safe REST API |
+| Persistence | JSON file | Auto-save every 30s via STM |
+
+---
+
+## Project Structure
+
+```
+client/src/
+  Main.elm              # Routing, page states, game setup
+  Api.elm               # HTTP client
+  Lobby.elm             # Game browser UI
+  Ports.elm             # localStorage interop
+  Game/
+    Game.elm            # Core game logic, board rendering
+    Card.elm            # Card definitions + movement patterns
+    Figure.elm          # Piece types (King/Pawn)
+    Cell.elm            # Board cell rendering
+
+server/src/
+  Api.hs                # Servant route definitions
+  App.hs                # Request handlers
+  Game.hs               # Game data types + turn logic
+  Database.hs           # JSON persistence, sessions
+
+assets/                 # Static files served to browser
+```
+
+---
+
+## API Reference
+
+Base URL: `http://localhost:8080`
+
+| Method | Endpoint | Query Params | Body | Description |
+|--------|----------|--------------|------|-------------|
+| `POST` | `/1/onitama/new` | - | - | Create new game, returns `GameId` |
+| `GET` | `/1/onitama/summary` | - | - | List all games as `[GameSummary]` |
+| `PUT` | `/1/onitama` | `table`, `name`, `token?` | - | Join game (or rejoin with token) |
+| `GET` | `/1/onitama` | `table` | - | Get game state |
+| `POST` | `/1/onitama` | `table`, `token` | `GameMove` | Submit a move |
+| `POST` | `/1/onitama/concede` | `table`, `token` | - | Concede the game, returns winner `Color` |
+| `GET` | `/:gameId` | - | - | Serve game HTML page |
+
+### Data Types
+
+```haskell
+GameId       = Int
+SessionToken = Text (UUID)
+Color        = "White" | "Black"
+GameStatus   = "WaitingForPlayers" | "InProgress" | "Completed"
+
+GameMove = {
+  color: Color,
+  card:  String,
+  from:  [Int, Int],
+  move:  [Int, Int]
+}
+
+GameSummary = {
+  summaryId:        GameId,
+  summaryPlayer1:   String,
+  summaryPlayer2:   String,
+  summaryMoveCount: Int,
+  summaryStatus:    GameStatus
+}
+
+JoinGameResponse = {
+  responseGame:  Game,
+  responseToken: SessionToken
 }
 ```
 
-JSON Message from Client to server after third game move.
-```
-{"color":"White","card":"Rabbit","from":[3,0],"move":[1,1]}
-```
+### Example Session
 
+```bash
+# Create a new game
+curl -X POST localhost:8080/1/onitama/new
+# Returns: 1
 
-## Client
-The Game logic is implemented entirely on the client side only.
-So there's no checking for cheating on the server side currently!
-This is on purpose because I want to use it for demonstration.
+# Alice joins as White
+curl -X PUT "localhost:8080/1/onitama?table=1&name=Alice"
+# Returns: {"responseGame": {...}, "responseToken": "abc-123..."}
 
-Feel free to play the older [non-multiplayer version here ](https://tasm-devil.github.io/Onitama/) since it doesn't want you to setup a backend server.
+# Bob joins as Black
+curl -X PUT "localhost:8080/1/onitama?table=1&name=Bob"
+# Returns: {"responseGame": {...}, "responseToken": "def-456..."}
 
-### Thanks
-- Inspiration came from [here](https://github.com/Lanny/Onitama)
-- Http-Server HowTo from [here](https://elmprogramming.com/decoding-json-part-1.html)
+# Alice makes a move
+curl -X POST "localhost:8080/1/onitama?table=1&token=abc-123..." \
+  -H "Content-Type: application/json" \
+  -d '{"color":"White","card":"Tiger","from":[2,0],"move":[0,2]}'
 
-## Server
-The Server is my first haskell project. So don't expect very much. I still do not understand monads ;)
-
-### Test with curl
-
-You can easily test the API with some simple curl commands. The 1 before /onitama is the API Version.
-
-```
-Get all Games:
-curl http://localhost:8080/1/onitama/summary -w "\n"
-
-Alice posts a new Game and gets a table-number (= game-number):
-curl -X POST http://localhost:8080/1/onitama/new -w "\n"
-
-Response: ID (ID is table/game id e.g: 3)
-
-Alice joins her new table 3:
-curl -X PUT "http://localhost:8080/1/onitama?table=3&name=Alice" -w "\n"
-
-Response: responseGame, responseToken (e.g.: a4cd5ddc-71a3-41a2-bff2-0c516df006d3)
-
-Bob joins table 3 as black Player (and leaves it):
-curl -X PUT "http://localhost:8080/1/onitama?table=3&name=Bob" -w "\n"
-
-Response: responseGame, responseToken (e.g.: f5ea6fb0-2527-46d8-b0ab-9e861cf55395)
-
-Bob rejoins table 3:
-curl -X PUT "http://localhost:8080/1/onitama?table=3&name=Bob&token=f5ea6fb0-2527-46d8-b0ab-9e861cf55395" -w "\n"
-
-Response: responseGame and old responseToken (e.g.: f5ea6fb0-2527-46d8-b0ab-9e861cf55395)
-
-Bob posts a new GameMove to Game 3:
-curl -X POST -d '{"color": "White","card": "Ox","from": [3,0],"move": [0,1]}' -H 'Content-Type: application/json' "http://localhost:8080/1/onitama?table=3&token=a4cd5ddc-71a3-41a2-bff2-0c516df006d3" -w "\n"
-
-Response: {"color": "White","card": "Ox","from": [3,0],"move": [0,1]}
-
-Alice fetches Game 3 to see Bobs last move:
-curl "http://localhost:8080/1/onitama?table=3" -w "\n"
+# Bob fetches the updated game state
+curl "localhost:8080/1/onitama?table=1"
 ```
 
-## ToDos
-In the order in which I would like to tackle them.
+### Game State JSON
 
-- [X] GetGame with UUID in the URL should work to
-- [X] GetGames should also return all playernames with gameids.
-- [X] GameIds from 1 to infinity instead of UUID
-- [X] Change API to /VERSION/GAMENAME?table=GAMEID
-- [X] Authetification by player name using sessions-ids
-- [X] Save sessions in local storage
-- [ ] Implement http polling temporarily.
-- [ ] The common card should determine, which player starts the game.
-- [ ] Check for checkmate!
-- [ ] JSON for GameMove is to verbose. Simplyfy it to something like `{"move":"white:c1b2:elephant"}`
-- [ ] Use WebSocket to get new moves without the need to do http polling.
-- [ ] Implement Chat feature
-- [ ] Add support for the Cards from the Senseis Path explansion.
+```json
+{
+  "cards": ["Tiger", "Crab", "Monkey", "Crane", "Dragon"],
+  "history": [
+    {"color": "White", "card": "Tiger", "from": [2, 0], "move": [0, 2]}
+  ],
+  "player_white": "Alice",
+  "player_black": "Bob",
+  "winner": null
+}
+```
+
+Cards order: `[White1, White2, Black1, Black2, Common]`
+
+The common card (5th) determines who moves first based on its color stamp.
+
+---
+
+## Build Commands
+
+| Command | Description |
+|---------|-------------|
+| `make all` | Full setup + build |
+| `make server-start` | Build and run (port 8080), hot-reloads client |
+| `make client-build` | Build Elm frontend only |
+| `make server-build` | Build Haskell backend only |
+| `make test` | Run all tests |
+| `make clean` | Remove build artifacts |
+
+### Docker
+
+```bash
+make all
+docker build -t onitama:latest .
+docker run -p 8080:8080 onitama:latest
+```
+
+---
+
+## Roadmap
+
+- [x] Sequential game IDs (instead of UUIDs)
+- [x] Clean API structure `/VERSION/GAME?table=ID`
+- [x] Session-based authentication per game
+- [x] Persist sessions in localStorage
+- [x] Win detection (capture King / reach Temple)
+- [x] Common card determines starting player
+- [ ] Simplify move format to `w:a1b2:tiger` (game-agnostic)
+- [ ] Server sends random seed, client generates cards
+- [ ] Move token to HTTP header
+- [ ] Global auth system (email + 6-digit code)
+- [ ] WebSocket for real-time updates
+- [ ] In-game chat
+- [ ] Sensei's Path expansion cards
 
 ### Expansion Cards
 
-- Senseis Path ([image](https://www.gadgetsville.store/wp-content/uploads/2017/12/16096-c.jpg))
-- Promo Cards ([link](https://www.arcanewonders.com/product/onitama-promo-cards/))
+- [Sensei's Path](https://www.gadgetsville.store/wp-content/uploads/2017/12/16096-c.jpg) - 16 additional cards
+- [Promo Cards](https://www.arcanewonders.com/product/onitama-promo-cards/) - Special edition cards
 
-## Thanks
-Thanks to <https://github.com/haskell-servant/example-servant-elm>
+---
+
+## Acknowledgments
+
+- Game design: Shimpei Sato, published by Arcane Wonders
+- Inspiration: [Lanny/Onitama](https://github.com/Lanny/Onitama)
+- Elm HTTP guide: [elmprogramming.com](https://elmprogramming.com/decoding-json-part-1.html)
+- Servant + Elm integration: [example-servant-elm](https://github.com/haskell-servant/example-servant-elm)
+
+---
+
+*This is a learning project exploring functional programming on both frontend (Elm) and backend (Haskell). Contributions welcome!*

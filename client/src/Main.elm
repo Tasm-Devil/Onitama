@@ -3,6 +3,7 @@ module Main exposing (main)
 import Api exposing (Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
+import Game.Card exposing (dummyCard)
 import Game.Figure exposing (Color(..))
 import Game.Game as Game exposing (Game, GameMove, GameState(..), Msg(..))
 import Html exposing (Html)
@@ -256,6 +257,9 @@ transformGameMove g =
 buildGame : String -> ServerGame -> Game
 buildGame name servergame =
     let
+        commonCard =
+            Maybe.withDefault dummyCard (List.head <| List.drop 4 <| servergame.cards)
+
         newgame =
             Game.setupNewGame servergame.cards
                 (if name == servergame.player_black then
@@ -264,9 +268,7 @@ buildGame name servergame =
                  else
                     White
                 )
-                White
-
-        -- ToDo: White is not always the first player!
+                commonCard.startPlayer
     in
     List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
 

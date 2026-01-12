@@ -6,8 +6,8 @@ import Svg.Attributes as SvgA
 
 
 type Color
-    = White
-    | Black
+    = White -- red
+    | Black -- blue
 
 
 invert : Color -> Color

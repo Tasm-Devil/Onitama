@@ -4,10 +4,9 @@
 module App where
 
 import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
-import Game (Game (Game), GameMove, give5Cards, Color)
+import Game (Game (Game), GameMove, give5Cards, Color, PlayerSlot(..), getCurrentPlayerSlot)
 import Database
   ( DB,
-    PlayerSlot (..),
     initDB,
     markDBChanged,
     logDBState,
@@ -19,7 +18,6 @@ import Database
     forceSave,
     joinGameWithToken,
     validateToken,
-    getCurrentPlayerSlot,
     concedeGame
   )
 import Control.Monad.IO.Class (liftIO)
