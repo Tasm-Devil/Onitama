@@ -159,20 +159,20 @@ getGameIdFromServer =
 joinGame : GameId -> String -> Maybe SessionToken -> Cmd Msg
 joinGame gameid name maybeToken =
     let
-        tokenParam =
+        tokenHeader =
             case maybeToken of
                 Just token ->
-                    "&token=" ++ token
-                
+                    [ Http.header "X-Session-Token" token ]
+
                 Nothing ->
-                    ""
+                    []
     in
     Http.request
         { method = "PUT"
-        , headers = []
-        , url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&name=" ++ name ++ tokenParam
+        , headers = tokenHeader
+        , url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&name=" ++ name
         , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedJoinGameResponse (Decode.nullable decodeJoinGameResponse |> Decode.andThen (\maybeResponse -> 
+        , expect = Http.expectJson ReceivedJoinGameResponse (Decode.nullable decodeJoinGameResponse |> Decode.andThen (\maybeResponse ->
             case maybeResponse of
                 Just response -> Decode.succeed response
                 Nothing -> Decode.fail "Server returned null - game not found or full"
@@ -200,19 +200,27 @@ getGameFromServer gameid =
 
 postNewGameMove : GameId -> SessionToken -> Game.GameMove -> Cmd Msg
 postNewGameMove gameid token gameMove =
-    Http.post
-        { url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&token=" ++ token
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "X-Session-Token" token ]
+        , url = "/1/onitama?table=" ++ String.fromInt gameid
         , body = Http.jsonBody (encodeGameMove gameMove)
         , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
 concede : GameId -> SessionToken -> Cmd Msg
 concede gameid token =
-    Http.post
-        { url = "/1/onitama/concede?table=" ++ String.fromInt gameid ++ "&token=" ++ token
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "X-Session-Token" token ]
+        , url = "/1/onitama/concede?table=" ++ String.fromInt gameid
         , body = Http.emptyBody
         , expect = Http.expectJson ReceivedConcedeResponse (Decode.nullable decodeColor)
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 

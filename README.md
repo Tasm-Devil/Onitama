@@ -116,11 +116,13 @@ Base URL: `http://localhost:8080`
 |--------|----------|--------------|------|-------------|
 | `POST` | `/1/onitama/new` | - | - | Create new game, returns `GameId` |
 | `GET` | `/1/onitama/summary` | - | - | List all games as `[GameSummary]` |
-| `PUT` | `/1/onitama` | `table`, `name`, `token?` | - | Join game (or rejoin with token) |
+| `PUT` | `/1/onitama` | `table`, `name` | - | Join game (or rejoin with token header) |
 | `GET` | `/1/onitama` | `table` | - | Get game state |
-| `POST` | `/1/onitama` | `table`, `token` | `GameMove` | Submit a move |
-| `POST` | `/1/onitama/concede` | `table`, `token` | - | Concede the game, returns winner `Color` |
+| `POST` | `/1/onitama` | `table` | `GameMove` | Submit a move (requires token header) |
+| `POST` | `/1/onitama/concede` | `table` | - | Concede the game (requires token header) |
 | `GET` | `/:gameId` | - | - | Serve game HTML page |
+
+**Authentication**: Routes that modify game state require the `X-Session-Token` header.
 
 ### Data Types
 
@@ -165,7 +167,8 @@ curl -X PUT "localhost:8080/1/onitama?table=1&name=Bob"
 # Returns: {"responseGame": {...}, "responseToken": "def-456..."}
 
 # Alice makes a move (format: "color:from+to:card")
-curl -X POST "localhost:8080/1/onitama?table=1&token=abc-123..." \
+curl -X POST "localhost:8080/1/onitama?table=1" \
+  -H "X-Session-Token: abc-123..." \
   -H "Content-Type: application/json" \
   -d '"w:c1c3:tiger"'
 
@@ -221,9 +224,9 @@ docker run -p 8080:8080 onitama:latest
 - [x] Persist sessions in localStorage
 - [x] Win detection (capture King / reach Temple)
 - [x] Common card determines starting player
-- [x] Simplify move format to `w:c1c3:tiger` (game-agnostic)
+- [x] Simplify move format to `w:c1c3:tiger`
+- [x] Move token to HTTP header (`X-Session-Token`)
 - [ ] Server sends random seed, client generates cards
-- [ ] Move token to HTTP header
 - [ ] Global auth system (email + 6-digit code)
 - [ ] WebSocket for real-time updates
 - [ ] In-game chat

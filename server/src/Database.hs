@@ -4,15 +4,7 @@ module Database where
 
 import Api (GameId (..), GameStatus (..), GameSummary (..), Games, JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.STM
-  ( TVar,
-    atomically,
-    modifyTVar,
-    newTVarIO,
-    readTVar,
-    readTVarIO,
-    writeTVar,
-  )
+import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
@@ -27,7 +19,7 @@ import qualified Data.Text as T
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
-import Game (Color (..), Game (Game), PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
+import Game (Color (..), Game (..), PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
 import System.Directory (doesFileExist)
 
 -- Session key: (GameId, PlayerSlot)
@@ -53,25 +45,23 @@ dbFilePath = "gamedb.json"
 -- Load database from file or create a new one if file doesn't exist
 loadDB :: IO (TVar DBState)
 loadDB = do
-  putStrLn $ "Looking for database file at: " ++ dbFilePath
   fileExists <- doesFileExist dbFilePath
   initialDB <-
     if fileExists
       then do
-        putStrLn "Database file found, loading..."
         fileContent <- Lazy.readFile dbFilePath
         let maybeDB = decode fileContent
         case maybeDB of
           Just db -> do
             let gameCount = Map.size (dbGames db)
-            putStrLn $ "Successfully loaded database with " ++ show gameCount ++ " games"
+            putStrLn $ "Successfully loaded database at " ++ dbFilePath ++ " with " ++ show gameCount ++ " games"
             return db
           Nothing -> do
-            putStrLn "Failed to parse database file, starting with empty DB"
-            return $ DBState empty 1 empty False
+            putStrLn $ "Failed to parse database file at " ++ dbFilePath ++ " , starting with empty DB"
+            return $ DBState { dbGames = empty, dbNextId = 1, dbSessions = empty, dbHasChanged = False }
       else do
-        putStrLn "Database file not found, starting with empty DB"
-        return $ DBState empty 1 empty False
+        putStrLn $ "Database file at " ++ dbFilePath ++ " not found, starting with empty DB"
+        return $ DBState { dbGames = empty, dbNextId = 1, dbSessions = empty, dbHasChanged = False }
   newTVarIO initialDB
 
 -- Save database to file with pretty printing
@@ -86,20 +76,16 @@ saveDB dbVar = do
 
   let gameCount = Map.size (dbGames dbState)
 
-  if dbHasChanged dbState
-    then do
-      putStrLn $ "Saving database with " ++ show gameCount ++ " games to " ++ dbFilePath
-      -- Use pretty printing for human-readable JSON
-      let encoderConfig =
-            Pretty.defConfig
-              { Pretty.confIndent = Pretty.Spaces 2,
-                Pretty.confCompare = compare
-              }
-      let encodedDB = Pretty.encodePretty' encoderConfig dbState
-      putStrLn $ "JSON size: " ++ show (Lazy.length encodedDB) ++ " bytes"
-      Lazy.writeFile dbFilePath encodedDB
-      putStrLn "Database saved to file successfully (pretty-printed)"
-    else return ()
+  when (dbHasChanged dbState) $ do
+    -- Use pretty printing for human-readable JSON
+    let encoderConfig =
+          Pretty.defConfig
+            { Pretty.confIndent = Pretty.Spaces 2,
+              Pretty.confCompare = compare
+            }
+    let encodedDB = Pretty.encodePretty' encoderConfig dbState
+    Lazy.writeFile dbFilePath encodedDB
+    putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
 
 -- Start periodic saving of database
 startPeriodicSave :: TVar DBState -> IO ()
@@ -109,7 +95,6 @@ startPeriodicSave dbVar = do
   _ <- forkIO $ forever $ do
     saveDB dbVar
     threadDelay (30 * 1000000) -- 30 seconds for testing (instead of 10 minutes)
-  putStrLn "Periodic save thread started"
   return ()
 
 -- Log current database state
@@ -155,7 +140,7 @@ insertGameWithNewId (DB dbVar) = do
     let newId = GameId (dbNextId state)
     modifyTVar dbVar $ \s ->
       s
-        { dbGames = Map.insert newId (Game "" "" newCards [] Nothing) (dbGames s),
+        { dbGames = Map.insert newId (Game { player_white = "", player_black = "", cards = newCards, history = [], winner = Nothing }) (dbGames s),
           dbNextId = dbNextId s + 1,
           dbHasChanged = True
         }
@@ -278,9 +263,9 @@ joinGameWithToken db@(DB dbVar) gameId playerName maybeProvidedToken = do
             else do
               -- New player, find empty slot
               let (slot, updatedGame)
-                    | null p1 && null p2 = (PlayerWhite, Game playerName "" cards history Nothing)
-                    | null p1 = (PlayerWhite, Game playerName p2 cards history Nothing)
-                    | null p2 = (PlayerBlack, Game p1 playerName cards history Nothing)
+                    | null p1 && null p2 = (PlayerWhite, Game { player_white = playerName, player_black = "", cards = cards, history = history, winner = Nothing })
+                    | null p1 = (PlayerWhite, Game { player_white = playerName, player_black = p2, cards = cards, history = history, winner = Nothing })
+                    | null p2 = (PlayerBlack, Game { player_white = p1, player_black = playerName, cards = cards, history = history, winner = Nothing })
                     | otherwise = (PlayerWhite, game) -- dummy, will return Nothing
               if game == updatedGame
                 then do
@@ -324,7 +309,7 @@ concedeGame db@(DB dbVar) gameId token = do
         case Map.lookup gameId (dbGames currentState) of
           Nothing -> return False
           Just (Game p1 p2 cards history _) -> do
-            let updatedGame = Game p1 p2 cards history (Just winnerColor)
+            let updatedGame = Game { player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor }
             writeTVar dbVar $
               currentState
                 { dbGames = Map.insert gameId updatedGame (dbGames currentState),

@@ -20,6 +20,7 @@ import Servant
     Capture,
     FromHttpApiData,
     Get,
+    Header,
     JSON,
     MimeRender (..),
     Post,
@@ -88,13 +89,13 @@ type NewGame = "1" :> "onitama" :> "new" :> Post '[JSON] GameId
 
 type GetGameSummaries = "1" :> "onitama" :> "summary" :> Get '[JSON] [GameSummary]
 
-type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> QueryParam "token" SessionToken :> Put '[JSON] (Maybe JoinGameResponse)
+type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> Header "X-Session-Token" SessionToken :> Put '[JSON] (Maybe JoinGameResponse)
 
 type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (Maybe Game)
 
-type NewMove = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
+type NewMove = "1" :> "onitama" :> QueryParam "table" GameId :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
 
-type Concede = "1" :> "onitama" :> "concede" :> QueryParam "table" GameId :> QueryParam "token" SessionToken :> Post '[JSON] (Maybe Color)
+type Concede = "1" :> "onitama" :> "concede" :> QueryParam "table" GameId :> Header "X-Session-Token" SessionToken :> Post '[JSON] (Maybe Color)
 
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 

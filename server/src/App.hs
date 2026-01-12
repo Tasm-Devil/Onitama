@@ -4,7 +4,7 @@
 module App where
 
 import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
-import Game (Game (Game), GameMove, give5Cards, Color, PlayerSlot(..), getCurrentPlayerSlot)
+import Game (Game (..), GameMove, give5Cards, Color, PlayerSlot(..), getCurrentPlayerSlot)
 import Database
   ( DB,
     initDB,
@@ -37,28 +37,38 @@ import Servant
     hoistServer,
     serve,
     type (:<|>) (..),
+    throwError,
+    err404, unTagged,
   )
+import System.Directory (doesFileExist)
 
+-- | WAI Application entry point
 app :: IO Application
-app = serve apiWithAssets <$> server
+app = serve apiWithAssets <$> makeServer
 
+-- | Custom monad for handlers: gives access to DB via ReaderT
 type AppM = ReaderT DB Handler
 
-server :: IO (Server APIWithAssets)
-server = do
+-- | Build the complete server: typed API routes + static file serving
+makeServer :: IO (Server APIWithAssets)
+makeServer = do
   putStrLn "Starting server..."
-  let assets = staticApp $ defaultFileServerSettings "assets/"
   db <- initDB
   putStrLn "Server initialized successfully"
-  return (readerServer db :<|> Tagged assets)
-  where
-    readerToHandler :: DB -> AppM a -> Handler a
-    readerToHandler db appM = runReaderT appM db
-    readerServer :: DB -> ServerT API Handler
-    readerServer db = hoistServer api (readerToHandler db) apiServer
 
-apiServer :: ServerT API AppM
-apiServer = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMove :<|> concede :<|> getIndexHtml
+  let staticFileServer = staticApp $ defaultFileServerSettings "assets/"
+      apiHandlers      = hoistServer api (runAppM db) handlers
+
+  -- Combine: try API routes first, fall back to static files
+  return (apiHandlers :<|> Tagged { unTagged = staticFileServer })
+
+-- | Convert our AppM monad to Servant's Handler monad
+runAppM :: DB -> AppM a -> Handler a
+runAppM db action = runReaderT action db
+
+-- | All API route handlers
+handlers :: ServerT API AppM
+handlers = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMove :<|> concede :<|> getIndexHtml
 
 newGame :: AppM GameId
 newGame = do
@@ -128,7 +138,7 @@ newMove maybeGameId maybeToken move = do
             return Nothing
           else do
             -- Token is valid, process the move
-            let updateGameFn (Game p1 p2 cards history w) = Just $ Game p1 p2 cards (move : history) w
+            let updateGameFn (Game p1 p2 cards history w) = Just $ Game { player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w }
             success <- liftIO $ updateGame db gameId updateGameFn
             if success then do
               liftIO $ putStrLn "Move accepted"
@@ -145,9 +155,12 @@ concede maybeGameId maybeToken = do
     _ -> return Nothing
 
 getIndexHtml :: GameId -> AppM RawHtml
-getIndexHtml gameId = do
-  bs <- liftIO $ Lazy.readFile "assets/index.html"
-  return $ RawHtml bs
+getIndexHtml _ = do
+  let path = "assets/index.html"
+  exists <- liftIO $ doesFileExist path
+  if exists
+    then RawHtml <$> liftIO (Lazy.readFile path)
+    else throwError err404
 
 
 
