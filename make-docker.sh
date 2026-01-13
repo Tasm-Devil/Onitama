@@ -1,12 +1,11 @@
 #!/bin/sh
 
-make build
-docker build -t onitama-server .
-# docker build -f Dockerfile.full-build -t onitama-server .
-
-
-docker run -it -p 8080:8080 --rm onitama-server:latest 
+make all
+docker build -t onitama:latest .
+# docker build -f Dockerfile.full-build -t onitama-haskell .
+docker run -p 8080:8080 onitama:latest 
 
 # docker images
-# docker rmi onitama-server:latest
+# docker rmi onitama:latest
 # docker system prune -a
+# docker save onitama:latest > onitama.tar

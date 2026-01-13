@@ -22,7 +22,8 @@ A multiplayer web implementation of the elegant abstract strategy game [Onitama]
 
 Two players face off with 5 pieces each (1 King + 4 Pawns). Each turn, play a movement card to move one piece, then swap that card with the neutral card. Capture the opponent's King or move your King to their Temple to win.
 
-> **Play the single-player version**: [tasm-devil.github.io/Onitama](https://tasm-devil.github.io/Onitama/) (no server required)
+> **Play the latest version**: [https://onitama.deneaux.de/](https://onitama.deneaux.de/) (only for testing)
+> **Play the old serverless version**: [tasm-devil.github.io/Onitama](https://tasm-devil.github.io/Onitama/) (no server required)
 
 ---
 
