@@ -228,10 +228,13 @@ docker run -p 8080:8080 onitama:latest
 - [x] Common card determines starting player
 - [x] Simplify move format to `w:c1c3:tiger`
 - [x] Move token to HTTP header (`X-Session-Token`)
+- [ ] **Timestamps** for games and moves (detect abandoned games)
+- [ ] **Per-player token system** (global player identity)
+- [ ] **Footer component** with project info and GitHub link
+- [ ] **CSS improvements** (responsive, animations, better aesthetics)
 - [ ] Let visitors join a game for watching
 - [ ] playback gamemoves
-- [ ] WebSocket for real-time updates
-- [ ] In-game chat
+- [ ] Maybe **WebSockets** for real-time updates and In-game chat
 - [ ] Server sends random seed, client generates cards
 - [ ] Global auth system (email + 6-digit code)
 - [ ] Sensei's Path expansion cards

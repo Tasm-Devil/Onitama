@@ -14,6 +14,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import Lobby exposing (GameId, Model, Msg(..), Status(..))
 import Ports
+import Time
 import Url exposing (Url)
 
 
@@ -54,8 +55,30 @@ init _ url key =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Ports.loadSession SessionLoadedFromStorage
+subscriptions model =
+    let
+        sessionSub =
+            Ports.loadSession SessionLoadedFromStorage
+
+        pollingSub =
+            case model of
+                Playing _ _ _ _ game _ _ ->
+                    -- Poll every 2 seconds during active games
+                    case game.state of
+                        GameOver _ ->
+                            Sub.none
+
+                        _ ->
+                            Time.every 2000 Tick
+
+                Lobby _ _ ->
+                    -- Poll every 3 seconds in lobby for new games
+                    Time.every 3000 Tick
+
+                _ ->
+                    Sub.none
+    in
+    Sub.batch [ sessionSub, pollingSub ]
 
 
 main : Program () Model Msg
@@ -109,8 +132,7 @@ view model =
                         |> List.map (Html.map GotGameMsg)
                      )
                         ++ [ Html.div []
-                                [ Html.input [ HtmlA.type_ "button", HtmlA.value "Update", onClick RequestGameFromServer ] []
-                                , viewHistory history
+                                [ viewHistory history
                                 ]
                            ]
                     )
@@ -286,6 +308,7 @@ type Msg
     | RequestGameFromServer
     | SessionLoadedFromStorage Encode.Value
     | GotServerMsg Api.Msg
+    | Tick Time.Posix
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -314,6 +337,20 @@ update msg model =
 
         GotServerMsg servermsg ->
             handleServerMsg servermsg model
+
+        Tick _ ->
+            -- Auto-poll for updates
+            case model of
+                Playing _ _ _ _ _ _ _ ->
+                    -- Poll for game state updates
+                    handleRequestGame model
+
+                Lobby _ _ ->
+                    -- Poll for lobby/game summaries updates
+                    ( model, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 
@@ -549,6 +586,10 @@ handleGameSummaries result model =
         ( Err _, Redirect key _ sessions ) ->
             ( Lobby { status = Home [], key = key } sessions, Cmd.none )
 
+        ( Ok summaries, Lobby lobby sessions ) ->
+            -- Update lobby with fresh game summaries (from polling)
+            ( Lobby { lobby | status = Home summaries } sessions, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
 
@@ -652,27 +693,34 @@ joinGameSuccess key gameid name joinResponse sessions shouldSaveSession =
 handleGameUpdate : Result Http.Error Api.ServerGame -> Model -> ( Model, Cmd Msg )
 handleGameUpdate result model =
     case ( result, model ) of
-        ( Ok servergame, Playing key gameid name token game _ sessions ) ->
+        ( Ok servergame, Playing key gameid name token game currentHistory sessions ) ->
             case game.state of
                 GameOver _ ->
                     ( Playing key gameid name token game servergame.history sessions, Cmd.none )
 
                 _ ->
-                    List.head servergame.history
-                        |> Maybe.map
-                            (\gameMove ->
-                                let
-                                    updatedGame =
-                                        game |> Game.update (NewGameMove <| transformGameMove gameMove)
+                    -- Only update if there's a NEW move (server history changed)
+                    if List.head servergame.history == List.head currentHistory then
+                        -- No new moves, keep current game state (preserves UI like selected pieces)
+                        ( model, Cmd.none )
 
-                                    concedeCmd =
-                                        checkAndConcede updatedGame gameid token
-                                in
-                                ( Playing key gameid name token updatedGame servergame.history sessions
-                                , concedeCmd
+                    else
+                        -- New move detected, apply it
+                        List.head servergame.history
+                            |> Maybe.map
+                                (\gameMove ->
+                                    let
+                                        updatedGame =
+                                            game |> Game.update (NewGameMove <| transformGameMove gameMove)
+
+                                        concedeCmd =
+                                            checkAndConcede updatedGame gameid token
+                                    in
+                                    ( Playing key gameid name token updatedGame servergame.history sessions
+                                    , concedeCmd
+                                    )
                                 )
-                            )
-                        |> Maybe.withDefault ( model, Cmd.none )
+                            |> Maybe.withDefault ( model, Cmd.none )
 
         _ ->
             ( model, Cmd.none )

@@ -9,6 +9,7 @@ import Network.Wai.Middleware.Cors
       simpleCorsResourcePolicy,
       CorsResourcePolicy(corsMethods, corsRequestHeaders) )
 import Network.Wai.Middleware.RequestLogger (logStdoutDev)
+-- ^ Uncomment logStdoutDev in main function below for verbose request logging
 
 
 
@@ -22,4 +23,7 @@ policy =
 main :: IO ()
 main = do
     let port = 8080
-    run port . logStdoutDev . cors (const $ Just policy) =<< app
+    putStrLn $ "Starting Onitama server on port " ++ show port
+    -- For verbose request logging, replace the line below with:
+    -- run port . logStdoutDev . cors (const $ Just policy) =<< app
+    run port . cors (const $ Just policy) =<< app

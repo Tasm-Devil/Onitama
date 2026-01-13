@@ -102,10 +102,197 @@ Base URL: `http://localhost:8080/1/onitama`
 - **Haskell**: hspec framework in `server/test/` (currently minimal)
 - **Elm**: No tests yet (can add with elm-test)
 
-## Known Limitations / TODOs
+## TODO
 
-- No server-side move validation (cheating possible)
-- No checkmate/win detection on server
+### 1. Add Timestamps for Game Lifecycle Management
+**Priority: HIGH** (required for production)
+
+**Backend (Haskell)**:
+- Add `createdAt :: UTCTime` field to `Game` type in `server/src/Game.hs`
+- Add `lastActivity :: UTCTime` field to `Game` type
+- Add `timestamp :: UTCTime` field to each move in history (make history `[(GameMove, UTCTime)]`)
+- Update `lastActivity` on every move submission
+- Add periodic cleanup job to delete abandoned games (e.g., `lastActivity > 24 hours`)
+- Ensure timestamps are serialized in ISO8601 format in `gamedb.json`
+
+**Frontend (Elm)**:
+- Update `Game` decoder in `client/src/Api.elm` to parse timestamps
+- Display "Last activity: X minutes ago" in lobby for each game
+- Add visual indicator for stale games (e.g., grayed out if > 1 hour inactive)
+
+**Database Schema Change**:
+```json
+{
+  "dbGames": {
+    "1": {
+      "createdAt": "2026-01-13T10:30:00Z",
+      "lastActivity": "2026-01-13T10:35:00Z",
+      "cards": [...],
+      "history": [
+        {"move": "w:c1c3:tiger", "timestamp": "2026-01-13T10:35:00Z", "playerId": "1"}
+      ],
+      ...
+    }
+  }
+}
+```
+
+### 2. Add Footer Component
+**Priority: MEDIUM** (polish)
+
+**Frontend (Elm)**:
+- Create `client/src/Footer.elm` with reusable footer view
+- Include:
+  - "Made with Elm and Haskell ❤️" (user preference on emoji)
+  - GitHub link: `https://github.com/Tasm-Devil/Onitama`
+  - Game rules link (optional)
+  - Version/commit hash (from build-time env var?)
+- Import and display in:
+  - `Lobby.elm` (always visible)
+  - `Game/Game.elm` (optional, may clutter during play)
+  - `Main.elm` on error/redirect pages
+
+**Styling**:
+- Fixed bottom or bottom-of-page?
+- Match current minimal aesthetic
+
+### 3. Improve CSS and Visual Design
+**Priority: LOW** (can be iterative)
+
+**Considerations**:
+- Keep it lightweight (no heavy frameworks unless justified)
+- Mobile responsive (media queries)
+- Better board/card aesthetics:
+  - Card hover effects
+  - Piece movement animations
+  - Board grid improvements
+- Consider:
+  - Tailwind CSS (utility-first, tree-shakeable)
+  - Pure CSS custom properties (simple, no build step)
+  - Current approach works, just needs refinement
+
+**Subtasks** (can be broken down later):
+- Responsive layout for mobile
+- Hover states and transitions
+- Better color scheme
+- Accessible focus states
+
+### 4. Migrate to Per-Player Token System
+**Priority: HIGH** (architectural change, do before adding more features)
+
+**Current**: Token per game per player `[{gameId, playerName, token}]`
+**Target**: Token per player globally `[{playerId, playerName, token}]`
+
+**Backend (Haskell)**:
+- Create new `Player` type in `server/src/Database.hs`:
+  ```haskell
+  data Player = Player
+    { playerId   :: PlayerId    -- Integer
+    , playerName :: Text
+    , playerToken :: SessionToken -- UUID
+    , createdAt  :: UTCTime
+    }
+  ```
+- Add `dbPlayers :: Map PlayerId Player` to database
+- Add `dbNextPlayerId :: Int` counter
+- Change `Game` to reference `PlayerId` instead of player names:
+  ```haskell
+  data Game = Game
+    { gameCards        :: [Card]
+    , gameHistory      :: [(GameMove, UTCTime, PlayerId)]
+    , gamePlayerWhite  :: Maybe PlayerId
+    , gamePlayerBlack  :: Maybe PlayerId
+    , gameWinner       :: Maybe Winner
+    , gameCreatedAt    :: UTCTime
+    , gameLastActivity :: UTCTime
+    }
+  ```
+- Update API endpoints to work with player IDs:
+  - `/new` returns `PlayerId` on first join
+  - Join endpoint creates/reuses player record
+  - Token validates against `dbPlayers`, not per-game
+
+**Frontend (Elm)**:
+- Update localStorage structure:
+  ```javascript
+  // Old: [{ gameId: 1, playerName: "Alice", token: "..." }]
+  // New: { playerId: "1", playerName: "Alice", token: "..." }
+  ```
+- Update `Ports.elm` to store single player identity
+- Update API client to send player ID with requests
+- Handle name changes (allow player to update display name?)
+
+**Database Migration**:
+- Write migration script to convert existing `gamedb.json`
+- Extract unique players from existing games
+- Generate player IDs and assign to games
+- Preserve existing tokens if possible (or invalidate and require re-login)
+
+**Database Schema (Final)**:
+```json
+{
+  "dbGames": {
+    "1": {
+      "createdAt": "2026-01-13T10:30:00Z",
+      "lastActivity": "2026-01-13T10:35:00Z",
+      "cards": ["Boar", "Elephant", "Crane", "Ox", "Tiger"],
+      "history": [
+        {"move": "w:c1c3:tiger", "timestamp": "2026-01-13T10:35:00Z", "playerId": "1"}
+      ],
+      "player_black": null,
+      "player_white": "1",
+      "winner": null
+    }
+  },
+  "dbPlayers": {
+    "1": {
+      "name": "Alice",
+      "token": "da7db216-61d9-46ec-b1ce-d931aab6b111",
+      "createdAt": "2026-01-10T08:00:00Z"
+    }
+  },
+  "dbNextGameId": 2,
+  "dbNextPlayerId": 2,
+  "dbHasChanged": true
+}
+```
+
+**Benefits**:
+- Consistent player identity across games
+- Easier to add future features (stats, match history, ELO rating)
+- Natural fit for eventual relational DB migration
+- No global name collisions (player ID is unique)
+
+**Tradeoffs**:
+- More complex migration from current system
+- Player names become mutable (need UI to change them?)
+- Slightly more DB lookups (player ID -> name for display)
+
+### 5. Add Command-Line Options to Server
+**Priority: LOW** (quality of life improvement)
+
+**Backend (Haskell)**:
+- Add command-line argument parsing (use `optparse-applicative` package)
+- Support options like:
+  - `-v, --verbose`: Enable verbose request logging (logStdoutDev)
+  - `-p, --port PORT`: Specify custom port (default 8080)
+  - `-d, --database FILE`: Specify custom database file path
+  - `--log-file FILE`: Log to file instead of stdout
+- Update `server/app/Main.hs` to conditionally enable logStdoutDev based on verbose flag
+- Currently, verbose logging must be manually uncommented in source code
+
+**Example Usage**:
+```bash
+./server -v -p 3000  # Run on port 3000 with verbose logging
+./server --database /data/games.json  # Custom database location
+```
+
+**Note**: The logStdoutDev import is already available in Main.hs with instructions on how to enable it manually.
+
+## Known Limitations
+
+- No server-side move validation (cheating possible by design - see Architecture Philosophy)
+- No checkmate/win detection on server (client-only)
 - HTTP polling only (WebSocket planned)
 - No chat feature
 - No expansion cards (Sensei's Path)
