@@ -9,9 +9,17 @@ RUN apt-get update && \
     netbase && \
     rm -rf /var/lib/apt/lists/*
 
+# Copy server binary
 COPY .stack-work/install/*/*/*/bin/server /app/server
-#COPY gamedb.json ./
-COPY assets ./assets
+
+# Copy assets (run 'make release' before building to get optimized elm.js)
+COPY assets/elm.js ./assets/elm.js
+COPY assets/favicon.svg ./assets/favicon.svg
+COPY assets/index.html ./assets/index.html
+COPY assets/localStorage.js ./assets/localStorage.js
+COPY assets/style.css ./assets/style.css
+
+# Note: Onitama_Logo.svg and elm.min.js are excluded from Docker image
 
 EXPOSE 8080
 CMD ["/app/server"]

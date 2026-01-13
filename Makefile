@@ -1,9 +1,16 @@
 all: setup build
 
+# Development build (debug mode)
 build: client-build server-build
 
+# Production build (optimized)
+release: setup client-release server-build
+
 client-build:
-	(cd client ; make)
+	(cd client ; make debug)
+
+client-release:
+	(cd client ; make release)
 
 setup:
 	stack setup
@@ -12,14 +19,16 @@ setup:
 server-build:
 	stack build
 
-server-start: build 
+server-start: build
 	stack exec server
 
 test:
 	stack test
 	(cd client ; make run-tests)
-	(cd client ; make)
+	(cd client ; make debug)
 
 clean:
-	rm -r .stack-work
+	rm -rf .stack-work
 	(cd client ; make clean)
+
+.PHONY: all build release client-build client-release setup server-build server-start test clean

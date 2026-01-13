@@ -201,17 +201,22 @@ The common card (5th) determines who moves first based on its color stamp.
 
 | Command | Description |
 |---------|-------------|
-| `make all` | Full setup + build |
-| `make server-start` | Build and run (port 8080), hot-reloads client |
-| `make client-build` | Build Elm frontend only |
+| `make all` | Full setup + build (debug mode) |
+| `make build` | Build both client (debug) and server |
+| `make release` | **Production build** (optimized frontend, ~40% smaller) |
+| `make client-build` | Build Elm frontend in debug mode (with time-travel debugger) |
+| `make client-release` | Build Elm frontend optimized for production |
 | `make server-build` | Build Haskell backend only |
+| `make server-start` | Build and run (port 8080) |
 | `make test` | Run all tests |
 | `make clean` | Remove build artifacts |
+
+**Note:** Use `make release` before Docker builds to get optimized frontend (~40% smaller).
 
 ### Docker
 
 ```bash
-make all
+make release  # Build optimized version for production
 docker build -t onitama:latest .
 docker run -p 8080:8080 onitama:latest
 ```

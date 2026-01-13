@@ -614,7 +614,8 @@ handleJoinResponse result model =
             ( EnterName key gameid name storedSession sessions, Cmd.none )
 
         ( Ok joinResponse, Rejoining key gameId playerName _ sessions ) ->
-            joinGameSuccess key gameId playerName joinResponse sessions False
+            -- Always save the new token from server, even when rejoining
+            joinGameSuccess key gameId playerName joinResponse sessions True
 
         ( Err _, Rejoining key gameId playerName _ sessions ) ->
             ( EnterName key gameId playerName Nothing sessions, Cmd.none )
@@ -635,7 +636,8 @@ handleJoinResponse result model =
                         |> Maybe.map .playerName
                         |> Maybe.withDefault "Unknown"
             in
-            joinGameSuccess key gameid playerName joinResponse sessions False
+            -- Always save the new token from server
+            joinGameSuccess key gameid playerName joinResponse sessions True
 
         ( Err _, Redirect key url sessions ) ->
             let

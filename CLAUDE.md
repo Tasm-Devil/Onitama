@@ -12,13 +12,20 @@ Multiplayer web implementation of the abstract board game Onitama.
 ## Build Commands
 
 ```bash
-make all           # Full setup + build
-make server-start  # Build and run server on port 8080
-make client-build  # Build Elm frontend only
-make server-build  # Build Haskell backend only
-make test          # Run all tests
-make clean         # Remove build artifacts
+make all            # Full setup + build (debug mode)
+make build          # Build both client (debug) and server
+make release        # Build optimized production version
+make client-build   # Build Elm frontend in DEBUG mode (with time-travel debugger)
+make client-release # Build Elm frontend in RELEASE mode (optimized, ~40% smaller)
+make server-build   # Build Haskell backend only
+make server-start   # Build and run server on port 8080
+make test           # Run all tests
+make clean          # Remove build artifacts
 ```
+
+**Debug vs Release:**
+- **Debug** (`make client-build`): Includes Elm's time-travel debugger, larger file size (~375KB)
+- **Release** (`make client-release`): Optimized for production, no debugger, smaller (~225KB)
 
 ## Project Structure
 
@@ -300,7 +307,9 @@ Base URL: `http://localhost:8080/1/onitama`
 ## Docker
 
 ```bash
-make all
+make release  # Build optimized version for production
 docker build -t onitama:latest .
 docker run -p 8080:8080 onitama:latest
 ```
+
+**Important:** Always run `make release` before building the Docker image to ensure the optimized frontend is included.
