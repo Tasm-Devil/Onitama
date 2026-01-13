@@ -23,6 +23,7 @@ A multiplayer web implementation of the elegant abstract strategy game [Onitama]
 Two players face off with 5 pieces each (1 King + 4 Pawns). Each turn, play a movement card to move one piece, then swap that card with the neutral card. Capture the opponent's King or move your King to their Temple to win.
 
 > **Play the latest version**: [https://onitama.deneaux.de/](https://onitama.deneaux.de/) (only for testing)
+
 > **Play the old serverless version**: [tasm-devil.github.io/Onitama](https://tasm-devil.github.io/Onitama/) (no server required)
 
 ---
@@ -227,10 +228,12 @@ docker run -p 8080:8080 onitama:latest
 - [x] Common card determines starting player
 - [x] Simplify move format to `w:c1c3:tiger`
 - [x] Move token to HTTP header (`X-Session-Token`)
-- [ ] Server sends random seed, client generates cards
-- [ ] Global auth system (email + 6-digit code)
+- [ ] Let visitors join a game for watching
+- [ ] playback gamemoves
 - [ ] WebSocket for real-time updates
 - [ ] In-game chat
+- [ ] Server sends random seed, client generates cards
+- [ ] Global auth system (email + 6-digit code)
 - [ ] Sensei's Path expansion cards
 
 ### Expansion Cards

@@ -2,4 +2,6 @@ client/elm-stuff/
 .stack-work/
 assets/elm.js
 assets/elm.min.js
+gamedb.json
+onitama.tar
 *.cabal
