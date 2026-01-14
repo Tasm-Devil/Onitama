@@ -233,8 +233,8 @@ docker run -p 8080:8080 onitama:latest
 - [x] Common card determines starting player
 - [x] Simplify move format to `w:c1c3:tiger`
 - [x] Move token to HTTP header (`X-Session-Token`)
+- [X] **Per-player token system** (global player identity)
 - [ ] **Timestamps** for games and moves (detect abandoned games)
-- [ ] **Per-player token system** (global player identity)
 - [ ] **Footer component** with project info and GitHub link
 - [ ] **CSS improvements** (responsive, animations, better aesthetics)
 - [ ] Let visitors join a game for watching
