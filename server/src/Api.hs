@@ -12,8 +12,9 @@ import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
+import qualified Data.Text as T
 import GHC.Generics (Generic)
-import Game (Game (..), GameMove, Color)
+import Game (Game (..), GameMove, Color, Card)
 import Network.HTTP.Media ((//), (/:))
 import Servant
   ( Accept (contentType),
@@ -40,9 +41,22 @@ newtype GameId = GameId Int
 newtype SessionToken = SessionToken Text
   deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
 
--- Response when joining a game includes both game state and session token
+-- Game state with player names (for client display)
+-- This is what clients receive, not the internal Game type with PlayerIds
+data GameWithNames = GameWithNames
+  { gameWhiteName :: Text
+  , gameBlackName :: Text
+  , gameCards :: [Card]
+  , gameHistory :: [GameMove]
+  , gameWinner :: Maybe Color
+  } deriving (Show, Generic)
+
+instance ToJSON GameWithNames
+instance FromJSON GameWithNames
+
+-- Response when joining a game includes game data and session token
 data JoinGameResponse = JoinGameResponse
-  { responseGame :: Game
+  { responseGame :: GameWithNames
   , responseToken :: SessionToken
   } deriving (Show, Generic)
 
@@ -65,21 +79,21 @@ instance FromJSON GameSummary
 instance ToJSON GameStatus
 instance FromJSON GameStatus
 
--- Create a game summary from a full game
-gameToSummary :: GameId -> Game -> GameSummary
-gameToSummary gameId (Game p1 p2 _ history maybeWinner) =
+-- Create a game summary from game data with player names
+gameToSummary :: GameId -> Text -> Text -> Game -> GameSummary
+gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner) =
   GameSummary
     { summaryId = gameId,
-      summaryPlayer1 = p1,
-      summaryPlayer2 = p2,
+      summaryPlayer1 = if maybeWhiteId == Nothing then "" else T.unpack whiteName,
+      summaryPlayer2 = if maybeBlackId == Nothing then "" else T.unpack blackName,
       summaryMoveCount = Prelude.length history,
-      summaryStatus = determineStatus p1 p2 maybeWinner
+      summaryStatus = determineStatus maybeWhiteId maybeBlackId maybeWinner
     }
   where
     determineStatus _ _ (Just _) = Completed
-    determineStatus "" "" Nothing = WaitingForPlayers
-    determineStatus "" _ Nothing = WaitingForPlayers
-    determineStatus _ "" Nothing = WaitingForPlayers
+    determineStatus Nothing Nothing Nothing = WaitingForPlayers
+    determineStatus Nothing _ Nothing = WaitingForPlayers
+    determineStatus _ Nothing Nothing = WaitingForPlayers
     determineStatus _ _ Nothing = InProgress
 
 type Games = Map GameId Game
@@ -91,7 +105,7 @@ type GetGameSummaries = "1" :> "onitama" :> "summary" :> Get '[JSON] [GameSummar
 
 type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> Header "X-Session-Token" SessionToken :> Put '[JSON] (Maybe JoinGameResponse)
 
-type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (Maybe Game)
+type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (Maybe GameWithNames)
 
 type NewMove = "1" :> "onitama" :> QueryParam "table" GameId :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
 

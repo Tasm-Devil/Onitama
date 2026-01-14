@@ -22,6 +22,9 @@ instance ToJSON PlayerSlot
 
 instance FromJSON PlayerSlot
 
+-- PlayerId is an internal database key (foreign key to dbPlayers)
+type PlayerId = Int
+
 type Card = String
 
 -- GameMove is now a simple string like "w:c1c3:tiger"
@@ -30,8 +33,8 @@ type Card = String
 type GameMove = String
 
 data Game = Game
-  { player_white :: String,
-    player_black :: String,
+  { player_white :: Maybe PlayerId,
+    player_black :: Maybe PlayerId,
     cards :: [Card],
     history :: [GameMove],
     winner :: Maybe Color

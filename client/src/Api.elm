@@ -100,20 +100,21 @@ capitalizeFirst str =
 
 
 type alias ServerGame =
-    { player_white : String
-    , player_black : String
-    , cards : List Card
-    , history : List Game.GameMove
+    { gameWhiteName : String
+    , gameBlackName : String
+    , gameCards : List Card
+    , gameHistory : List Game.GameMove
+    , gameWinner : Maybe Color
     }
 
 
-type alias SessionToken =
+type alias PlayerToken =
     String
 
 
 type alias JoinGameResponse =
     { responseGame : ServerGame
-    , responseToken : SessionToken
+    , responseToken : PlayerToken
     }
 
 
@@ -156,7 +157,7 @@ getGameIdFromServer =
         }
 
 
-joinGame : GameId -> String -> Maybe SessionToken -> Cmd Msg
+joinGame : GameId -> String -> Maybe PlayerToken -> Cmd Msg
 joinGame gameid name maybeToken =
     let
         tokenHeader =
@@ -198,7 +199,7 @@ getGameFromServer gameid =
         }
 
 
-postNewGameMove : GameId -> SessionToken -> Game.GameMove -> Cmd Msg
+postNewGameMove : GameId -> PlayerToken -> Game.GameMove -> Cmd Msg
 postNewGameMove gameid token gameMove =
     Http.request
         { method = "POST"
@@ -211,7 +212,7 @@ postNewGameMove gameid token gameMove =
         }
 
 
-concede : GameId -> SessionToken -> Cmd Msg
+concede : GameId -> PlayerToken -> Cmd Msg
 concede gameid token =
     Http.request
         { method = "POST"
@@ -291,10 +292,11 @@ decodeGameMove =
 decodeGame : Decoder ServerGame
 decodeGame =
     Decode.succeed ServerGame
-        |> required "player_white" Decode.string
-        |> required "player_black" Decode.string
-        |> required "cards" (Decode.list (Decode.map Game.Card.cardByName Decode.string))
-        |> required "history" (Decode.list decodeGameMove)
+        |> required "gameWhiteName" Decode.string
+        |> required "gameBlackName" Decode.string
+        |> required "gameCards" (Decode.list (Decode.map Game.Card.cardByName Decode.string))
+        |> required "gameHistory" (Decode.list decodeGameMove)
+        |> required "gameWinner" (Decode.nullable decodeColor)
 
 
 decodeJoinGameResponse : Decoder JoinGameResponse

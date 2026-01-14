@@ -3,8 +3,9 @@
 
 module App where
 
-import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets)
+import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets, GameWithNames)
 import Game (Game (..), GameMove, give5Cards, Color, PlayerSlot(..), getCurrentPlayerSlot)
+import qualified Data.Text as T
 import Database
   ( DB,
     initDB,
@@ -17,8 +18,9 @@ import Database
     getAllGameSummaries,
     forceSave,
     joinGameWithToken,
-    validateToken,
-    concedeGame
+    validateTokenForMove,
+    concedeGame,
+    getGameWithNames
   )
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
@@ -93,10 +95,10 @@ joinGame maybeGameId name maybeToken = do
     then return Nothing
     else do
       let gameId = fromJust maybeGameId
-      let playerName = fromJust name
-      
-      liftIO $ putStrLn $ "Player " ++ playerName ++ " attempting to join game " ++ show gameId
-      
+      let playerName = T.pack (fromJust name)
+
+      liftIO $ putStrLn $ "Player " ++ T.unpack playerName ++ " attempting to join game " ++ show gameId
+
       -- Join game and get token (with optional existing token for rejoin)
       result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
       case result of
@@ -107,43 +109,33 @@ joinGame maybeGameId name maybeToken = do
           liftIO $ putStrLn "Join successful, token generated/retrieved"
           return $ Just joingameresponse
 
-getGame :: Maybe GameId -> AppM (Maybe Game)
+getGame :: Maybe GameId -> AppM (Maybe GameWithNames)
 getGame maybeGameId = do
   case maybeGameId of
     Nothing -> return Nothing
     Just gameId -> do
       db <- ask
-      liftIO $ getGameById db gameId
+      liftIO $ getGameWithNames db gameId
 
 newMove :: Maybe GameId -> Maybe SessionToken -> GameMove -> AppM (Maybe GameMove)
 newMove maybeGameId maybeToken move = do
   case (maybeGameId, maybeToken) of
     (Just gameId, Just token) -> do
       db <- ask
-      -- Check if the game exists
-      maybeGame <- liftIO $ getGameById db gameId
-      case maybeGame of
-        Nothing -> do
-          liftIO $ putStrLn "Move rejected: game not found"
-          return Nothing
-        Just game -> do
-          -- Determine whose turn it is
-          let currentSlot = getCurrentPlayerSlot game
-          
-          -- Validate token
-          isValid <- liftIO $ validateToken db gameId token currentSlot
-          
-          if not isValid then do
-            liftIO $ putStrLn $ "Move rejected: invalid token or not your turn (expected " ++ show currentSlot ++ ")"
-            return Nothing
-          else do
-            -- Token is valid, process the move
-            let updateGameFn (Game p1 p2 cards history w) = Just $ Game { player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w }
-            success <- liftIO $ updateGame db gameId updateGameFn
-            if success then do
-              liftIO $ putStrLn "Move accepted"
-              return (Just move)
-            else return Nothing
+      -- Validate token and check if it's the player's turn
+      isValid <- liftIO $ validateTokenForMove db gameId token
+
+      if not isValid then do
+        liftIO $ putStrLn "Move rejected: invalid token or not your turn"
+        return Nothing
+      else do
+        -- Token is valid, process the move
+        let updateGameFn (Game p1 p2 cards history w) = Just $ Game { player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w }
+        success <- liftIO $ updateGame db gameId updateGameFn
+        if success then do
+          liftIO $ putStrLn "Move accepted"
+          return (Just move)
+        else return Nothing
     _ -> return Nothing
 
 concede :: Maybe GameId -> Maybe SessionToken -> AppM (Maybe Color)

@@ -26,23 +26,22 @@ type alias PlayerName =
     String
 
 
-type alias SessionToken =
+type alias PlayerToken =
     String
 
 
-type alias StoredSession =
-    { gameId : GameId
-    , playerName : String
-    , token : SessionToken
+type alias PlayerIdentity =
+    { playerName : String
+    , token : PlayerToken
     }
 
 
 type Model
-    = Redirect Key Url (List StoredSession)
-    | Lobby Lobby.Model (List StoredSession)
-    | EnterName Key GameId PlayerName (Maybe StoredSession) (List StoredSession)
-    | Playing Key GameId PlayerName SessionToken Game (List Game.GameMove) (List StoredSession)
-    | Rejoining Key GameId PlayerName SessionToken (List StoredSession)
+    = Redirect Key Url (Maybe PlayerIdentity)
+    | Lobby Lobby.Model (Maybe PlayerIdentity)
+    | EnterName Key GameId PlayerName (Maybe PlayerIdentity)
+    | Playing Key GameId PlayerName PlayerToken Game (List Game.GameMove) (Maybe PlayerIdentity)
+    | Rejoining Key GameId PlayerName PlayerToken (Maybe PlayerIdentity)
 
 
 
@@ -51,14 +50,14 @@ type Model
 
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( Redirect key url [], Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+    ( Redirect key url Nothing, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     let
         sessionSub =
-            Ports.loadSession SessionLoadedFromStorage
+            Ports.loadPlayer PlayerLoadedFromStorage
 
         pollingSub =
             case model of
@@ -112,7 +111,7 @@ view model =
                 Lobby.view m
                     |> Html.map GotLobbyMsg
 
-            EnterName _ _ player _ _ ->
+            EnterName _ _ player _ ->
                 Html.div [ HtmlA.class "landing-screen" ]
                     [ Html.form [ HtmlA.id "name-form" ]
                         [ Html.h1 []
@@ -181,40 +180,32 @@ viewGameMove gameMove =
 
 
 -- HELPERS
--- Add or update a session in the session list
 
 
-updateSessionStorage : StoredSession -> List StoredSession -> List StoredSession
-updateSessionStorage newSession sessions =
+-- Encode player identity for localStorage
+encodePlayer : PlayerIdentity -> Encode.Value
+encodePlayer player =
+    Encode.object
+        [ ( "playerName", Encode.string player.playerName )
+        , ( "token", Encode.string player.token )
+        ]
+
+
+-- Decode player identity from localStorage
+decodePlayer : Encode.Value -> Maybe PlayerIdentity
+decodePlayer value =
     let
-        -- Remove any existing session for this game (by gameId and token)
-        -- This prevents duplicates even if playerName changes
-        filtered =
-            List.filter
-                (\s -> not (s.gameId == newSession.gameId && s.token == newSession.token))
-                sessions
-
-        -- Also remove any session with same gameId but empty playerName
-        cleanedUp =
-            List.filter
-                (\s -> not (s.gameId == newSession.gameId && String.isEmpty s.playerName))
-                filtered
+        playerDecoder =
+            Decode.map2 PlayerIdentity
+                (Decode.field "playerName" Decode.string)
+                (Decode.field "token" Decode.string)
     in
-    newSession :: cleanedUp
-
-
-
--- Find a session for a specific game and player
-
-
-findSession : GameId -> String -> List StoredSession -> Maybe StoredSession
-findSession gameId playerName sessions =
-    List.filter (\s -> s.gameId == gameId && s.playerName == playerName) sessions
-        |> List.head
+    Decode.decodeValue playerDecoder value
+        |> Result.toMaybe
 
 
 -- Check if we lost and should concede
-checkAndConcede : Game -> GameId -> SessionToken -> Cmd Msg
+checkAndConcede : Game -> GameId -> PlayerToken -> Cmd Msg
 checkAndConcede game gameid token =
     case game.state of
         GameOver winner ->
@@ -228,42 +219,6 @@ checkAndConcede game gameid token =
 
         _ ->
             Cmd.none
-
-
--- Encode a session for localStorage
-
-
-encodeSession : StoredSession -> Encode.Value
-encodeSession session =
-    Encode.object
-        [ ( "gameId", Encode.int session.gameId )
-        , ( "playerName", Encode.string session.playerName )
-        , ( "token", Encode.string session.token )
-        ]
-
-
-
--- Decode sessions from localStorage
-
-
-decodeSessions : Encode.Value -> List StoredSession
-decodeSessions value =
-    let
-        sessionDecoder =
-            Decode.map3 StoredSession
-                (Decode.field "gameId" Decode.int)
-                (Decode.field "playerName" Decode.string)
-                (Decode.field "token" Decode.string)
-
-        result =
-            Decode.decodeValue (Decode.list sessionDecoder) value
-    in
-    case result of
-        Ok sessions ->
-            sessions
-
-        Err _ ->
-            []
 
 
 transformGameMove : Game.GameMove -> Game.GameMove
@@ -280,11 +235,11 @@ buildGame : String -> ServerGame -> Game
 buildGame name servergame =
     let
         commonCard =
-            Maybe.withDefault dummyCard (List.head <| List.drop 4 <| servergame.cards)
+            Maybe.withDefault dummyCard (List.head <| List.drop 4 <| servergame.gameCards)
 
         newgame =
-            Game.setupNewGame servergame.cards
-                (if name == servergame.player_black then
+            Game.setupNewGame servergame.gameCards
+                (if name == servergame.gameBlackName then
                     Black
 
                  else
@@ -292,7 +247,7 @@ buildGame name servergame =
                 )
                 commonCard.startPlayer
     in
-    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.history
+    List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.gameHistory
 
 
 
@@ -306,7 +261,7 @@ type Msg
     | GotLobbyMsg Lobby.Msg
     | TypingName String
     | RequestGameFromServer
-    | SessionLoadedFromStorage Encode.Value
+    | PlayerLoadedFromStorage Encode.Value
     | GotServerMsg Api.Msg
     | Tick Time.Posix
 
@@ -332,8 +287,8 @@ update msg model =
         RequestGameFromServer ->
             handleRequestGame model
 
-        SessionLoadedFromStorage value ->
-            handleSessionLoaded value model
+        PlayerLoadedFromStorage value ->
+            handlePlayerLoaded value model
 
         GotServerMsg servermsg ->
             handleServerMsg servermsg model
@@ -364,34 +319,36 @@ handleUrlChange url model =
             String.dropLeft 1 url.path
     in
     case model of
-        Lobby lobby sessions ->
+        Lobby lobby player ->
             if String.isEmpty gameidStr then
                 ( model, Cmd.none )
 
             else
                 case String.toInt gameidStr of
                     Just gameid ->
-                        case List.filter (\s -> s.gameId == gameid) sessions |> List.head of
-                            Just session ->
-                                ( Rejoining lobby.key gameid session.playerName session.token sessions
-                                , Cmd.map GotServerMsg <| Api.joinGame gameid session.playerName (Just session.token)
+                        case player of
+                            Just p ->
+                                -- We have player identity, try to rejoin
+                                ( Rejoining lobby.key gameid p.playerName p.token player
+                                , Cmd.map GotServerMsg <| Api.joinGame gameid p.playerName (Just p.token)
                                 )
 
                             Nothing ->
-                                ( EnterName lobby.key gameid "" Nothing sessions, Cmd.none )
+                                -- No player identity, need to enter name
+                                ( EnterName lobby.key gameid "" Nothing, Cmd.none )
 
                     Nothing ->
                         ( model, Cmd.none )
 
-        EnterName key currentGameId name storedSession sessions ->
+        EnterName key currentGameId name player ->
             if String.toInt gameidStr == Just currentGameId then
-                ( EnterName key currentGameId name storedSession sessions, Cmd.none )
+                ( EnterName key currentGameId name player, Cmd.none )
 
             else
-                ( Redirect key url sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+                ( Redirect key url player, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
-        Playing key _ _ _ _ _ sessions ->
-            ( Redirect key url sessions, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+        Playing key _ _ _ _ _ player ->
+            ( Redirect key url player, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         _ ->
             ( model, Cmd.none )
@@ -404,10 +361,10 @@ handleUrlChange url model =
 handleClickedLink : Browser.UrlRequest -> Model -> ( Model, Cmd Msg )
 handleClickedLink urlRequest model =
     case model of
-        Lobby lobby sessions ->
+        Lobby lobby player ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( Lobby lobby sessions, Nav.pushUrl lobby.key <| Url.toString url )
+                    ( Lobby lobby player, Nav.pushUrl lobby.key <| Url.toString url )
 
                 _ ->
                     ( model, Cmd.none )
@@ -423,7 +380,7 @@ handleClickedLink urlRequest model =
 handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
 handleGameMsg gamemsg model =
     case model of
-        Playing key gameid name token game history_ sessions ->
+        Playing key gameid name token game history_ player ->
             let
                 game_after =
                     Game.update gamemsg game
@@ -438,7 +395,7 @@ handleGameMsg gamemsg model =
                         _ ->
                             Cmd.none
             in
-            ( Playing key gameid name token game_after history_ sessions, cmd )
+            ( Playing key gameid name token game_after history_ player, cmd )
 
         _ ->
             ( model, Cmd.none )
@@ -465,8 +422,8 @@ handleLobbyMsg lobbymsg model =
 handleTypingName : String -> Model -> ( Model, Cmd Msg )
 handleTypingName newname model =
     case model of
-        EnterName key gameid _ storedSession sessions ->
-            ( EnterName key gameid newname storedSession sessions, Cmd.none )
+        EnterName key gameid _ player ->
+            ( EnterName key gameid newname player, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -475,13 +432,11 @@ handleTypingName newname model =
 handleRequestGame : Model -> ( Model, Cmd Msg )
 handleRequestGame model =
     case model of
-        EnterName _ gameid name _ sessions ->
+        EnterName _ gameid name player ->
             let
-                maybeStoredSession =
-                    findSession gameid name sessions
-
+                -- Use stored token if available
                 maybeToken =
-                    Maybe.map .token maybeStoredSession
+                    Maybe.map .token player
             in
             ( model, Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken )
 
@@ -493,16 +448,16 @@ handleRequestGame model =
 
 
 
--- SESSION HANDLERS
+-- PLAYER IDENTITY HANDLERS
 
 
-handleSessionLoaded : Encode.Value -> Model -> ( Model, Cmd Msg )
-handleSessionLoaded value model =
+handlePlayerLoaded : Encode.Value -> Model -> ( Model, Cmd Msg )
+handlePlayerLoaded value model =
     case model of
         Redirect key url _ ->
             let
-                loadedSessions =
-                    decodeSessions value
+                loadedPlayer =
+                    decodePlayer value
 
                 gameidStr =
                     String.dropLeft 1 url.path
@@ -512,17 +467,20 @@ handleSessionLoaded value model =
             in
             case maybeGameId of
                 Just gameId ->
-                    case List.filter (\s -> s.gameId == gameId) loadedSessions |> List.head of
-                        Just session ->
-                            ( Rejoining key gameId session.playerName session.token loadedSessions
-                            , Cmd.map GotServerMsg <| Api.joinGame gameId session.playerName (Just session.token)
+                    case loadedPlayer of
+                        Just player ->
+                            -- Have player identity and game ID, try to rejoin
+                            ( Rejoining key gameId player.playerName player.token loadedPlayer
+                            , Cmd.map GotServerMsg <| Api.joinGame gameId player.playerName (Just player.token)
                             )
 
                         Nothing ->
-                            ( Redirect key url loadedSessions, Cmd.none )
+                            -- No player identity, need to enter name
+                            ( Redirect key url Nothing, Cmd.none )
 
                 Nothing ->
-                    ( Redirect key url loadedSessions, Cmd.none )
+                    -- No game ID in URL
+                    ( Redirect key url loadedPlayer, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -557,7 +515,7 @@ handleServerMsg servermsg model =
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
 handleGameSummaries result model =
     case ( result, model ) of
-        ( Ok summaries, Redirect key url sessions ) ->
+        ( Ok summaries, Redirect key url player ) ->
             let
                 gameidStr =
                     String.dropLeft 1 url.path
@@ -571,24 +529,24 @@ handleGameSummaries result model =
             case maybeGameId of
                 Just gameid ->
                     if List.member gameid gameIds then
-                        ( EnterName key gameid "" Nothing sessions, Cmd.none )
+                        ( EnterName key gameid "" player, Cmd.none )
 
                     else
-                        ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key "/" )
+                        ( Lobby { status = Home summaries, key = key } player, Nav.pushUrl key "/" )
 
                 Nothing ->
                     if String.isEmpty gameidStr then
-                        ( Lobby { status = Home summaries, key = key } sessions, Cmd.none )
+                        ( Lobby { status = Home summaries, key = key } player, Cmd.none )
 
                     else
-                        ( Lobby { status = Home summaries, key = key } sessions, Nav.pushUrl key "/" )
+                        ( Lobby { status = Home summaries, key = key } player, Nav.pushUrl key "/" )
 
-        ( Err _, Redirect key _ sessions ) ->
-            ( Lobby { status = Home [], key = key } sessions, Cmd.none )
+        ( Err _, Redirect key _ player ) ->
+            ( Lobby { status = Home [], key = key } player, Cmd.none )
 
-        ( Ok summaries, Lobby lobby sessions ) ->
+        ( Ok summaries, Lobby lobby player ) ->
             -- Update lobby with fresh game summaries (from polling)
-            ( Lobby { lobby | status = Home summaries } sessions, Cmd.none )
+            ( Lobby { lobby | status = Home summaries } player, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -597,8 +555,8 @@ handleGameSummaries result model =
 handleNewGameId : Result Http.Error GameId -> Model -> ( Model, Cmd Msg )
 handleNewGameId result model =
     case ( result, model ) of
-        ( Ok gameId, Lobby lobby sessions ) ->
-            ( Lobby lobby sessions, Nav.pushUrl lobby.key <| "/" ++ String.fromInt gameId )
+        ( Ok gameId, Lobby lobby player ) ->
+            ( Lobby lobby player, Nav.pushUrl lobby.key <| "/" ++ String.fromInt gameId )
 
         _ ->
             ( model, Cmd.none )
@@ -607,53 +565,50 @@ handleNewGameId result model =
 handleJoinResponse : Result Http.Error Api.JoinGameResponse -> Model -> ( Model, Cmd Msg )
 handleJoinResponse result model =
     case ( result, model ) of
-        ( Ok joinResponse, EnterName key gameid name _ sessions ) ->
-            joinGameSuccess key gameid name joinResponse sessions True
+        ( Ok joinResponse, EnterName key gameid name _ ) ->
+            -- Always save player identity when joining
+            joinGameSuccess key gameid name joinResponse True
 
-        ( Err _, EnterName key gameid name storedSession sessions ) ->
-            ( EnterName key gameid name storedSession sessions, Cmd.none )
+        ( Err _, EnterName key gameid name player ) ->
+            ( EnterName key gameid name player, Cmd.none )
 
-        ( Ok joinResponse, Rejoining key gameId playerName _ sessions ) ->
-            -- Always save the new token from server, even when rejoining
-            joinGameSuccess key gameId playerName joinResponse sessions True
+        ( Ok joinResponse, Rejoining key gameId playerName _ _ ) ->
+            -- Update token from server when rejoining
+            joinGameSuccess key gameId playerName joinResponse True
 
-        ( Err _, Rejoining key gameId playerName _ sessions ) ->
-            ( EnterName key gameId playerName Nothing sessions, Cmd.none )
+        ( Err _, Rejoining key gameId playerName _ _ ) ->
+            -- Rejoin failed, enter name screen
+            ( EnterName key gameId playerName Nothing, Cmd.none )
 
-        ( Ok joinResponse, Redirect key url sessions ) ->
+        ( Ok joinResponse, Redirect key url _ ) ->
             let
                 gameid =
                     String.dropLeft 1 url.path
                         |> String.toInt
                         |> Maybe.withDefault 0
 
-                token =
-                    joinResponse.responseToken
-
+                -- Use player name from response (server knows who we are)
                 playerName =
-                    List.filter (\s -> s.gameId == gameid && s.token == token) sessions
-                        |> List.head
-                        |> Maybe.map .playerName
-                        |> Maybe.withDefault "Unknown"
+                    joinResponse.responseGame.gameWhiteName
+                        |> (\name -> if String.isEmpty name then joinResponse.responseGame.gameBlackName else name)
             in
-            -- Always save the new token from server
-            joinGameSuccess key gameid playerName joinResponse sessions True
+            joinGameSuccess key gameid playerName joinResponse True
 
-        ( Err _, Redirect key url sessions ) ->
+        ( Err _, Redirect key url player ) ->
             let
                 gameId =
                     String.dropLeft 1 url.path
                         |> String.toInt
                         |> Maybe.withDefault 0
             in
-            ( EnterName key gameId "" Nothing sessions, Cmd.none )
+            ( EnterName key gameId "" player, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
 
 
-joinGameSuccess : Key -> GameId -> String -> Api.JoinGameResponse -> List StoredSession -> Bool -> ( Model, Cmd Msg )
-joinGameSuccess key gameid name joinResponse sessions shouldSaveSession =
+joinGameSuccess : Key -> GameId -> String -> Api.JoinGameResponse -> Bool -> ( Model, Cmd Msg )
+joinGameSuccess key gameid name joinResponse shouldSavePlayer =
     let
         servergame =
             joinResponse.responseGame
@@ -664,22 +619,14 @@ joinGameSuccess key gameid name joinResponse sessions shouldSaveSession =
         finalgame =
             buildGame name servergame
 
-        newStoredSession =
-            { gameId = gameid
-            , playerName = name
+        newPlayer =
+            { playerName = name
             , token = token
             }
 
-        updatedSessions =
-            if shouldSaveSession && not (String.isEmpty name) then
-                updateSessionStorage newStoredSession sessions
-
-            else
-                sessions
-
         saveCmd =
-            if shouldSaveSession && not (String.isEmpty name) then
-                Ports.saveSession (encodeSession newStoredSession)
+            if shouldSavePlayer && not (String.isEmpty name) then
+                Ports.savePlayer (encodePlayer newPlayer)
 
             else
                 Cmd.none
@@ -687,7 +634,7 @@ joinGameSuccess key gameid name joinResponse sessions shouldSaveSession =
         concedeCmd =
             checkAndConcede finalgame gameid token
     in
-    ( Playing key gameid name token finalgame servergame.history updatedSessions
+    ( Playing key gameid name token finalgame servergame.gameHistory (Just newPlayer)
     , Cmd.batch [ saveCmd, concedeCmd ]
     )
 
@@ -695,20 +642,20 @@ joinGameSuccess key gameid name joinResponse sessions shouldSaveSession =
 handleGameUpdate : Result Http.Error Api.ServerGame -> Model -> ( Model, Cmd Msg )
 handleGameUpdate result model =
     case ( result, model ) of
-        ( Ok servergame, Playing key gameid name token game currentHistory sessions ) ->
+        ( Ok servergame, Playing key gameid name token game currentHistory player ) ->
             case game.state of
                 GameOver _ ->
-                    ( Playing key gameid name token game servergame.history sessions, Cmd.none )
+                    ( Playing key gameid name token game servergame.gameHistory player, Cmd.none )
 
                 _ ->
                     -- Only update if there's a NEW move (server history changed)
-                    if List.head servergame.history == List.head currentHistory then
+                    if List.head servergame.gameHistory == List.head currentHistory then
                         -- No new moves, keep current game state (preserves UI like selected pieces)
                         ( model, Cmd.none )
 
                     else
                         -- New move detected, apply it
-                        List.head servergame.history
+                        List.head servergame.gameHistory
                             |> Maybe.map
                                 (\gameMove ->
                                     let
@@ -718,7 +665,7 @@ handleGameUpdate result model =
                                         concedeCmd =
                                             checkAndConcede updatedGame gameid token
                                     in
-                                    ( Playing key gameid name token updatedGame servergame.history sessions
+                                    ( Playing key gameid name token updatedGame servergame.gameHistory player
                                     , concedeCmd
                                     )
                                 )
@@ -731,7 +678,7 @@ handleGameUpdate result model =
 handleMoveConfirmation : Result Http.Error Game.GameMove -> Model -> ( Model, Cmd Msg )
 handleMoveConfirmation result model =
     case ( result, model ) of
-        ( Ok gameMove, Playing key gameid name token game history_ sessions ) ->
+        ( Ok gameMove, Playing key gameid name token game history_ player ) ->
             let
                 updatedGame =
                     game |> Game.update (NewGameMove <| transformGameMove gameMove)
@@ -739,7 +686,7 @@ handleMoveConfirmation result model =
                 concedeCmd =
                     checkAndConcede updatedGame gameid token
             in
-            ( Playing key gameid name token updatedGame (gameMove :: history_) sessions
+            ( Playing key gameid name token updatedGame (gameMove :: history_) player
             , concedeCmd
             )
 
