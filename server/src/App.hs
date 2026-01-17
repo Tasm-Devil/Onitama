@@ -3,31 +3,28 @@
 
 module App where
 
-import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), JoinError (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets, GameWithNames)
-import Game (Game (..), GameMove, give5Cards, Color, PlayerSlot(..), getCurrentPlayerSlot)
-import qualified Data.Text as T
-import Database
-  ( DB,
-    initDB,
-    markDBChanged,
-    logDBState,
-    getGameById,
-    insertGame,
-    insertGameWithNewId,
-    updateGame,
-    getAllGameSummaries,
-    forceSave,
-    joinGameWithToken,
-    validateTokenForMove,
-    concedeGame,
-    getGameWithNames
-  )
+import Api (API, APIWithAssets, GameId (..), GameSummary, GameWithNames, JoinError (..), JoinGameResponse (..), RawHtml (RawHtml), SessionToken (..), api, apiWithAssets)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
 import Data.Maybe (fromJust, isNothing)
+import qualified Data.Text as T
+import Database
+  ( DB,
+    concedeGame,
+    forceSave,
+    getAllGameSummaries,
+    getGameWithNames,
+    initDB,
+    insertGameWithNewId,
+    joinGameWithToken,
+    logDBState,
+    updateGame,
+    validateTokenForMove,
+  )
+import Game (Color, Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
 import Network.Wai (Application)
-import Network.Wai.Application.Static (staticApp, defaultFileServerSettings)
+import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
 import Servant
   ( Application,
     Handler,
@@ -36,11 +33,12 @@ import Servant
     Raw,
     Server,
     Tagged (Tagged),
+    err404,
     hoistServer,
     serve,
-    type (:<|>) (..),
     throwError,
-    err404, unTagged,
+    unTagged,
+    type (:<|>) (..),
   )
 import System.Directory (doesFileExist)
 
@@ -59,10 +57,10 @@ makeServer = do
   putStrLn "Server initialized successfully"
 
   let staticFileServer = staticApp $ defaultFileServerSettings "assets/"
-      apiHandlers      = hoistServer api (runAppM db) handlers
+      apiHandlers = hoistServer api (runAppM db) handlers
 
   -- Combine: try API routes first, fall back to static files
-  return (apiHandlers :<|> Tagged { unTagged = staticFileServer })
+  return (apiHandlers :<|> Tagged {unTagged = staticFileServer})
 
 -- | Convert our AppM monad to Servant's Handler monad
 runAppM :: DB -> AppM a -> Handler a
@@ -81,8 +79,9 @@ newGame = do
     logDBState "After creating game" db
     -- Force an immediate save for testing
     forceSave db
-  
+
   return gameId
+
 getGameSummaries :: AppM [GameSummary]
 getGameSummaries = do
   db <- ask
@@ -104,8 +103,7 @@ joinGame maybeGameId maybeName maybeToken = do
         Right joinResponse -> do
           liftIO $ putStrLn "Join successful"
           return $ Right joinResponse
-
-    _ -> return $ Left JEInvalidName  -- Missing gameId or name
+    _ -> return $ Left JEInvalidName -- Missing gameId or name
 
 getGame :: Maybe GameId -> AppM (Maybe GameWithNames)
 getGame maybeGameId = do
@@ -123,17 +121,19 @@ newMove maybeGameId maybeToken move = do
       -- Validate token and check if it's the player's turn
       isValid <- liftIO $ validateTokenForMove db gameId token
 
-      if not isValid then do
-        liftIO $ putStrLn "Move rejected: invalid token or not your turn"
-        return Nothing
-      else do
-        -- Token is valid, process the move
-        let updateGameFn (Game p1 p2 cards history w) = Just $ Game { player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w }
-        success <- liftIO $ updateGame db gameId updateGameFn
-        if success then do
-          liftIO $ putStrLn "Move accepted"
-          return (Just move)
-        else return Nothing
+      if not isValid
+        then do
+          liftIO $ putStrLn "Move rejected: invalid token or not your turn"
+          return Nothing
+        else do
+          -- Token is valid, process the move
+          let updateGameFn (Game p1 p2 cards history w) = Just $ Game {player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w}
+          success <- liftIO $ updateGame db gameId updateGameFn
+          if success
+            then do
+              liftIO $ putStrLn "Move accepted"
+              return (Just move)
+            else return Nothing
     _ -> return Nothing
 
 concede :: Maybe GameId -> Maybe SessionToken -> AppM (Maybe Color)
@@ -151,6 +151,3 @@ getIndexHtml _ = do
   if exists
     then RawHtml <$> liftIO (Lazy.readFile path)
     else throwError err404
-
-
-

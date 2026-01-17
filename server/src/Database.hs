@@ -2,7 +2,7 @@
 
 module Database where
 
-import Api (GameId (..), GameStatus (..), GameSummary (..), Games, JoinGameResponse (..), JoinError (..), SessionToken (..), gameToSummary, GameWithNames (..))
+import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), Games, JoinError (..), JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, when)
@@ -11,10 +11,10 @@ import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.Aeson.Encode.Pretty as Pretty
 import Data.ByteString.Lazy as Lazy (ByteString, readFile, writeFile)
 import qualified Data.ByteString.Lazy as Lazy (length)
+import Data.List (find)
 import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
-import Data.List (find)
-import Data.Maybe (fromMaybe, isJust)
+import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.UUID (toText)
@@ -25,13 +25,14 @@ import System.Directory (doesFileExist)
 
 -- Player type: stores player identity and token
 data Player = Player
-  { playerId    :: PlayerId
-  , playerName  :: Text
-  , playerToken :: SessionToken
+  { playerId :: PlayerId,
+    playerName :: Text,
+    playerToken :: SessionToken
   }
   deriving (Eq, Show, Generic)
 
 instance FromJSON Player
+
 instance ToJSON Player
 
 data DBState = DBState
@@ -68,10 +69,10 @@ loadDB = do
             return db
           Nothing -> do
             putStrLn $ "Failed to parse database file at " ++ dbFilePath ++ " , starting with empty DB"
-            return $ DBState { dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False }
+            return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False}
       else do
         putStrLn $ "Database file at " ++ dbFilePath ++ " not found, starting with empty DB"
-        return $ DBState { dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False }
+        return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False}
   newTVarIO initialDB
 
 -- Save database to file with pretty printing
@@ -150,19 +151,13 @@ insertGameWithNewId (DB dbVar) = do
     let newId = GameId (dbNextGameId state)
     modifyTVar dbVar $ \s ->
       s
-        { dbGames = Map.insert newId (Game { player_white = Nothing, player_black = Nothing, cards = newCards, history = [], winner = Nothing }) (dbGames s),
+        { dbGames = Map.insert newId (Game {player_white = Nothing, player_black = Nothing, cards = newCards, history = [], winner = Nothing}) (dbGames s),
           dbNextGameId = dbNextGameId s + 1,
           dbHasChanged = True
         }
     return newId
   markDBChanged (DB dbVar)
   return gameId
-
-insertGame :: DB -> GameId -> Game -> IO ()
-insertGame (DB dbVar) gameId game = do
-  atomically $ modifyTVar dbVar $ \state ->
-    state {dbGames = Map.insert gameId game (dbGames state), dbHasChanged = True}
-  markDBChanged (DB dbVar)
 
 updateGame :: DB -> GameId -> (Game -> Maybe Game) -> IO Bool
 updateGame (DB dbVar) gameId updateFn = do
@@ -203,13 +198,14 @@ gameToGameWithNames db game = do
       return $ maybe T.empty playerName maybePlayer
     Nothing -> return T.empty
 
-  return $ GameWithNames
-    { gameWhiteName = whiteName
-    , gameBlackName = blackName
-    , gameCards = cards game
-    , gameHistory = history game
-    , gameWinner = winner game
-    }
+  return $
+    GameWithNames
+      { gameWhiteName = whiteName,
+        gameBlackName = blackName,
+        gameCards = cards game,
+        gameHistory = history game,
+        gameWinner = winner game
+      }
 
 -- Get a game with player names for client display
 getGameWithNames :: DB -> GameId -> IO (Maybe GameWithNames)
@@ -330,7 +326,6 @@ joinGameWithToken db@(DB dbVar) gameId playerNameText maybeProvidedToken = do
                       newPlayer <- createPlayer db trimmedName
                       putStrLn $ "Created new player (invalid token): " ++ T.unpack trimmedName
                       return $ Right newPlayer
-
             Nothing -> do
               -- No token: name must be available
               putStrLn $ "No token provided, checking if name available: " ++ T.unpack trimmedName
@@ -359,10 +354,9 @@ joinGameWithToken db@(DB dbVar) gameId playerNameText maybeProvidedToken = do
                 else do
                   -- Try to join an empty slot
                   let updatedGame
-                        | maybeWhiteId == Nothing = Just $ Game { player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner }
-                        | maybeBlackId == Nothing = Just $ Game { player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner }
+                        | isNothing maybeWhiteId = Just $ Game {player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner}
+                        | isNothing maybeBlackId = Just $ Game {player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner}
                         | otherwise = Nothing -- Game is full
-
                   case updatedGame of
                     Nothing -> do
                       putStrLn "Game is full, cannot join"
@@ -426,7 +420,7 @@ concedeGame db@(DB dbVar) gameId token = do
             case Map.lookup gameId (dbGames currentState) of
               Nothing -> return False
               Just (Game p1 p2 cards history _) -> do
-                let updatedGame = Game { player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor }
+                let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor}
                 writeTVar dbVar $
                   currentState
                     { dbGames = Map.insert gameId updatedGame (dbGames currentState),
@@ -439,7 +433,7 @@ concedeGame db@(DB dbVar) gameId token = do
               putStrLn $ "Game " ++ show gameId ++ " ended: " ++ show winnerColor ++ " wins"
               return $ Just winnerColor
             else do
-              putStrLn $ "Concede failed: game not found"
+              putStrLn "Concede failed: game not found"
               return Nothing
     _ -> do
       putStrLn "Concede failed: invalid token or game not found"

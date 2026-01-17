@@ -539,20 +539,20 @@ handleStoredPlayersLoaded value model =
         Redirect key url _ ->
             ( Redirect key url players, Cmd.none )
 
-        Lobby key lobby  _ ->
+        Lobby key lobby _ ->
             ( Lobby key lobby players, Cmd.none )
 
-        EnterName key gameid (Entering currentName)  _ ->
-            ( EnterName key gameid (Entering currentName)  players, Cmd.none )
+        EnterName key gameid (Entering currentName) _ ->
+            ( EnterName key gameid (Entering currentName) players, Cmd.none )
 
-        EnterName key gameid (Joining name)  _ ->
-            ( EnterName key gameid (Joining name)  players, Cmd.none )
+        EnterName key gameid (Joining name) _ ->
+            ( EnterName key gameid (Joining name) players, Cmd.none )
 
-        EnterName key gameid (JoinError name errorMsg)  _ ->
-            ( EnterName key gameid (JoinError name errorMsg)  players, Cmd.none )
+        EnterName key gameid (JoinError name errorMsg) _ ->
+            ( EnterName key gameid (JoinError name errorMsg) players, Cmd.none )
 
-        Playing key gameid name token game history  _ ->
-            ( Playing key gameid name token game history  players, Cmd.none )
+        Playing key gameid name token game history _ ->
+            ( Playing key gameid name token game history players, Cmd.none )
 
 
 
@@ -584,7 +584,7 @@ handleServerMsg servermsg model =
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
 handleGameSummaries result model =
     case ( result, model ) of
-        ( Ok summaries, Redirect key url  storedPlayers ) ->
+        ( Ok summaries, Redirect key url storedPlayers ) ->
             let
                 gameidStr =
                     String.dropLeft 1 url.path
@@ -594,31 +594,30 @@ handleGameSummaries result model =
 
                 gameIds =
                     List.map .summaryId summaries
-
             in
             case maybeGameId of
                 Just gameid ->
                     if List.member gameid gameIds then
-                        ( EnterName key gameid (Entering "")  storedPlayers
+                        ( EnterName key gameid (Entering "") storedPlayers
                         , Cmd.none
                         )
 
                     else
-                        ( Lobby key { status = Home summaries }  storedPlayers, Nav.pushUrl key "/" )
+                        ( Lobby key { status = Home summaries } storedPlayers, Nav.pushUrl key "/" )
 
                 Nothing ->
                     if String.isEmpty gameidStr then
-                        ( Lobby key { status = Home summaries }  storedPlayers, Cmd.none )
+                        ( Lobby key { status = Home summaries } storedPlayers, Cmd.none )
 
                     else
-                        ( Lobby key { status = Home summaries }  storedPlayers, Nav.pushUrl key "/" )
+                        ( Lobby key { status = Home summaries } storedPlayers, Nav.pushUrl key "/" )
 
-        ( Err _, Redirect key _  storedPlayers ) ->
-            ( Lobby key { status = Home [] }  storedPlayers, Cmd.none )
+        ( Err _, Redirect key _ storedPlayers ) ->
+            ( Lobby key { status = Home [] } storedPlayers, Cmd.none )
 
         ( Ok summaries, Lobby key lobby storedPlayers ) ->
             -- Update lobby with fresh game summaries (from polling)
-            ( Lobby key { lobby | status = Home summaries }  storedPlayers, Cmd.none )
+            ( Lobby key { lobby | status = Home summaries } storedPlayers, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -627,8 +626,8 @@ handleGameSummaries result model =
 handleNewGameId : Result Http.Error GameId -> Model -> ( Model, Cmd Msg )
 handleNewGameId result model =
     case ( result, model ) of
-        ( Ok gameId, Lobby key lobby  storedPlayers ) ->
-            ( Lobby key lobby  storedPlayers, Nav.pushUrl key <| "/" ++ String.fromInt gameId )
+        ( Ok gameId, Lobby key lobby storedPlayers ) ->
+            ( Lobby key lobby storedPlayers, Nav.pushUrl key <| "/" ++ String.fromInt gameId )
 
         _ ->
             ( model, Cmd.none )
@@ -642,13 +641,13 @@ handleJoinResponse result model =
             -- Server explicitly tells us which player we are
             joinGameSuccess key gameid joinResponse storedPlayers
 
-        ( Ok (Err joinError), EnterName key gameid (Joining name)  storedPlayers ) ->
+        ( Ok (Err joinError), EnterName key gameid (Joining name) storedPlayers ) ->
             -- Join error from server: show error in EnterName screen
-            ( EnterName key gameid (JoinError name (Api.joinErrorToString joinError))  storedPlayers
+            ( EnterName key gameid (JoinError name (Api.joinErrorToString joinError)) storedPlayers
             , Cmd.none
             )
 
-        ( Err httpError, EnterName key gameid (Joining name)  storedPlayers ) ->
+        ( Err httpError, EnterName key gameid (Joining name) storedPlayers ) ->
             -- Network error: show error in EnterName screen
             let
                 errorMsg =
@@ -668,7 +667,7 @@ handleJoinResponse result model =
                         Http.BadBody msg ->
                             "Invalid response: " ++ msg
             in
-            ( EnterName key gameid (JoinError name errorMsg)  storedPlayers
+            ( EnterName key gameid (JoinError name errorMsg) storedPlayers
             , Cmd.none
             )
 
@@ -708,7 +707,6 @@ joinGameSuccess key gameid joinResponse storedPlayers =
         concedeCmd =
             checkAndConcede finalgame gameid token
     in
-    
     ( Playing key gameid name token finalgame servergame.gameHistory storedPlayers
     , Cmd.batch [ saveCmd, concedeCmd ]
     )

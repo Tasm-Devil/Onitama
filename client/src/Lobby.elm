@@ -1,4 +1,4 @@
-module Lobby exposing (GameId, Model, Msg(..), Status(..), GameSummary, GameStatus(..), view)
+module Lobby exposing (GameId, GameStatus(..), GameSummary, Model, Msg(..), Status(..), view)
 
 import Html exposing (Html)
 import Html.Attributes as HtmlA
@@ -21,6 +21,7 @@ type alias Model =
 type Status
     = Home (List GameSummary)
 
+
 type GameStatus
     = WaitingForPlayers
     | InProgress
@@ -34,6 +35,7 @@ type alias GameSummary =
     , summaryMoveCount : Int
     , summaryStatus : GameStatus
     }
+
 
 
 -- ToDo: Refactor this in the model
@@ -81,12 +83,14 @@ createGameTableRow summary =
         player1Display =
             if String.isEmpty summary.summaryPlayer1 then
                 "(waiting)"
+
             else
                 summary.summaryPlayer1
 
         player2Display =
             if String.isEmpty summary.summaryPlayer2 then
                 "(waiting)"
+
             else
                 summary.summaryPlayer2
 
@@ -119,9 +123,6 @@ createGameTableRow summary =
                 [ Html.text "Join" ]
             ]
         ]
-
-
-
 
 
 type Msg

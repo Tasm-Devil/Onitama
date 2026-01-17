@@ -7,14 +7,14 @@
 
 module Api where
 
-import Data.Aeson (FromJSON, ToJSON, FromJSONKey, ToJSONKey)
+import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
 import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.Generics (Generic)
-import Game (Game (..), GameMove, Color, Card)
+import Game (Card, Color, Game (..), GameMove)
 import Network.HTTP.Media ((//), (/:))
 import Servant
   ( Accept (contentType),
@@ -44,22 +44,25 @@ newtype SessionToken = SessionToken Text
 -- Game state with player names (for client display)
 -- This is what clients receive, not the internal Game type with PlayerIds
 data GameWithNames = GameWithNames
-  { gameWhiteName :: Text
-  , gameBlackName :: Text
-  , gameCards :: [Card]
-  , gameHistory :: [GameMove]
-  , gameWinner :: Maybe Color
-  } deriving (Show, Generic)
+  { gameWhiteName :: Text,
+    gameBlackName :: Text,
+    gameCards :: [Card],
+    gameHistory :: [GameMove],
+    gameWinner :: Maybe Color
+  }
+  deriving (Show, Generic)
 
 instance ToJSON GameWithNames
+
 instance FromJSON GameWithNames
 
 -- Response when joining a game includes game data, session token, and player name
 data JoinGameResponse = JoinGameResponse
-  { responseGame :: GameWithNames
-  , responseToken :: SessionToken
-  , responsePlayerName :: Text  -- Server explicitly tells client which player they are
-  } deriving (Show, Generic)
+  { responseGame :: GameWithNames,
+    responseToken :: SessionToken,
+    responsePlayerName :: Text -- Server explicitly tells client which player they are
+  }
+  deriving (Show, Generic)
 
 -- Errors that can occur when joining a game
 data JoinError
@@ -72,23 +75,31 @@ data JoinError
 
 -- Lightweight game summary for listing games
 data GameSummary = GameSummary
-  { summaryId :: GameId
-  , summaryPlayer1 :: String
-  , summaryPlayer2 :: String
-  , summaryMoveCount :: Int
-  , summaryStatus :: GameStatus
-  } deriving (Show, Eq, Generic)
+  { summaryId :: GameId,
+    summaryPlayer1 :: String,
+    summaryPlayer2 :: String,
+    summaryMoveCount :: Int,
+    summaryStatus :: GameStatus
+  }
+  deriving (Show, Eq, Generic)
 
 data GameStatus = WaitingForPlayers | InProgress | Completed
   deriving (Show, Eq, Generic)
 
 instance ToJSON JoinGameResponse
+
 instance FromJSON JoinGameResponse
+
 instance ToJSON JoinError
+
 instance FromJSON JoinError
+
 instance ToJSON GameSummary
+
 instance FromJSON GameSummary
+
 instance ToJSON GameStatus
+
 instance FromJSON GameStatus
 
 -- Create a game summary from game data with player names
@@ -135,7 +146,7 @@ type APIWithAssets = API :<|> Raw
 apiWithAssets :: Proxy APIWithAssets
 apiWithAssets = Proxy
 
---https://mmhaskell.com/blog/2020/3/23/serving-html-with-servant
+-- https://mmhaskell.com/blog/2020/3/23/serving-html-with-servant
 data HTML = HTML
 
 newtype RawHtml = RawHtml {unRaw :: Lazy.ByteString}

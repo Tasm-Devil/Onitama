@@ -1,4 +1,4 @@
-module Api exposing (JoinGameResponse, JoinError, Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede, gameMoveToString, stringToGameMove, joinErrorToString)
+module Api exposing (JoinError, JoinGameResponse, Msg(..), ServerGame, concede, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -7,7 +7,8 @@ import Http
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
-import Lobby exposing (GameId, Status(..),GameSummary, GameStatus(..))
+import Lobby exposing (GameId, GameStatus(..), GameSummary, Status(..))
+
 
 
 -- MOVE STRING CONVERSION
@@ -17,8 +18,11 @@ import Lobby exposing (GameId, Status(..),GameSummary, GameStatus(..))
 posToChess : ( Int, Int ) -> String
 posToChess ( x, y ) =
     let
-        col = String.fromChar (Char.fromCode (Char.toCode 'a' + x))
-        row = String.fromInt (y + 1)
+        col =
+            String.fromChar (Char.fromCode (Char.toCode 'a' + x))
+
+        row =
+            String.fromInt (y + 1)
     in
     col ++ row
 
@@ -28,13 +32,18 @@ chessToPos str =
     case String.toList str of
         [ colChar, rowChar ] ->
             let
-                x = Char.toCode colChar - Char.toCode 'a'
-                y = Char.toCode rowChar - Char.toCode '1'
+                x =
+                    Char.toCode colChar - Char.toCode 'a'
+
+                y =
+                    Char.toCode rowChar - Char.toCode '1'
             in
             if x >= 0 && x <= 4 && y >= 0 && y <= 4 then
                 Just ( x, y )
+
             else
                 Nothing
+
         _ ->
             Nothing
 
@@ -42,13 +51,25 @@ chessToPos str =
 gameMoveToString : Game.GameMove -> String
 gameMoveToString { color, card, from, move } =
     let
-        colorStr = case color of
-            White -> "w"
-            Black -> "b"
-        fromStr = posToChess from
-        toPos = ( Tuple.first from + Tuple.first move, Tuple.second from + Tuple.second move )
-        toStr = posToChess toPos
-        cardStr = String.toLower card.name
+        colorStr =
+            case color of
+                White ->
+                    "w"
+
+                Black ->
+                    "b"
+
+        fromStr =
+            posToChess from
+
+        toPos =
+            ( Tuple.first from + Tuple.first move, Tuple.second from + Tuple.second move )
+
+        toStr =
+            posToChess toPos
+
+        cardStr =
+            String.toLower card.name
     in
     colorStr ++ ":" ++ fromStr ++ toStr ++ ":" ++ cardStr
 
@@ -58,27 +79,39 @@ stringToGameMove str =
     case String.split ":" str of
         [ colorStr, positions, cardStr ] ->
             let
-                maybeColor = case colorStr of
-                    "w" -> Just White
-                    "b" -> Just Black
-                    _ -> Nothing
+                maybeColor =
+                    case colorStr of
+                        "w" ->
+                            Just White
+
+                        "b" ->
+                            Just Black
+
+                        _ ->
+                            Nothing
 
                 maybeFromTo =
                     if String.length positions == 4 then
                         let
-                            fromStr = String.left 2 positions
-                            toStr = String.right 2 positions
+                            fromStr =
+                                String.left 2 positions
+
+                            toStr =
+                                String.right 2 positions
                         in
                         Maybe.map2 Tuple.pair (chessToPos fromStr) (chessToPos toStr)
+
                     else
                         Nothing
 
-                card = cardByName (capitalizeFirst cardStr)
+                card =
+                    cardByName (capitalizeFirst cardStr)
             in
             case ( maybeColor, maybeFromTo ) of
                 ( Just color, Just ( from, to ) ) ->
                     let
-                        move = ( Tuple.first to - Tuple.first from, Tuple.second to - Tuple.second from )
+                        move =
+                            ( Tuple.first to - Tuple.first from, Tuple.second to - Tuple.second from )
                     in
                     Just { color = color, card = card, from = from, move = move }
 
@@ -115,7 +148,7 @@ type alias PlayerToken =
 type alias JoinGameResponse =
     { responseGame : ServerGame
     , responseToken : PlayerToken
-    , responsePlayerName : String  -- Server explicitly tells us who we are
+    , responsePlayerName : String -- Server explicitly tells us who we are
     }
 
 
@@ -258,6 +291,7 @@ concede gameid token =
         , timeout = Nothing
         , tracker = Nothing
         }
+
 
 
 -- DECODERS
