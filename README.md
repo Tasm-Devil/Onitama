@@ -235,8 +235,9 @@ docker run -p 8080:8080 onitama:latest
 - [x] Move token to HTTP header (`X-Session-Token`)
 - [X] **Per-player token system** (global player identity)
 - [ ] **Timestamps** for games and moves (detect abandoned games)
-- [ ] **Footer component** with project info and GitHub link
+- [ ] **Footer component** with project info, GitHub link and QR-Code
 - [ ] **CSS improvements** (responsive, animations, better aesthetics)
+- [ ] Add **Command-Line Options** to server
 - [ ] Let visitors join a game for watching
 - [ ] playback gamemoves
 - [ ] Maybe **WebSockets** for real-time updates and In-game chat

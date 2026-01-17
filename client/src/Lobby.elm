@@ -1,6 +1,5 @@
 module Lobby exposing (GameId, Model, Msg(..), Status(..), GameSummary, GameStatus(..), view)
 
-import Browser.Navigation exposing (Key)
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import Html.Events exposing (onClick)
