@@ -5,3 +5,4 @@ assets/elm.min.js
 gamedb.json
 onitama.tar
 *.cabal
+*.old

@@ -54,11 +54,21 @@ data GameWithNames = GameWithNames
 instance ToJSON GameWithNames
 instance FromJSON GameWithNames
 
--- Response when joining a game includes game data and session token
+-- Response when joining a game includes game data, session token, and player name
 data JoinGameResponse = JoinGameResponse
   { responseGame :: GameWithNames
   , responseToken :: SessionToken
+  , responsePlayerName :: Text  -- Server explicitly tells client which player they are
   } deriving (Show, Generic)
+
+-- Errors that can occur when joining a game
+data JoinError
+  = JEGameNotFound
+  | JEGameFull
+  | JEInvalidToken
+  | JENameTaken
+  | JEInvalidName
+  deriving (Eq, Show, Generic)
 
 -- Lightweight game summary for listing games
 data GameSummary = GameSummary
@@ -74,6 +84,8 @@ data GameStatus = WaitingForPlayers | InProgress | Completed
 
 instance ToJSON JoinGameResponse
 instance FromJSON JoinGameResponse
+instance ToJSON JoinError
+instance FromJSON JoinError
 instance ToJSON GameSummary
 instance FromJSON GameSummary
 instance ToJSON GameStatus
@@ -103,7 +115,7 @@ type NewGame = "1" :> "onitama" :> "new" :> Post '[JSON] GameId
 
 type GetGameSummaries = "1" :> "onitama" :> "summary" :> Get '[JSON] [GameSummary]
 
-type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> Header "X-Session-Token" SessionToken :> Put '[JSON] (Maybe JoinGameResponse)
+type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> Header "X-Session-Token" SessionToken :> Put '[JSON] (Either JoinError JoinGameResponse)
 
 type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (Maybe GameWithNames)
 

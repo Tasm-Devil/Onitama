@@ -3,7 +3,7 @@
 
 module App where
 
-import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets, GameWithNames)
+import Api (API, GameId (..), GameSummary, SessionToken (..), JoinGameResponse (..), JoinError (..), api, RawHtml (RawHtml), APIWithAssets, apiWithAssets, GameWithNames)
 import Game (Game (..), GameMove, give5Cards, Color, PlayerSlot(..), getCurrentPlayerSlot)
 import qualified Data.Text as T
 import Database
@@ -88,26 +88,24 @@ getGameSummaries = do
   db <- ask
   liftIO $ getAllGameSummaries db
 
-joinGame :: Maybe GameId -> Maybe String -> Maybe SessionToken -> AppM (Maybe JoinGameResponse)
-joinGame maybeGameId name maybeToken = do
+joinGame :: Maybe GameId -> Maybe String -> Maybe SessionToken -> AppM (Either JoinError JoinGameResponse)
+joinGame maybeGameId maybeName maybeToken = do
   db <- ask
-  if isNothing name || isNothing maybeGameId
-    then return Nothing
-    else do
-      let gameId = fromJust maybeGameId
-      let playerName = T.pack (fromJust name)
+  case (maybeGameId, maybeName) of
+    (Just gameId, Just name) -> do
+      let playerName = T.pack name
+      liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
 
-      liftIO $ putStrLn $ "Player " ++ T.unpack playerName ++ " attempting to join game " ++ show gameId
-
-      -- Join game and get token (with optional existing token for rejoin)
       result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
       case result of
-        Nothing -> do
-          liftIO $ putStrLn "Join failed: game not found, full, or invalid token for rejoin"
-          return Nothing
-        Just joingameresponse -> do
-          liftIO $ putStrLn "Join successful, token generated/retrieved"
-          return $ Just joingameresponse
+        Left err -> do
+          liftIO $ putStrLn $ "Join failed: " ++ show err
+          return $ Left err
+        Right joinResponse -> do
+          liftIO $ putStrLn "Join successful"
+          return $ Right joinResponse
+
+    _ -> return $ Left JEInvalidName  -- Missing gameId or name
 
 getGame :: Maybe GameId -> AppM (Maybe GameWithNames)
 getGame maybeGameId = do

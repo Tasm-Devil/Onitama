@@ -36,12 +36,17 @@ type alias PlayerIdentity =
     }
 
 
+type EnterNameState
+    = Entering PlayerName -- current name, all stored players
+    | Joining PlayerName -- waiting for response
+    | JoinError PlayerName String -- name, error, all stored players
+
+
 type Model
-    = Redirect Key Url (Maybe PlayerIdentity)
-    | Lobby Lobby.Model (Maybe PlayerIdentity)
-    | EnterName Key GameId PlayerName (Maybe PlayerIdentity)
-    | Playing Key GameId PlayerName PlayerToken Game (List Game.GameMove) (Maybe PlayerIdentity)
-    | Rejoining Key GameId PlayerName PlayerToken (Maybe PlayerIdentity)
+    = Redirect Key Url (List PlayerIdentity)
+    | Lobby Key Lobby.Model (List PlayerIdentity)
+    | EnterName Key GameId EnterNameState (List PlayerIdentity)
+    | Playing Key GameId PlayerName PlayerToken Game (List Game.GameMove) (List PlayerIdentity)
 
 
 
@@ -50,14 +55,14 @@ type Model
 
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( Redirect key url Nothing, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+    ( Redirect key url [], Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     let
-        sessionSub =
-            Ports.loadPlayer PlayerLoadedFromStorage
+        playersSub =
+            Ports.loadPlayers StoredPlayersLoaded
 
         pollingSub =
             case model of
@@ -70,14 +75,14 @@ subscriptions model =
                         _ ->
                             Time.every 2000 Tick
 
-                Lobby _ _ ->
+                Lobby _ _ _ ->
                     -- Poll every 3 seconds in lobby for new games
                     Time.every 3000 Tick
 
                 _ ->
                     Sub.none
     in
-    Sub.batch [ sessionSub, pollingSub ]
+    Sub.batch [ playersSub, pollingSub ]
 
 
 main : Program () Model Msg
@@ -107,22 +112,76 @@ view model =
                         [ Html.text url.path ]
                     ]
 
-            Lobby m _ ->
+            Lobby _ m _ ->
                 Lobby.view m
                     |> Html.map GotLobbyMsg
 
-            EnterName _ _ player _ ->
-                Html.div [ HtmlA.class "landing-screen" ]
-                    [ Html.form [ HtmlA.id "name-form" ]
-                        [ Html.h1 []
-                            [ Html.text "Onitama" ]
-                        , Html.small [] [ Html.text "Enter your name..." ]
-                        , Html.div [ HtmlA.class "name-line" ]
-                            [ Html.input [ HtmlA.id "name", HtmlA.placeholder "Enter your name", HtmlA.value <| player, onInput TypingName ] []
-                            , Html.input [ HtmlA.type_ "button", HtmlA.value "Join", onClick RequestGameFromServer ] []
+            EnterName _ _ state storedPlayers ->
+                case state of
+                    Entering currentName ->
+                        Html.div [ HtmlA.class "landing-screen" ]
+                            [ Html.form [ HtmlA.id "name-form" ]
+                                [ Html.h1 []
+                                    [ Html.text "Onitama" ]
+                                , Html.small [] [ Html.text "Enter your name or select from existing players..." ]
+                                , Html.div [ HtmlA.class "name-line" ]
+                                    [ Html.input
+                                        [ HtmlA.id "name"
+                                        , HtmlA.placeholder "Enter your name"
+                                        , HtmlA.value currentName
+                                        , HtmlA.attribute "autocomplete" "off"
+                                        , HtmlA.attribute "list" "player-names"
+                                        , onInput TypingName
+                                        ]
+                                        []
+                                    , Html.datalist [ HtmlA.id "player-names" ]
+                                        (List.map (\p -> Html.option [ HtmlA.value p.playerName ] []) storedPlayers)
+                                    , Html.input
+                                        [ HtmlA.type_ "button"
+                                        , HtmlA.value "Join"
+                                        , HtmlA.disabled (String.isEmpty currentName)
+                                        , onClick RequestGameFromServer
+                                        ]
+                                        []
+                                    ]
+                                ]
                             ]
-                        ]
-                    ]
+
+                    Joining playerName ->
+                        Html.div [ HtmlA.class "landing-screen" ]
+                            [ Html.h2 [] [ Html.text "Joining game..." ]
+                            , Html.p [] [ Html.text ("Joining as " ++ playerName) ]
+                            , Html.div [ HtmlA.class "spinner" ] []
+                            ]
+
+                    JoinError playerName errorMsg ->
+                        Html.div [ HtmlA.class "landing-screen" ]
+                            [ Html.form [ HtmlA.id "name-form" ]
+                                [ Html.h1 [] [ Html.text "Onitama" ]
+                                , Html.div [ HtmlA.class "error-message" ]
+                                    [ Html.text errorMsg ]
+                                , Html.div [ HtmlA.class "name-line" ]
+                                    [ Html.input
+                                        [ HtmlA.id "name"
+                                        , HtmlA.placeholder "Enter your name"
+                                        , HtmlA.value playerName
+                                        , HtmlA.attribute "autocomplete" "off"
+                                        , HtmlA.attribute "list" "player-names"
+                                        , onInput TypingName
+                                        ]
+                                        []
+                                    , Html.datalist [ HtmlA.id "player-names" ]
+                                        (List.map (\p -> Html.option [ HtmlA.value p.playerName ] []) storedPlayers)
+                                    , Html.input
+                                        [ HtmlA.type_ "button"
+                                        , HtmlA.value "Try Again"
+                                        , HtmlA.disabled (String.isEmpty playerName)
+                                        , onClick RequestGameFromServer
+                                        ]
+                                        []
+                                    ]
+                                ]
+                            ]
 
             Playing _ _ _ _ game history _ ->
                 Html.div [ HtmlA.class "game-container", HtmlA.style "display" "flex" ]
@@ -135,12 +194,6 @@ view model =
                                 ]
                            ]
                     )
-
-            Rejoining _ _ playerName _ _ ->
-                Html.div [ HtmlA.class "landing-screen" ]
-                    [ Html.h2 [] [ Html.text "Rejoining..." ]
-                    , Html.p [] [ Html.text ("Rejoining as " ++ playerName) ]
-                    ]
         ]
 
 
@@ -180,9 +233,9 @@ viewGameMove gameMove =
 
 
 -- HELPERS
-
-
 -- Encode player identity for localStorage
+
+
 encodePlayer : PlayerIdentity -> Encode.Value
 encodePlayer player =
     Encode.object
@@ -191,20 +244,29 @@ encodePlayer player =
         ]
 
 
--- Decode player identity from localStorage
-decodePlayer : Encode.Value -> Maybe PlayerIdentity
-decodePlayer value =
+
+-- Decode list of player identities from localStorage
+
+
+decodePlayers : Encode.Value -> List PlayerIdentity
+decodePlayers value =
     let
         playerDecoder =
             Decode.map2 PlayerIdentity
                 (Decode.field "playerName" Decode.string)
                 (Decode.field "token" Decode.string)
+
+        playersDecoder =
+            Decode.list playerDecoder
     in
-    Decode.decodeValue playerDecoder value
-        |> Result.toMaybe
+    Decode.decodeValue playersDecoder value
+        |> Result.withDefault []
+
 
 
 -- Check if we lost and should concede
+
+
 checkAndConcede : Game -> GameId -> PlayerToken -> Cmd Msg
 checkAndConcede game gameid token =
     case game.state of
@@ -261,7 +323,7 @@ type Msg
     | GotLobbyMsg Lobby.Msg
     | TypingName String
     | RequestGameFromServer
-    | PlayerLoadedFromStorage Encode.Value
+    | StoredPlayersLoaded Encode.Value
     | GotServerMsg Api.Msg
     | Tick Time.Posix
 
@@ -287,8 +349,8 @@ update msg model =
         RequestGameFromServer ->
             handleRequestGame model
 
-        PlayerLoadedFromStorage value ->
-            handlePlayerLoaded value model
+        StoredPlayersLoaded value ->
+            handleStoredPlayersLoaded value model
 
         GotServerMsg servermsg ->
             handleServerMsg servermsg model
@@ -300,7 +362,7 @@ update msg model =
                     -- Poll for game state updates
                     handleRequestGame model
 
-                Lobby _ _ ->
+                Lobby _ _ _ ->
                     -- Poll for lobby/game summaries updates
                     ( model, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
@@ -319,36 +381,31 @@ handleUrlChange url model =
             String.dropLeft 1 url.path
     in
     case model of
-        Lobby lobby player ->
+        Lobby key _ storedPlayers ->
             if String.isEmpty gameidStr then
                 ( model, Cmd.none )
 
             else
                 case String.toInt gameidStr of
                     Just gameid ->
-                        case player of
-                            Just p ->
-                                -- We have player identity, try to rejoin
-                                ( Rejoining lobby.key gameid p.playerName p.token player
-                                , Cmd.map GotServerMsg <| Api.joinGame gameid p.playerName (Just p.token)
-                                )
-
-                            Nothing ->
-                                -- No player identity, need to enter name
-                                ( EnterName lobby.key gameid "" Nothing, Cmd.none )
+                        -- Transition to EnterName (player names come via subscription)
+                        ( EnterName key gameid (Entering "") storedPlayers
+                        , Cmd.none
+                        )
 
                     Nothing ->
                         ( model, Cmd.none )
 
-        EnterName key currentGameId name player ->
+        EnterName key currentGameId _ storedPlayers ->
+            -- Stay in EnterName if same game, otherwise redirect
             if String.toInt gameidStr == Just currentGameId then
-                ( EnterName key currentGameId name player, Cmd.none )
+                ( model, Cmd.none )
 
             else
-                ( Redirect key url player, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+                ( Redirect key url storedPlayers, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
-        Playing key _ _ _ _ _ player ->
-            ( Redirect key url player, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+        Playing key _ _ _ _ _ storedPlayers ->
+            ( Redirect key url storedPlayers, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         _ ->
             ( model, Cmd.none )
@@ -361,10 +418,10 @@ handleUrlChange url model =
 handleClickedLink : Browser.UrlRequest -> Model -> ( Model, Cmd Msg )
 handleClickedLink urlRequest model =
     case model of
-        Lobby lobby player ->
+        Lobby key lobby storedPlayers ->
             case urlRequest of
                 Browser.Internal url ->
-                    ( Lobby lobby player, Nav.pushUrl lobby.key <| Url.toString url )
+                    ( Lobby key lobby storedPlayers, Nav.pushUrl key <| Url.toString url )
 
                 _ ->
                     ( model, Cmd.none )
@@ -380,7 +437,7 @@ handleClickedLink urlRequest model =
 handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
 handleGameMsg gamemsg model =
     case model of
-        Playing key gameid name token game history_ player ->
+        Playing key gameid name token game history_ storedPlayers ->
             let
                 game_after =
                     Game.update gamemsg game
@@ -395,7 +452,7 @@ handleGameMsg gamemsg model =
                         _ ->
                             Cmd.none
             in
-            ( Playing key gameid name token game_after history_ player, cmd )
+            ( Playing key gameid name token game_after history_ storedPlayers, cmd )
 
         _ ->
             ( model, Cmd.none )
@@ -408,7 +465,7 @@ handleGameMsg gamemsg model =
 handleLobbyMsg : Lobby.Msg -> Model -> ( Model, Cmd Msg )
 handleLobbyMsg lobbymsg model =
     case ( lobbymsg, model ) of
-        ( RequestNewGameFromServer, Lobby _ _ ) ->
+        ( RequestNewGameFromServer, Lobby _ _ _ ) ->
             ( model, Cmd.map GotServerMsg Api.getGameIdFromServer )
 
         _ ->
@@ -422,8 +479,11 @@ handleLobbyMsg lobbymsg model =
 handleTypingName : String -> Model -> ( Model, Cmd Msg )
 handleTypingName newname model =
     case model of
-        EnterName key gameid _ player ->
-            ( EnterName key gameid newname player, Cmd.none )
+        EnterName key gameid (Entering _) storedPlayers ->
+            ( EnterName key gameid (Entering newname) storedPlayers, Cmd.none )
+
+        EnterName key gameid (JoinError _ error) storedPlayers ->
+            ( EnterName key gameid (JoinError newname error) storedPlayers, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -432,13 +492,31 @@ handleTypingName newname model =
 handleRequestGame : Model -> ( Model, Cmd Msg )
 handleRequestGame model =
     case model of
-        EnterName _ gameid name player ->
+        EnterName key gameid (Entering name) storedPlayers ->
             let
-                -- Use stored token if available
+                -- Look up token from stored players list
                 maybeToken =
-                    Maybe.map .token player
+                    storedPlayers
+                        |> List.filter (\p -> p.playerName == name)
+                        |> List.head
+                        |> Maybe.map .token
             in
-            ( model, Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken )
+            ( EnterName key gameid (Joining name) storedPlayers
+            , Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken
+            )
+
+        EnterName key gameid (JoinError name _) storedPlayers ->
+            -- Retry after error, look up token from stored players
+            let
+                maybeToken =
+                    storedPlayers
+                        |> List.filter (\p -> p.playerName == name)
+                        |> List.head
+                        |> Maybe.map .token
+            in
+            ( EnterName key gameid (Joining name) storedPlayers
+            , Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken
+            )
 
         Playing _ gameid _ _ _ _ _ ->
             ( model, Cmd.map GotServerMsg <| Api.getGameFromServer gameid )
@@ -451,39 +529,30 @@ handleRequestGame model =
 -- PLAYER IDENTITY HANDLERS
 
 
-handlePlayerLoaded : Encode.Value -> Model -> ( Model, Cmd Msg )
-handlePlayerLoaded value model =
+handleStoredPlayersLoaded : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleStoredPlayersLoaded value model =
+    let
+        players =
+            decodePlayers value
+    in
     case model of
         Redirect key url _ ->
-            let
-                loadedPlayer =
-                    decodePlayer value
+            ( Redirect key url players, Cmd.none )
 
-                gameidStr =
-                    String.dropLeft 1 url.path
+        Lobby key lobby  _ ->
+            ( Lobby key lobby players, Cmd.none )
 
-                maybeGameId =
-                    String.toInt gameidStr
-            in
-            case maybeGameId of
-                Just gameId ->
-                    case loadedPlayer of
-                        Just player ->
-                            -- Have player identity and game ID, try to rejoin
-                            ( Rejoining key gameId player.playerName player.token loadedPlayer
-                            , Cmd.map GotServerMsg <| Api.joinGame gameId player.playerName (Just player.token)
-                            )
+        EnterName key gameid (Entering currentName)  _ ->
+            ( EnterName key gameid (Entering currentName)  players, Cmd.none )
 
-                        Nothing ->
-                            -- No player identity, need to enter name
-                            ( Redirect key url Nothing, Cmd.none )
+        EnterName key gameid (Joining name)  _ ->
+            ( EnterName key gameid (Joining name)  players, Cmd.none )
 
-                Nothing ->
-                    -- No game ID in URL
-                    ( Redirect key url loadedPlayer, Cmd.none )
+        EnterName key gameid (JoinError name errorMsg)  _ ->
+            ( EnterName key gameid (JoinError name errorMsg)  players, Cmd.none )
 
-        _ ->
-            ( model, Cmd.none )
+        Playing key gameid name token game history  _ ->
+            ( Playing key gameid name token game history  players, Cmd.none )
 
 
 
@@ -515,7 +584,7 @@ handleServerMsg servermsg model =
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
 handleGameSummaries result model =
     case ( result, model ) of
-        ( Ok summaries, Redirect key url player ) ->
+        ( Ok summaries, Redirect key url  storedPlayers ) ->
             let
                 gameidStr =
                     String.dropLeft 1 url.path
@@ -525,28 +594,31 @@ handleGameSummaries result model =
 
                 gameIds =
                     List.map .summaryId summaries
+
             in
             case maybeGameId of
                 Just gameid ->
                     if List.member gameid gameIds then
-                        ( EnterName key gameid "" player, Cmd.none )
+                        ( EnterName key gameid (Entering "")  storedPlayers
+                        , Cmd.none
+                        )
 
                     else
-                        ( Lobby { status = Home summaries, key = key } player, Nav.pushUrl key "/" )
+                        ( Lobby key { status = Home summaries }  storedPlayers, Nav.pushUrl key "/" )
 
                 Nothing ->
                     if String.isEmpty gameidStr then
-                        ( Lobby { status = Home summaries, key = key } player, Cmd.none )
+                        ( Lobby key { status = Home summaries }  storedPlayers, Cmd.none )
 
                     else
-                        ( Lobby { status = Home summaries, key = key } player, Nav.pushUrl key "/" )
+                        ( Lobby key { status = Home summaries }  storedPlayers, Nav.pushUrl key "/" )
 
-        ( Err _, Redirect key _ player ) ->
-            ( Lobby { status = Home [], key = key } player, Cmd.none )
+        ( Err _, Redirect key _  storedPlayers ) ->
+            ( Lobby key { status = Home [] }  storedPlayers, Cmd.none )
 
-        ( Ok summaries, Lobby lobby player ) ->
+        ( Ok summaries, Lobby key lobby storedPlayers ) ->
             -- Update lobby with fresh game summaries (from polling)
-            ( Lobby { lobby | status = Home summaries } player, Cmd.none )
+            ( Lobby key { lobby | status = Home summaries }  storedPlayers, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -555,60 +627,57 @@ handleGameSummaries result model =
 handleNewGameId : Result Http.Error GameId -> Model -> ( Model, Cmd Msg )
 handleNewGameId result model =
     case ( result, model ) of
-        ( Ok gameId, Lobby lobby player ) ->
-            ( Lobby lobby player, Nav.pushUrl lobby.key <| "/" ++ String.fromInt gameId )
+        ( Ok gameId, Lobby key lobby  storedPlayers ) ->
+            ( Lobby key lobby  storedPlayers, Nav.pushUrl key <| "/" ++ String.fromInt gameId )
 
         _ ->
             ( model, Cmd.none )
 
 
-handleJoinResponse : Result Http.Error Api.JoinGameResponse -> Model -> ( Model, Cmd Msg )
+handleJoinResponse : Result Http.Error (Result Api.JoinError Api.JoinGameResponse) -> Model -> ( Model, Cmd Msg )
 handleJoinResponse result model =
     case ( result, model ) of
-        ( Ok joinResponse, EnterName key gameid name _ ) ->
-            -- Always save player identity when joining
-            joinGameSuccess key gameid name joinResponse True
+        ( Ok (Ok joinResponse), EnterName key gameid _ storedPlayers ) ->
+            -- Success: save token and transition to Playing
+            -- Server explicitly tells us which player we are
+            joinGameSuccess key gameid joinResponse storedPlayers
 
-        ( Err _, EnterName key gameid name player ) ->
-            ( EnterName key gameid name player, Cmd.none )
+        ( Ok (Err joinError), EnterName key gameid (Joining name)  storedPlayers ) ->
+            -- Join error from server: show error in EnterName screen
+            ( EnterName key gameid (JoinError name (Api.joinErrorToString joinError))  storedPlayers
+            , Cmd.none
+            )
 
-        ( Ok joinResponse, Rejoining key gameId playerName _ _ ) ->
-            -- Update token from server when rejoining
-            joinGameSuccess key gameId playerName joinResponse True
-
-        ( Err _, Rejoining key gameId playerName _ _ ) ->
-            -- Rejoin failed, enter name screen
-            ( EnterName key gameId playerName Nothing, Cmd.none )
-
-        ( Ok joinResponse, Redirect key url _ ) ->
+        ( Err httpError, EnterName key gameid (Joining name)  storedPlayers ) ->
+            -- Network error: show error in EnterName screen
             let
-                gameid =
-                    String.dropLeft 1 url.path
-                        |> String.toInt
-                        |> Maybe.withDefault 0
+                errorMsg =
+                    case httpError of
+                        Http.BadUrl _ ->
+                            "Invalid URL"
 
-                -- Use player name from response (server knows who we are)
-                playerName =
-                    joinResponse.responseGame.gameWhiteName
-                        |> (\name -> if String.isEmpty name then joinResponse.responseGame.gameBlackName else name)
-            in
-            joinGameSuccess key gameid playerName joinResponse True
+                        Http.Timeout ->
+                            "Request timed out"
 
-        ( Err _, Redirect key url player ) ->
-            let
-                gameId =
-                    String.dropLeft 1 url.path
-                        |> String.toInt
-                        |> Maybe.withDefault 0
+                        Http.NetworkError ->
+                            "Network error. Check your connection."
+
+                        Http.BadStatus code ->
+                            "Server error: " ++ String.fromInt code
+
+                        Http.BadBody msg ->
+                            "Invalid response: " ++ msg
             in
-            ( EnterName key gameId "" player, Cmd.none )
+            ( EnterName key gameid (JoinError name errorMsg)  storedPlayers
+            , Cmd.none
+            )
 
         _ ->
             ( model, Cmd.none )
 
 
-joinGameSuccess : Key -> GameId -> String -> Api.JoinGameResponse -> Bool -> ( Model, Cmd Msg )
-joinGameSuccess key gameid name joinResponse shouldSavePlayer =
+joinGameSuccess : Key -> GameId -> Api.JoinGameResponse -> List PlayerIdentity -> ( Model, Cmd Msg )
+joinGameSuccess key gameid joinResponse storedPlayers =
     let
         servergame =
             joinResponse.responseGame
@@ -616,16 +685,21 @@ joinGameSuccess key gameid name joinResponse shouldSavePlayer =
         token =
             joinResponse.responseToken
 
+        name =
+            joinResponse.responsePlayerName
+
         finalgame =
             buildGame name servergame
 
+        -- IMPORTANT: Always use token from server response
+        -- Server is source of truth
         newPlayer =
             { playerName = name
             , token = token
             }
 
         saveCmd =
-            if shouldSavePlayer && not (String.isEmpty name) then
+            if not (String.isEmpty name) then
                 Ports.savePlayer (encodePlayer newPlayer)
 
             else
@@ -634,7 +708,8 @@ joinGameSuccess key gameid name joinResponse shouldSavePlayer =
         concedeCmd =
             checkAndConcede finalgame gameid token
     in
-    ( Playing key gameid name token finalgame servergame.gameHistory (Just newPlayer)
+    
+    ( Playing key gameid name token finalgame servergame.gameHistory storedPlayers
     , Cmd.batch [ saveCmd, concedeCmd ]
     )
 
@@ -642,10 +717,10 @@ joinGameSuccess key gameid name joinResponse shouldSavePlayer =
 handleGameUpdate : Result Http.Error Api.ServerGame -> Model -> ( Model, Cmd Msg )
 handleGameUpdate result model =
     case ( result, model ) of
-        ( Ok servergame, Playing key gameid name token game currentHistory player ) ->
+        ( Ok servergame, Playing key gameid name token game currentHistory storedPlayers ) ->
             case game.state of
                 GameOver _ ->
-                    ( Playing key gameid name token game servergame.gameHistory player, Cmd.none )
+                    ( Playing key gameid name token game servergame.gameHistory storedPlayers, Cmd.none )
 
                 _ ->
                     -- Only update if there's a NEW move (server history changed)
@@ -665,7 +740,7 @@ handleGameUpdate result model =
                                         concedeCmd =
                                             checkAndConcede updatedGame gameid token
                                     in
-                                    ( Playing key gameid name token updatedGame servergame.gameHistory player
+                                    ( Playing key gameid name token updatedGame servergame.gameHistory storedPlayers
                                     , concedeCmd
                                     )
                                 )
@@ -678,7 +753,7 @@ handleGameUpdate result model =
 handleMoveConfirmation : Result Http.Error Game.GameMove -> Model -> ( Model, Cmd Msg )
 handleMoveConfirmation result model =
     case ( result, model ) of
-        ( Ok gameMove, Playing key gameid name token game history_ player ) ->
+        ( Ok gameMove, Playing key gameid name token game history_ storedPlayers ) ->
             let
                 updatedGame =
                     game |> Game.update (NewGameMove <| transformGameMove gameMove)
@@ -686,7 +761,7 @@ handleMoveConfirmation result model =
                 concedeCmd =
                     checkAndConcede updatedGame gameid token
             in
-            ( Playing key gameid name token updatedGame (gameMove :: history_) player
+            ( Playing key gameid name token updatedGame (gameMove :: history_) storedPlayers
             , concedeCmd
             )
 

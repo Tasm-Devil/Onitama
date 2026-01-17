@@ -48,6 +48,7 @@ server/src/           # Haskell backend
   Database.hs         # JSON persistence and session management
 
 assets/               # Static files served to browser
+  localStorage.js     # Bidirectional player identity persistence
 ```
 
 ## API Endpoints
@@ -89,10 +90,61 @@ Base URL: `http://localhost:8080/1/onitama`
 ## Architecture Notes
 
 ### Frontend (Elm)
-- TEA architecture with discriminated union for page states: `Redirect | Lobby | EnterName | Playing | Rejoining`
-- Session stored in localStorage (gameId, playerName, token)
+- TEA architecture with discriminated union for page states: `Redirect | Lobby | EnterName | Playing`
+- Player identities stored in localStorage as list: `[{playerName, token}]`
+  - Bidirectional sync: JavaScript immediately notifies Elm when players are saved
+  - Prevents data loss during state transitions
+  - Provides autocomplete for returning players
 - Board perspective rotated for Black player (see `transformGameMove`)
 - Polls server for updates (no WebSocket)
+
+### Client Flow (Page State Transitions)                                                                                                                                                          
+
+**1. Init → Redirect**
+- App starts in `Redirect` state with empty storedPlayers
+- Immediately fetches game summaries from server
+- Subscribes to localStorage to load stored player identities
+             
+**2. Redirect → Lobby or EnterName**
+- When summaries arrive and storedPlayers load:
+  - If URL is "/" (or invalid): → `Lobby` with game list
+  - If URL is "/{gameId}" and game exists: → `EnterName` for that game
+  - If URL is "/{gameId}" but game doesn't exist: → `Lobby` and redirect to "/"
+                                                                                                                                                                                                  
+**3. Lobby**
+- User can:
+  - Create new game → navigates to "/{newGameId}" → `EnterName`
+  - Click existing game → navigates to "/{gameId}" → `EnterName`
+- Polls for lobby updates every 3 seconds
+                                                                                                                                                                                                  
+**4. EnterName**
+- Three substates:
+  - `Entering name`: Shows input form with autocomplete from storedPlayers 
+  - `Joining name`: Waiting for server join response
+  - `JoinError name error`: Server rejected join, shows error with retry
+- On submit:
+  - Looks up token from storedPlayers by matching playerName
+  - Sends join request with name and optional token to server
+- On success: → `Playing`
+                                                                                                                                                                                                  
+**5. Playing**
+- Receives game state and token from server
+- Saves new PlayerIdentity to localStorage (JS immediately syncs back to Elm)
+- Renders game board from player's perspective (Black rotated 180°)
+- Polls server for game state updates every 2 seconds (stops when GameOver)
+- User makes move:
+  - Game state updates locally to `MoveDone`
+  - Move sent to server
+  - On confirmation: game state updated with move
+- Auto-concedes if client detects player has lost
+- URL navigation away from game: → `Redirect` to re-evaluate
+                                                                                                                                                                                                  
+**Key Patterns:**
+- `storedPlayers: List PlayerIdentity` is threaded through all states for autocomplete/token lookup
+- **localStorage synchronization**: When Elm saves a player via port, JavaScript updates localStorage then immediately sends the fresh list back to Elm via subscription, keeping all model states in sync
+- Move history comparison: Server history vs local history to detect opponent moves
+- Perspective transformation: Black player's moves rotated before sending, opponent moves rotated on receive
+         
 
 ### Backend (Haskell)
 - Type-safe API with Servant
@@ -101,8 +153,22 @@ Base URL: `http://localhost:8080/1/onitama`
 - Auto-saves to `gamedb.json` every 30 seconds
 
 ### Important Patterns
-- Move history is append-only (head = most recent, functional style)
-- Cards: 16 standard Onitama cards with hardcoded movement patterns
+
+**Move History:**
+- Append-only list (head = most recent, functional style)
+- Server history compared with local history to detect opponent moves
+
+**Cards:**
+- 16 standard Onitama cards with hardcoded movement patterns
+
+**localStorage Persistence:**
+- Player identities (name + token pairs) stored in browser localStorage
+- Bidirectional port communication pattern:
+  1. Elm → `savePlayer` port → JavaScript updates localStorage
+  2. JavaScript → `loadPlayers` subscription → Elm receives updated list
+  3. This immediate sync prevents data loss during page state transitions
+- Implemented in `assets/localStorage.js` and `client/src/Ports.elm`
+- Enables autocomplete for returning players and seamless token reuse
 
 ## Testing
 
@@ -110,6 +176,7 @@ Base URL: `http://localhost:8080/1/onitama`
 - **Elm**: No tests yet (can add with elm-test)
 
 ## TODO
+- See README.md
 
 ### 1. Add Timestamps for Game Lifecycle Management
 **Priority: HIGH** (required for production)
@@ -184,98 +251,7 @@ Base URL: `http://localhost:8080/1/onitama`
 - Better color scheme
 - Accessible focus states
 
-### 4. Migrate to Per-Player Token System
-**Priority: HIGH** (architectural change, do before adding more features)
-
-**Current**: Token per game per player `[{gameId, playerName, token}]`
-**Target**: Token per player globally `[{playerId, playerName, token}]`
-
-**Backend (Haskell)**:
-- Create new `Player` type in `server/src/Database.hs`:
-  ```haskell
-  data Player = Player
-    { playerId   :: PlayerId    -- Integer
-    , playerName :: Text
-    , playerToken :: SessionToken -- UUID
-    , createdAt  :: UTCTime
-    }
-  ```
-- Add `dbPlayers :: Map PlayerId Player` to database
-- Add `dbNextPlayerId :: Int` counter
-- Change `Game` to reference `PlayerId` instead of player names:
-  ```haskell
-  data Game = Game
-    { gameCards        :: [Card]
-    , gameHistory      :: [(GameMove, UTCTime, PlayerId)]
-    , gamePlayerWhite  :: Maybe PlayerId
-    , gamePlayerBlack  :: Maybe PlayerId
-    , gameWinner       :: Maybe Winner
-    , gameCreatedAt    :: UTCTime
-    , gameLastActivity :: UTCTime
-    }
-  ```
-- Update API endpoints to work with player IDs:
-  - `/new` returns `PlayerId` on first join
-  - Join endpoint creates/reuses player record
-  - Token validates against `dbPlayers`, not per-game
-
-**Frontend (Elm)**:
-- Update localStorage structure:
-  ```javascript
-  // Old: [{ gameId: 1, playerName: "Alice", token: "..." }]
-  // New: { playerId: "1", playerName: "Alice", token: "..." }
-  ```
-- Update `Ports.elm` to store single player identity
-- Update API client to send player ID with requests
-- Handle name changes (allow player to update display name?)
-
-**Database Migration**:
-- Write migration script to convert existing `gamedb.json`
-- Extract unique players from existing games
-- Generate player IDs and assign to games
-- Preserve existing tokens if possible (or invalidate and require re-login)
-
-**Database Schema (Final)**:
-```json
-{
-  "dbGames": {
-    "1": {
-      "createdAt": "2026-01-13T10:30:00Z",
-      "lastActivity": "2026-01-13T10:35:00Z",
-      "cards": ["Boar", "Elephant", "Crane", "Ox", "Tiger"],
-      "history": [
-        {"move": "w:c1c3:tiger", "timestamp": "2026-01-13T10:35:00Z", "playerId": "1"}
-      ],
-      "player_black": null,
-      "player_white": "1",
-      "winner": null
-    }
-  },
-  "dbPlayers": {
-    "1": {
-      "name": "Alice",
-      "token": "da7db216-61d9-46ec-b1ce-d931aab6b111",
-      "createdAt": "2026-01-10T08:00:00Z"
-    }
-  },
-  "dbNextGameId": 2,
-  "dbNextPlayerId": 2,
-  "dbHasChanged": true
-}
-```
-
-**Benefits**:
-- Consistent player identity across games
-- Easier to add future features (stats, match history, ELO rating)
-- Natural fit for eventual relational DB migration
-- No global name collisions (player ID is unique)
-
-**Tradeoffs**:
-- More complex migration from current system
-- Player names become mutable (need UI to change them?)
-- Slightly more DB lookups (player ID -> name for display)
-
-### 5. Add Command-Line Options to Server
+### 4. Add Command-Line Options to Server
 **Priority: LOW** (quality of life improvement)
 
 **Backend (Haskell)**:

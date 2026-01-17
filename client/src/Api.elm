@@ -1,4 +1,4 @@
-module Api exposing (JoinGameResponse, Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede, gameMoveToString, stringToGameMove)
+module Api exposing (JoinGameResponse, JoinError, Msg(..), ServerGame, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinGame, postNewGameMove, concede, gameMoveToString, stringToGameMove, joinErrorToString)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -115,13 +115,44 @@ type alias PlayerToken =
 type alias JoinGameResponse =
     { responseGame : ServerGame
     , responseToken : PlayerToken
+    , responsePlayerName : String  -- Server explicitly tells us who we are
     }
 
+
+type JoinError
+    = JEGameNotFound
+    | JEGameFull
+    | JEInvalidToken
+    | JENameTaken
+    | JEInvalidName
+    | JENetworkError String
+
+
+joinErrorToString : JoinError -> String
+joinErrorToString error =
+    case error of
+        JEGameNotFound ->
+            "Game not found. It may have been deleted."
+
+        JEGameFull ->
+            "This game is full. Both players have already joined."
+
+        JEInvalidToken ->
+            "Your session expired. Please try again."
+
+        JENameTaken ->
+            "This name is already taken. Please choose another name."
+
+        JEInvalidName ->
+            "Please enter a valid name (at least 1 character)."
+
+        JENetworkError msg ->
+            "Network error: " ++ msg
 
 
 type Msg
     = ReceivedGameIdFromServer (Result Http.Error GameId) -- the game id of the new game
-    | ReceivedJoinGameResponse (Result Http.Error JoinGameResponse)
+    | ReceivedJoinGameResponse (Result Http.Error (Result JoinError JoinGameResponse))
     | ReceivedGameFromServer (Result Http.Error ServerGame)
     | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
     | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary)) -- lightweight game summaries
@@ -167,17 +198,21 @@ joinGame gameid name maybeToken =
 
                 Nothing ->
                     []
+
+        -- Decode Either JoinError JoinGameResponse
+        -- Server returns: {"Left": "JENameTaken"} or {"Right": {...}}
+        eitherDecoder =
+            Decode.oneOf
+                [ Decode.field "Right" decodeJoinGameResponse |> Decode.map Ok
+                , Decode.field "Left" decodeJoinError |> Decode.map Err
+                ]
     in
     Http.request
         { method = "PUT"
         , headers = tokenHeader
         , url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&name=" ++ name
         , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedJoinGameResponse (Decode.nullable decodeJoinGameResponse |> Decode.andThen (\maybeResponse ->
-            case maybeResponse of
-                Just response -> Decode.succeed response
-                Nothing -> Decode.fail "Server returned null - game not found or full"
-            ))
+        , expect = Http.expectJson ReceivedJoinGameResponse eitherDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -226,6 +261,32 @@ concede gameid token =
 
 
 -- DECODERS
+
+
+decodeJoinError : Decoder JoinError
+decodeJoinError =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "JEGameNotFound" ->
+                        Decode.succeed JEGameNotFound
+
+                    "JEGameFull" ->
+                        Decode.succeed JEGameFull
+
+                    "JEInvalidToken" ->
+                        Decode.succeed JEInvalidToken
+
+                    "JENameTaken" ->
+                        Decode.succeed JENameTaken
+
+                    "JEInvalidName" ->
+                        Decode.succeed JEInvalidName
+
+                    _ ->
+                        Decode.fail ("Unknown join error: " ++ str)
+            )
 
 
 decodeColor : Decoder Color
@@ -304,6 +365,7 @@ decodeJoinGameResponse =
     Decode.succeed JoinGameResponse
         |> required "responseGame" decodeGame
         |> required "responseToken" Decode.string
+        |> required "responsePlayerName" Decode.string
 
 
 encodeGameMove : Game.GameMove -> Encode.Value

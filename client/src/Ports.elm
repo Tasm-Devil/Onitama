@@ -1,13 +1,14 @@
-port module Ports exposing (savePlayer, loadPlayer)
+port module Ports exposing (savePlayer, loadPlayers)
 
 import Json.Encode as Encode
 
 
--- Save player identity to localStorage
+-- Save player identity to localStorage (adds or updates)
 -- Expects: { playerName: String, token: String }
 port savePlayer : Encode.Value -> Cmd msg
 
 
--- Load player identity from localStorage on startup
+-- Load all player identities from localStorage on startup
+-- Receives: [{ playerName: String, token: String }, ...]
 -- This is called automatically by JavaScript on page load
-port loadPlayer : (Encode.Value -> msg) -> Sub msg
+port loadPlayers : (Encode.Value -> msg) -> Sub msg

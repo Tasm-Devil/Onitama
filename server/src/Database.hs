@@ -2,7 +2,7 @@
 
 module Database where
 
-import Api (GameId (..), GameStatus (..), GameSummary (..), Games, JoinGameResponse (..), SessionToken (..), gameToSummary, GameWithNames (..))
+import Api (GameId (..), GameStatus (..), GameSummary (..), Games, JoinGameResponse (..), JoinError (..), SessionToken (..), gameToSummary, GameWithNames (..))
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, when)
@@ -267,6 +267,12 @@ getPlayerById (DB dbVar) pid = do
   state <- readTVarIO dbVar
   return $ Map.lookup pid (dbPlayers state)
 
+-- Get all player names (for dropdown in client)
+getAllPlayerNames :: DB -> IO [Text]
+getAllPlayerNames (DB dbVar) = do
+  state <- readTVarIO dbVar
+  return $ map playerName $ Map.elems (dbPlayers state)
+
 -- Create a new player with unique ID and token
 createPlayer :: DB -> Text -> IO Player
 createPlayer (DB dbVar) name = do
@@ -283,71 +289,94 @@ createPlayer (DB dbVar) name = do
         }
     return newPlayer
 
--- Get or create player by name (returns existing if found)
-getOrCreatePlayer :: DB -> Text -> IO Player
-getOrCreatePlayer db name = do
-  maybePlayer <- getPlayerByName db name
-  case maybePlayer of
-    Just player -> return player
-    Nothing -> createPlayer db name
-
 -- Validate that a token belongs to a player and return the player
 validatePlayerToken :: DB -> SessionToken -> IO (Maybe Player)
 validatePlayerToken = getPlayerByToken
 
 -- Join a game with player token
--- If token provided: validates and uses that player
--- If no token: creates new player with given name
-joinGameWithToken :: DB -> GameId -> Text -> Maybe SessionToken -> IO (Maybe JoinGameResponse)
+-- If token provided: MUST be valid (rejects invalid tokens)
+-- If no token: name MUST be available (rejects duplicate names)
+joinGameWithToken :: DB -> GameId -> Text -> Maybe SessionToken -> IO (Either JoinError JoinGameResponse)
 joinGameWithToken db@(DB dbVar) gameId playerNameText maybeProvidedToken = do
-  maybeGame <- getGameById db gameId
-  case maybeGame of
-    Nothing -> return Nothing
-    Just game@(Game maybeWhiteId maybeBlackId cards history winner) -> do
-      -- Determine which player is joining
-      player <- case maybeProvidedToken of
-        Just token -> do
-          maybePlayer <- getPlayerByToken db token
-          case maybePlayer of
-            Just p -> do
-              putStrLn $ "Validated token for player: " ++ T.unpack (playerName p)
-              return p
+  -- Validate name is not empty/whitespace
+  let trimmedName = T.strip playerNameText
+  if T.null trimmedName
+    then return $ Left JEInvalidName
+    else do
+      maybeGame <- getGameById db gameId
+      case maybeGame of
+        Nothing -> return $ Left JEGameNotFound
+        Just game@(Game maybeWhiteId maybeBlackId cards history winner) -> do
+          -- Determine which player is joining
+          playerResult <- case maybeProvidedToken of
+            Just token -> do
+              -- Token provided: validate it
+              maybePlayer <- getPlayerByToken db token
+              case maybePlayer of
+                Just p -> do
+                  -- Valid token: use that player
+                  putStrLn $ "Valid token for player: " ++ T.unpack (playerName p)
+                  return $ Right p
+                Nothing -> do
+                  -- Invalid token: treat like no token, check if name available
+                  putStrLn $ "Invalid token provided, treating as new player: " ++ T.unpack trimmedName
+                  existing <- getPlayerByName db trimmedName
+                  case existing of
+                    Just _ -> do
+                      putStrLn $ "Name already taken: " ++ T.unpack trimmedName
+                      return $ Left JENameTaken
+                    Nothing -> do
+                      -- Name is available, create new player
+                      newPlayer <- createPlayer db trimmedName
+                      putStrLn $ "Created new player (invalid token): " ++ T.unpack trimmedName
+                      return $ Right newPlayer
+
             Nothing -> do
-              putStrLn $ "Invalid token provided, creating new player: " ++ T.unpack playerNameText
-              getOrCreatePlayer db playerNameText
-        Nothing -> do
-          putStrLn $ "No token provided, getting or creating player: " ++ T.unpack playerNameText
-          getOrCreatePlayer db playerNameText
+              -- No token: name must be available
+              putStrLn $ "No token provided, checking if name available: " ++ T.unpack trimmedName
+              existing <- getPlayerByName db trimmedName
+              case existing of
+                Just _ -> do
+                  putStrLn $ "Name already taken: " ++ T.unpack trimmedName
+                  return $ Left JENameTaken
+                Nothing -> do
+                  -- Name is available, create new player
+                  newPlayer <- createPlayer db trimmedName
+                  putStrLn $ "Created new player: " ++ T.unpack trimmedName
+                  return $ Right newPlayer
 
-      let pid = playerId player
+          case playerResult of
+            Left err -> return $ Left err
+            Right player -> do
+              let pid = playerId player
 
-      -- Check if player is already in this game
-      if Just pid == maybeWhiteId || Just pid == maybeBlackId
-        then do
-          putStrLn $ "Player " ++ T.unpack (playerName player) ++ " already in game"
-          gameWithNames <- gameToGameWithNames db game
-          return $ Just (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player})
-        else do
-          -- Try to join an empty slot
-          let updatedGame
-                | maybeWhiteId == Nothing = Just $ Game { player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner }
-                | maybeBlackId == Nothing = Just $ Game { player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner }
-                | otherwise = Nothing -- Game is full
+              -- Check if player is already in this game
+              if Just pid == maybeWhiteId || Just pid == maybeBlackId
+                then do
+                  putStrLn $ "Player " ++ T.unpack (playerName player) ++ " already in game"
+                  gameWithNames <- gameToGameWithNames db game
+                  return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
+                else do
+                  -- Try to join an empty slot
+                  let updatedGame
+                        | maybeWhiteId == Nothing = Just $ Game { player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner }
+                        | maybeBlackId == Nothing = Just $ Game { player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner }
+                        | otherwise = Nothing -- Game is full
 
-          case updatedGame of
-            Nothing -> do
-              putStrLn "Game is full, cannot join"
-              return Nothing
-            Just newGame -> do
-              -- Update the game
-              atomically $ modifyTVar dbVar $ \state ->
-                state
-                  { dbGames = Map.insert gameId newGame (dbGames state),
-                    dbHasChanged = True
-                  }
-              putStrLn $ "Player " ++ T.unpack (playerName player) ++ " joined game"
-              gameWithNames <- gameToGameWithNames db newGame
-              return $ Just (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player})
+                  case updatedGame of
+                    Nothing -> do
+                      putStrLn "Game is full, cannot join"
+                      return $ Left JEGameFull
+                    Just newGame -> do
+                      -- Update the game
+                      atomically $ modifyTVar dbVar $ \state ->
+                        state
+                          { dbGames = Map.insert gameId newGame (dbGames state),
+                            dbHasChanged = True
+                          }
+                      putStrLn $ "Player " ++ T.unpack (playerName player) ++ " joined game"
+                      gameWithNames <- gameToGameWithNames db newGame
+                      return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
 
 -- Validate that a token is valid for making a move in a game
 -- Returns True if the player owns the current turn

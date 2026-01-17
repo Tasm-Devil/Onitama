@@ -15,8 +15,7 @@ type alias GameId =
 
 
 type alias Model =
-    { key : Key
-    , status : Status
+    { status : Status
     }
 
 
