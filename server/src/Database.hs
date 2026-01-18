@@ -17,6 +17,7 @@ import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust, isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime)
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
@@ -35,12 +36,34 @@ instance FromJSON Player
 
 instance ToJSON Player
 
+-- Cleanup configuration: timeout durations in hours
+data CleanupConfig = CleanupConfig
+  { cleanupWaitingForPlayers :: NominalDiffTime, -- hours for games waiting for players
+    cleanupInProgress :: NominalDiffTime, -- hours for games in progress
+    cleanupCompleted :: NominalDiffTime -- hours for completed games
+  }
+  deriving (Generic, Show)
+
+instance FromJSON CleanupConfig
+
+instance ToJSON CleanupConfig
+
+-- Default cleanup timeouts
+defaultCleanupConfig :: CleanupConfig
+defaultCleanupConfig =
+  CleanupConfig
+    { cleanupWaitingForPlayers = 2 * 3600, -- 2 hours in seconds
+      cleanupInProgress = 24 * 3600, -- 24 hours in seconds
+      cleanupCompleted = 72 * 3600 -- 72 hours in seconds
+    }
+
 data DBState = DBState
   { dbGames :: Games,
     dbNextGameId :: Int,
     dbPlayers :: Map PlayerId Player,
     dbNextPlayerId :: Int,
-    dbHasChanged :: Bool
+    dbHasChanged :: Bool,
+    dbCleanupConfig :: CleanupConfig
   }
   deriving (Generic)
 
@@ -69,10 +92,10 @@ loadDB = do
             return db
           Nothing -> do
             putStrLn $ "Failed to parse database file at " ++ dbFilePath ++ " , starting with empty DB"
-            return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False}
+            return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False, dbCleanupConfig = defaultCleanupConfig}
       else do
         putStrLn $ "Database file at " ++ dbFilePath ++ " not found, starting with empty DB"
-        return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False}
+        return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False, dbCleanupConfig = defaultCleanupConfig}
   newTVarIO initialDB
 
 -- Save database to file with pretty printing
@@ -98,14 +121,66 @@ saveDB dbVar = do
     Lazy.writeFile dbFilePath encodedDB
     putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
 
+-- Cleanup old games based on their status and lastActivity
+cleanupOldGames :: DB -> IO ()
+cleanupOldGames db@(DB dbVar) = do
+  now <- getCurrentTime
+  state <- readTVarIO dbVar
+  let config = dbCleanupConfig state
+      games = dbGames state
+
+      -- Determine timeout for each game based on status
+      shouldDelete gameId game =
+        let status = determineGameStatus game
+            timeout = case status of
+              WaitingForPlayers -> cleanupWaitingForPlayers config
+              InProgress -> cleanupInProgress config
+              Completed -> cleanupCompleted config
+            expirationTime = addUTCTime timeout (lastActivity game)
+         in now > expirationTime
+
+      gamesToDelete = Map.filterWithKey shouldDelete games
+      gameCount = Map.size gamesToDelete
+
+  when (gameCount > 0) $ do
+    putStrLn $ "Cleaning up " ++ show gameCount ++ " expired games"
+    atomically $ modifyTVar dbVar $ \s ->
+      s
+        { dbGames = Map.difference (dbGames s) gamesToDelete,
+          dbHasChanged = True
+        }
+    markDBChanged db
+
+-- Determine game status from Game data
+determineGameStatus :: Game -> GameStatus
+determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _) =
+  case maybeWinner of
+    Just _ -> Completed
+    Nothing ->
+      case (maybeWhiteId, maybeBlackId) of
+        (Nothing, Nothing) -> WaitingForPlayers
+        (Nothing, _) -> WaitingForPlayers
+        (_, Nothing) -> WaitingForPlayers
+        _ -> InProgress
+
 -- Start periodic saving of database
-startPeriodicSave :: TVar DBState -> IO ()
-startPeriodicSave dbVar = do
+startPeriodicSave :: DB -> IO ()
+startPeriodicSave (DB dbVar) = do
   putStrLn "Starting periodic database save thread"
   -- Fork a thread that will save the database every 30 seconds
   _ <- forkIO $ forever $ do
     saveDB dbVar
     threadDelay (30 * 1000000) -- 30 seconds for testing (instead of 10 minutes)
+  return ()
+
+-- Start periodic cleanup of old games
+startPeriodicCleanup :: DB -> IO ()
+startPeriodicCleanup db = do
+  putStrLn "Starting periodic game cleanup thread"
+  -- Fork a thread that will cleanup old games every 10 minutes
+  _ <- forkIO $ forever $ do
+    cleanupOldGames db
+    threadDelay (10 * 60 * 1000000) -- 10 minutes in microseconds
   return ()
 
 -- Log current database state
@@ -128,8 +203,10 @@ markDBChanged db@(DB dbVar) = do
 initDB :: IO DB
 initDB = do
   dbVar <- loadDB
-  startPeriodicSave dbVar
-  return $ DB dbVar
+  let db = DB dbVar
+  startPeriodicSave db
+  startPeriodicCleanup db
+  return db
 
 -- Helper functions for accessing and modifying the database
 getGames :: DB -> IO Games
@@ -146,12 +223,23 @@ getGameById (DB dbVar) gameId = do
 insertGameWithNewId :: DB -> IO GameId
 insertGameWithNewId (DB dbVar) = do
   newCards <- liftIO give5Cards
+  now <- getCurrentTime
   gameId <- atomically $ do
     state <- readTVar dbVar
     let newId = GameId (dbNextGameId state)
+        newGame =
+          Game
+            { player_white = Nothing,
+              player_black = Nothing,
+              cards = newCards,
+              history = [],
+              winner = Nothing,
+              createdAt = now,
+              lastActivity = now
+            }
     modifyTVar dbVar $ \s ->
       s
-        { dbGames = Map.insert newId (Game {player_white = Nothing, player_black = Nothing, cards = newCards, history = [], winner = Nothing}) (dbGames s),
+        { dbGames = Map.insert newId newGame (dbGames s),
           dbNextGameId = dbNextGameId s + 1,
           dbHasChanged = True
         }
@@ -198,13 +286,18 @@ gameToGameWithNames db game = do
       return $ maybe T.empty playerName maybePlayer
     Nothing -> return T.empty
 
+  -- Extract just the moves from history (without timestamps)
+  let moves = map fst (history game)
+
   return $
     GameWithNames
       { gameWhiteName = whiteName,
         gameBlackName = blackName,
         gameCards = cards game,
-        gameHistory = history game,
-        gameWinner = winner game
+        gameHistory = moves,
+        gameWinner = winner game,
+        gameCreatedAt = createdAt game,
+        gameLastActivity = lastActivity game
       }
 
 -- Get a game with player names for client display
@@ -276,7 +369,7 @@ createPlayer (DB dbVar) name = do
   atomically $ do
     state <- readTVar dbVar
     let pid = dbNextPlayerId state
-        newPlayer = Player pid name token
+        newPlayer = Player {playerId = pid, playerName = name, playerToken = token}
     modifyTVar dbVar $ \s ->
       s
         { dbPlayers = Map.insert pid newPlayer (dbPlayers s),
@@ -302,7 +395,7 @@ joinGameWithToken db@(DB dbVar) gameId playerNameText maybeProvidedToken = do
       maybeGame <- getGameById db gameId
       case maybeGame of
         Nothing -> return $ Left JEGameNotFound
-        Just game@(Game maybeWhiteId maybeBlackId cards history winner) -> do
+        Just game@(Game maybeWhiteId maybeBlackId cards history winner _ _) -> do
           -- Determine which player is joining
           playerResult <- case maybeProvidedToken of
             Just token -> do
@@ -353,9 +446,10 @@ joinGameWithToken db@(DB dbVar) gameId playerNameText maybeProvidedToken = do
                   return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
                 else do
                   -- Try to join an empty slot
+                  now <- getCurrentTime
                   let updatedGame
-                        | isNothing maybeWhiteId = Just $ Game {player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner}
-                        | isNothing maybeBlackId = Just $ Game {player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner}
+                        | isNothing maybeWhiteId = Just $ Game {player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now}
+                        | isNothing maybeBlackId = Just $ Game {player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now}
                         | otherwise = Nothing -- Game is full
                   case updatedGame of
                     Nothing -> do
@@ -419,8 +513,8 @@ concedeGame db@(DB dbVar) gameId token = do
             currentState <- readTVar dbVar
             case Map.lookup gameId (dbGames currentState) of
               Nothing -> return False
-              Just (Game p1 p2 cards history _) -> do
-                let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor}
+              Just (Game p1 p2 cards history _ created lastAct) -> do
+                let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor, createdAt = created, lastActivity = lastAct}
                 writeTVar dbVar $
                   currentState
                     { dbGames = Map.insert gameId updatedGame (dbGames currentState),

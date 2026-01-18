@@ -4,10 +4,12 @@ import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
 import Game.Game as Game exposing (GameState(..))
 import Http
+import Iso8601
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
 import Lobby exposing (GameId, GameStatus(..), GameSummary, Status(..))
+import Time exposing (Posix)
 
 
 
@@ -138,6 +140,8 @@ type alias ServerGame =
     , gameCards : List Card
     , gameHistory : List Game.GameMove
     , gameWinner : Maybe Color
+    , gameCreatedAt : Posix
+    , gameLastActivity : Posix
     }
 
 
@@ -449,6 +453,8 @@ decodeGameSummary =
         |> required "summaryPlayer2" Decode.string
         |> required "summaryMoveCount" Decode.int
         |> required "summaryStatus" decodeGameStatus
+        |> required "summaryCreatedAt" Iso8601.decoder
+        |> required "summaryLastActivity" Iso8601.decoder
 
 
 decodeGameMove : Decoder Game.GameMove
@@ -473,6 +479,8 @@ decodeGame =
         |> required "gameCards" (Decode.list (Decode.map Game.Card.cardByName Decode.string))
         |> required "gameHistory" (Decode.list decodeGameMove)
         |> required "gameWinner" (Decode.nullable decodeColor)
+        |> required "gameCreatedAt" Iso8601.decoder
+        |> required "gameLastActivity" Iso8601.decoder
 
 
 decodeJoinGameResponse : Decoder JoinGameResponse

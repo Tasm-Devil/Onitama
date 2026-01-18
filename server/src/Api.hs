@@ -11,8 +11,10 @@ import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
 import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import Game (Card, Color, Game (..), GameMove)
 import Network.HTTP.Media ((//), (/:))
@@ -48,7 +50,9 @@ data GameWithNames = GameWithNames
     gameBlackName :: Text,
     gameCards :: [Card],
     gameHistory :: [GameMove],
-    gameWinner :: Maybe Color
+    gameWinner :: Maybe Color,
+    gameCreatedAt :: UTCTime,
+    gameLastActivity :: UTCTime
   }
   deriving (Show, Generic)
 
@@ -95,7 +99,9 @@ data GameSummary = GameSummary
     summaryPlayer1 :: String,
     summaryPlayer2 :: String,
     summaryMoveCount :: Int,
-    summaryStatus :: GameStatus
+    summaryStatus :: GameStatus,
+    summaryCreatedAt :: UTCTime,
+    summaryLastActivity :: UTCTime
   }
   deriving (Show, Eq, Generic)
 
@@ -128,13 +134,15 @@ instance FromJSON GameStatus
 
 -- Create a game summary from game data with player names
 gameToSummary :: GameId -> Text -> Text -> Game -> GameSummary
-gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner) =
+gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner created lastAct) =
   GameSummary
     { summaryId = gameId,
-      summaryPlayer1 = if maybeWhiteId == Nothing then "" else T.unpack whiteName,
-      summaryPlayer2 = if maybeBlackId == Nothing then "" else T.unpack blackName,
+      summaryPlayer1 = if isNothing maybeWhiteId then "" else T.unpack whiteName,
+      summaryPlayer2 = if isNothing maybeBlackId then "" else T.unpack blackName,
       summaryMoveCount = Prelude.length history,
-      summaryStatus = determineStatus maybeWhiteId maybeBlackId maybeWinner
+      summaryStatus = determineStatus maybeWhiteId maybeBlackId maybeWinner,
+      summaryCreatedAt = created,
+      summaryLastActivity = lastAct
     }
   where
     determineStatus _ _ (Just _) = Completed
@@ -146,9 +154,8 @@ gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ histo
 type Games = Map GameId Game
 
 -- Request body for joining a game
-data JoinRequest = JoinRequest
-  { joinPlayerName :: String
-  }
+newtype JoinRequest
+  = JoinRequest {joinPlayerName :: String}
   deriving (Show, Generic)
 
 instance ToJSON JoinRequest

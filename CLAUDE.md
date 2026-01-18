@@ -207,38 +207,21 @@ If you want to support multiple games:
 ## TODO
 - See README.md
 
-### 1. Add Timestamps for Game Lifecycle Management
-**Priority: HIGH** (required for production)
+### 1. ✅ COMPLETED: Timestamps for Game Lifecycle Management
+**Status: COMPLETED** (2026-01-18)
 
-**Backend (Haskell)**:
-- Add `createdAt :: UTCTime` field to `Game` type in `server/src/Game.hs`
-- Add `lastActivity :: UTCTime` field to `Game` type
-- Add `timestamp :: UTCTime` field to each move in history (make history `[(GameMove, UTCTime)]`)
-- Update `lastActivity` on every move submission
-- Add periodic cleanup job to delete abandoned games (e.g., `lastActivity > 24 hours`)
-- Ensure timestamps are serialized in ISO8601 format in `gamedb.json`
-
-**Frontend (Elm)**:
-- Update `Game` decoder in `client/src/Api.elm` to parse timestamps
-- Display "Last activity: X minutes ago" in lobby for each game
-- Add visual indicator for stale games (e.g., grayed out if > 1 hour inactive)
-
-**Database Schema Change**:
-```json
-{
-  "dbGames": {
-    "1": {
-      "createdAt": "2026-01-13T10:30:00Z",
-      "lastActivity": "2026-01-13T10:35:00Z",
-      "cards": [...],
-      "history": [
-        {"move": "w:c1c3:tiger", "timestamp": "2026-01-13T10:35:00Z", "playerId": "1"}
-      ],
-      ...
-    }
-  }
-}
-```
+**Implementation Details**:
+- Added `createdAt` and `lastActivity` fields to `Game` type
+- Changed history to `[(GameMove, UTCTime)]` for per-move timestamps
+- Timestamps stored in ISO8601 format in `gamedb.json`
+- Automatic cleanup based on game status:
+  - **WaitingForPlayers**: 2 hours
+  - **InProgress**: 24 hours
+  - **Completed**: 72 hours
+- Background cleanup thread runs every 10 minutes
+- Lobby displays relative time ("5 min ago", "2 hr ago") for created/lastActivity
+- `lastActivity` updates on: game creation, player joining, move submission
+- No update on polling (passive viewing doesn't extend game lifetime)
 
 ### 2. Add Footer Component
 **Priority: MEDIUM** (polish)

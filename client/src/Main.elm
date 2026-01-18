@@ -355,16 +355,18 @@ update msg model =
         GotServerMsg servermsg ->
             handleServerMsg servermsg model
 
-        Tick _ ->
+        Tick currentTime ->
             -- Auto-poll for updates
             case model of
                 Playing _ _ _ _ _ _ _ ->
                     -- Poll for game state updates
                     handleRequestGame model
 
-                Lobby _ _ _ ->
-                    -- Poll for lobby/game summaries updates
-                    ( model, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+                Lobby key lobbyModel storedPlayers ->
+                    -- Update current time and poll for lobby/game summaries updates
+                    ( Lobby key { lobbyModel | currentTime = currentTime } storedPlayers
+                    , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -603,17 +605,17 @@ handleGameSummaries result model =
                         )
 
                     else
-                        ( Lobby key { status = Home summaries } storedPlayers, Nav.pushUrl key "/" )
+                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers, Nav.pushUrl key "/" )
 
                 Nothing ->
                     if String.isEmpty gameidStr then
-                        ( Lobby key { status = Home summaries } storedPlayers, Cmd.none )
+                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers, Cmd.none )
 
                     else
-                        ( Lobby key { status = Home summaries } storedPlayers, Nav.pushUrl key "/" )
+                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers, Nav.pushUrl key "/" )
 
         ( Err _, Redirect key _ storedPlayers ) ->
-            ( Lobby key { status = Home [] } storedPlayers, Cmd.none )
+            ( Lobby key { status = Home [], currentTime = Time.millisToPosix 0 } storedPlayers, Cmd.none )
 
         ( Ok summaries, Lobby key lobby storedPlayers ) ->
             -- Update lobby with fresh game summaries (from polling)

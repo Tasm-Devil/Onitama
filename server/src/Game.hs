@@ -4,6 +4,7 @@
 module Game where
 
 import Data.Aeson (FromJSON, ToJSON)
+import Data.Time.Clock (UTCTime)
 import GHC.Conc (TVar)
 import GHC.Generics (Generic)
 import System.Random (StdGen, newStdGen)
@@ -36,8 +37,10 @@ data Game = Game
   { player_white :: Maybe PlayerId,
     player_black :: Maybe PlayerId,
     cards :: [Card],
-    history :: [GameMove],
-    winner :: Maybe Color
+    history :: [(GameMove, UTCTime)],
+    winner :: Maybe Color,
+    createdAt :: UTCTime,
+    lastActivity :: UTCTime
   }
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
@@ -84,7 +87,7 @@ cardStartPlayer card = case card of
 
 -- Determine which player slot should make the next move based on game history and common card
 getCurrentPlayerSlot :: Game -> PlayerSlot
-getCurrentPlayerSlot (Game _ _ cards history _) =
+getCurrentPlayerSlot (Game _ _ cards history _ _ _) =
   let commonCard = if length cards >= 5 then cards !! 4 else ""
       startPlayer = cardStartPlayer commonCard
       moveCount = length history

@@ -9,6 +9,7 @@ import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
 import Data.Maybe (fromJust, isNothing)
 import qualified Data.Text as T
+import Data.Time.Clock (getCurrentTime)
 import Database
   ( DB,
     concedeGame,
@@ -125,7 +126,18 @@ newMove gameId maybeToken move = do
           return $ Left MENotYourTurn
         else do
           -- Token is valid, process the move
-          let updateGameFn (Game p1 p2 cards history w) = Just $ Game {player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w}
+          now <- liftIO getCurrentTime
+          let updateGameFn (Game p1 p2 cards history w created _) =
+                Just $
+                  Game
+                    { player_white = p1,
+                      player_black = p2,
+                      cards = cards,
+                      history = (move, now) : history,
+                      winner = w,
+                      createdAt = created,
+                      lastActivity = now
+                    }
           success <- liftIO $ updateGame db gameId updateGameFn
           if success
             then do

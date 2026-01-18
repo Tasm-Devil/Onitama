@@ -44,6 +44,7 @@ dependencies:
 - http-types         # for wai-make-assets
 - directory          # for wai-make-assets
 - text
+- time               # for timestamps
 
 
 library:

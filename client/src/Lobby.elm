@@ -3,6 +3,7 @@ module Lobby exposing (GameId, GameStatus(..), GameSummary, Model, Msg(..), Stat
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import Html.Events exposing (onClick)
+import Time exposing (Posix)
 
 
 
@@ -15,6 +16,7 @@ type alias GameId =
 
 type alias Model =
     { status : Status
+    , currentTime : Posix
     }
 
 
@@ -34,6 +36,8 @@ type alias GameSummary =
     , summaryPlayer2 : String
     , summaryMoveCount : Int
     , summaryStatus : GameStatus
+    , summaryCreatedAt : Posix
+    , summaryLastActivity : Posix
     }
 
 
@@ -69,16 +73,20 @@ view model =
                             , Html.td []
                                 [ Html.text "State" ]
                             , Html.td []
+                                [ Html.text "Created" ]
+                            , Html.td []
+                                [ Html.text "Last Activity" ]
+                            , Html.td []
                                 [ Html.text "" ]
                             ]
                         ]
-                        :: List.map createGameTableRow summaries
+                        :: List.map (createGameTableRow model.currentTime) summaries
                     )
                 ]
 
 
-createGameTableRow : GameSummary -> Html Msg
-createGameTableRow summary =
+createGameTableRow : Posix -> GameSummary -> Html Msg
+createGameTableRow currentTime summary =
     let
         player1Display =
             if String.isEmpty summary.summaryPlayer1 then
@@ -110,6 +118,12 @@ createGameTableRow summary =
 
         movesDisplay =
             String.fromInt summary.summaryMoveCount
+
+        createdAgo =
+            formatRelativeTime currentTime summary.summaryCreatedAt
+
+        lastActivityAgo =
+            formatRelativeTime currentTime summary.summaryLastActivity
     in
     Html.tr [ HtmlA.class "game-row" ]
         [ Html.td []
@@ -119,10 +133,49 @@ createGameTableRow summary =
         , Html.td []
             [ Html.text statusDisplay ]
         , Html.td []
+            [ Html.text createdAgo ]
+        , Html.td []
+            [ Html.text lastActivityAgo ]
+        , Html.td []
             [ Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
                 [ Html.text "Join" ]
             ]
         ]
+
+
+
+-- Format time relative to current time (e.g., "5 minutes ago")
+
+
+formatRelativeTime : Posix -> Posix -> String
+formatRelativeTime current past =
+    let
+        diffMs =
+            Time.posixToMillis current - Time.posixToMillis past
+
+        diffSeconds =
+            diffMs // 1000
+
+        diffMinutes =
+            diffSeconds // 60
+
+        diffHours =
+            diffMinutes // 60
+
+        diffDays =
+            diffHours // 24
+    in
+    if diffSeconds < 60 then
+        "just now"
+
+    else if diffMinutes < 60 then
+        String.fromInt diffMinutes ++ " min ago"
+
+    else if diffHours < 24 then
+        String.fromInt diffHours ++ " hr ago"
+
+    else
+        String.fromInt diffDays ++ " days ago"
 
 
 type Msg

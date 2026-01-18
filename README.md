@@ -149,11 +149,13 @@ GameStatus   = "WaitingForPlayers" | "InProgress" | "Completed"
 GameMove = String
 
 GameSummary = {
-  summaryId:        GameId,
-  summaryPlayer1:   String,
-  summaryPlayer2:   String,
-  summaryMoveCount: Int,
-  summaryStatus:    GameStatus
+  summaryId:          GameId,
+  summaryPlayer1:     String,
+  summaryPlayer2:     String,
+  summaryMoveCount:   Int,
+  summaryStatus:      GameStatus,
+  summaryCreatedAt:   UTCTime,      -- ISO8601 timestamp
+  summaryLastActivity: UTCTime      -- ISO8601 timestamp
 }
 
 JoinGameResponse = {
@@ -261,8 +263,8 @@ docker run -p 8080:8080 onitama:latest
 - [x] Common card determines starting player
 - [x] Simplify move format to `w:c1c3:tiger`
 - [x] Move token to HTTP header (`X-Session-Token`)
-- [X] **Per-player token system** (global player identity)
-- [ ] **Timestamps** for games and moves (detect abandoned games)
+- [x] **Per-player token system** (global player identity)
+- [x] **Timestamps** for games and moves (automatic cleanup of abandoned games)
 - [ ] **Footer component** with project info, GitHub link and QR-Code
 - [ ] **CSS improvements** (responsive, animations, better aesthetics)
 - [ ] Add **Command-Line Options** to server
