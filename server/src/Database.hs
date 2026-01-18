@@ -5,7 +5,7 @@ module Database where
 import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), Games, JoinError (..), JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
-import Control.Monad (forever, when)
+import Control.Monad (forever, unless, when)
 import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.Aeson.Encode.Pretty as Pretty
@@ -48,22 +48,13 @@ instance FromJSON CleanupConfig
 
 instance ToJSON CleanupConfig
 
--- Default cleanup timeouts
-defaultCleanupConfig :: CleanupConfig
-defaultCleanupConfig =
-  CleanupConfig
-    { cleanupWaitingForPlayers = 2 * 3600, -- 2 hours in seconds
-      cleanupInProgress = 24 * 3600, -- 24 hours in seconds
-      cleanupCompleted = 72 * 3600 -- 72 hours in seconds
-    }
-
 data DBState = DBState
   { dbGames :: Games,
-    dbNextGameId :: Int,
+    dbNextGameId :: Int, -- ToDO: don't like it being stored in gamedb
     dbPlayers :: Map PlayerId Player,
-    dbNextPlayerId :: Int,
-    dbHasChanged :: Bool,
-    dbCleanupConfig :: CleanupConfig
+    dbNextPlayerId :: Int, -- ToDO: don't like it being stored in gamedb
+    dbHasChanged :: Bool, -- ToDO: don't like it being stored in gamedb
+    dbCleanupConfig :: CleanupConfig -- ToDO: don't like it being stored in gamedb
   }
   deriving (Generic)
 
@@ -71,17 +62,27 @@ instance FromJSON DBState
 
 instance ToJSON DBState
 
-newtype DB = DB (TVar DBState)
-
-dbFilePath :: FilePath
-dbFilePath = "gamedb.json"
+-- Database wrapper with file path
+data DB = DB
+  { dbState :: TVar DBState,
+    dbFilePath :: FilePath
+  }
 
 -- Load database from file or create a new one if file doesn't exist
-loadDB :: IO (TVar DBState)
-loadDB = do
+loadDB :: FilePath -> Bool -> CleanupConfig -> IO (TVar DBState)
+loadDB dbFilePath resetDB cleanupCfg = do
   fileExists <- doesFileExist dbFilePath
+
+  -- If reset flag is set, skip loading and start fresh
+  let shouldLoad = fileExists && not resetDB
+
+  when resetDB $ do
+    putStrLn $ "Resetting database (--reset-db flag set), ignoring existing file at " ++ dbFilePath
+
+  let emptyDB = DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False, dbCleanupConfig = cleanupCfg}
+
   initialDB <-
-    if fileExists
+    if shouldLoad
       then do
         fileContent <- Lazy.readFile dbFilePath
         let maybeDB = decode fileContent
@@ -89,18 +90,22 @@ loadDB = do
           Just db -> do
             let gameCount = Map.size (dbGames db)
             putStrLn $ "Successfully loaded database at " ++ dbFilePath ++ " with " ++ show gameCount ++ " games"
-            return db
+            -- Update loaded DB with the provided cleanup config (in case defaults changed)
+            return $ db {dbCleanupConfig = cleanupCfg}
           Nothing -> do
             putStrLn $ "Failed to parse database file at " ++ dbFilePath ++ " , starting with empty DB"
-            return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False, dbCleanupConfig = defaultCleanupConfig}
+            return emptyDB
       else do
-        putStrLn $ "Database file at " ++ dbFilePath ++ " not found, starting with empty DB"
-        return $ DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False, dbCleanupConfig = defaultCleanupConfig}
+        -- Only print "not found" if file truly doesn't exist (not reset-db case)
+        unless fileExists $
+          putStrLn $
+            "Database file at " ++ dbFilePath ++ " not found, starting with empty DB"
+        return emptyDB
   newTVarIO initialDB
 
 -- Save database to file with pretty printing
-saveDB :: TVar DBState -> IO ()
-saveDB dbVar = do
+saveDB :: DB -> IO ()
+saveDB (DB dbVar filePath) = do
   dbState <- atomically $ do
     state <- readTVar dbVar
     let shouldSave = dbHasChanged state
@@ -118,12 +123,12 @@ saveDB dbVar = do
               Pretty.confCompare = compare
             }
     let encodedDB = Pretty.encodePretty' encoderConfig dbState
-    Lazy.writeFile dbFilePath encodedDB
+    Lazy.writeFile filePath encodedDB
     putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
 
 -- Cleanup old games based on their status and lastActivity
 cleanupOldGames :: DB -> IO ()
-cleanupOldGames db@(DB dbVar) = do
+cleanupOldGames db@(DB dbVar _) = do
   now <- getCurrentTime
   state <- readTVarIO dbVar
   let config = dbCleanupConfig state
@@ -164,28 +169,34 @@ determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _) =
         _ -> InProgress
 
 -- Start periodic saving of database
-startPeriodicSave :: DB -> IO ()
-startPeriodicSave (DB dbVar) = do
-  putStrLn "Starting periodic database save thread"
-  -- Fork a thread that will save the database every 30 seconds
+startPeriodicSave :: DB -> Double -> IO ()
+startPeriodicSave db saveIntervalMinutes = do
+  let saveIntervalSeconds = round (saveIntervalMinutes * 60)
+  putStrLn $ "Starting periodic database save thread (interval: " ++ show saveIntervalMinutes ++ " minutes)"
+  -- Fork a thread that will save the database at the specified interval
   _ <- forkIO $ forever $ do
-    saveDB dbVar
-    threadDelay (30 * 1000000) -- 30 seconds for testing (instead of 10 minutes)
+    saveDB db
+    threadDelay (saveIntervalSeconds * 1000000) -- Convert seconds to microseconds
   return ()
 
 -- Start periodic cleanup of old games
-startPeriodicCleanup :: DB -> IO ()
-startPeriodicCleanup db = do
-  putStrLn "Starting periodic game cleanup thread"
-  -- Fork a thread that will cleanup old games every 10 minutes
-  _ <- forkIO $ forever $ do
-    cleanupOldGames db
-    threadDelay (10 * 60 * 1000000) -- 10 minutes in microseconds
-  return ()
+startPeriodicCleanup :: DB -> Int -> Bool -> IO ()
+startPeriodicCleanup db cleanupIntervalMinutes enabled = do
+  if enabled
+    then do
+      putStrLn $ "Starting periodic game cleanup thread (interval: " ++ show cleanupIntervalMinutes ++ " minutes)"
+      -- Fork a thread that will cleanup old games at the specified interval
+      _ <- forkIO $ forever $ do
+        cleanupOldGames db
+        threadDelay (cleanupIntervalMinutes * 60 * 1000000) -- Convert minutes to microseconds
+      return ()
+    else do
+      putStrLn "Game cleanup disabled (--no-cleanup flag set)"
+      return ()
 
 -- Log current database state
 logDBState :: String -> DB -> IO ()
-logDBState prefix (DB dbVar) = do
+logDBState prefix (DB dbVar _) = do
   dbState <- readTVarIO dbVar
   let gameCount = Map.size (dbGames dbState)
   let changeStatus = if dbHasChanged dbState then "changed" else "unchanged"
@@ -193,35 +204,35 @@ logDBState prefix (DB dbVar) = do
 
 -- Mark database as changed
 markDBChanged :: DB -> IO ()
-markDBChanged db@(DB dbVar) = do
+markDBChanged db@(DB dbVar _) = do
   putStrLn "Marking database as changed"
   atomically $ do
     modifyTVar dbVar $ \state -> state {dbHasChanged = True}
   logDBState "After marking changed" db
 
--- Initialize database with TVar
-initDB :: IO DB
-initDB = do
-  dbVar <- loadDB
-  let db = DB dbVar
-  startPeriodicSave db
-  startPeriodicCleanup db
+-- Initialize database with TVar and configuration
+initDB :: FilePath -> Bool -> CleanupConfig -> Double -> Int -> Bool -> IO DB
+initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes cleanupEnabled = do
+  dbVar <- loadDB filePath resetDB cleanupConfig
+  let db = DB {dbState = dbVar, dbFilePath = filePath}
+  startPeriodicSave db saveIntervalMinutes
+  startPeriodicCleanup db cleanupIntervalMinutes cleanupEnabled
   return db
 
 -- Helper functions for accessing and modifying the database
 getGames :: DB -> IO Games
-getGames (DB dbVar) = do
+getGames (DB dbVar _) = do
   state <- readTVarIO dbVar
   return $ dbGames state
 
 getGameById :: DB -> GameId -> IO (Maybe Game)
-getGameById (DB dbVar) gameId = do
+getGameById (DB dbVar _) gameId = do
   state <- readTVarIO dbVar
   return $ Map.lookup gameId (dbGames state)
 
 -- Generate next game ID and insert game
 insertGameWithNewId :: DB -> IO GameId
-insertGameWithNewId (DB dbVar) = do
+insertGameWithNewId db@(DB dbVar _) = do
   newCards <- liftIO give5Cards
   now <- getCurrentTime
   gameId <- atomically $ do
@@ -244,11 +255,11 @@ insertGameWithNewId (DB dbVar) = do
           dbHasChanged = True
         }
     return newId
-  markDBChanged (DB dbVar)
+  markDBChanged db
   return gameId
 
 updateGame :: DB -> GameId -> (Game -> Maybe Game) -> IO Bool
-updateGame (DB dbVar) gameId updateFn = do
+updateGame db@(DB dbVar _) gameId updateFn = do
   result <- atomically $ do
     state <- readTVar dbVar
     let games = dbGames state
@@ -263,13 +274,13 @@ updateGame (DB dbVar) gameId updateFn = do
                 dbHasChanged = True
               }
           return True
-  when result $ markDBChanged (DB dbVar)
+  when result $ markDBChanged db
   return result
 
 forceSave :: DB -> IO ()
-forceSave (DB dbVar) = do
+forceSave db = do
   putStrLn "Forcing immediate database save"
-  saveDB dbVar
+  saveDB db
 
 -- Convert a Game to GameWithNames by looking up player names
 gameToGameWithNames :: DB -> Game -> IO GameWithNames
@@ -310,7 +321,7 @@ getGameWithNames db gameId = do
 
 -- Get all game summaries
 getAllGameSummaries :: DB -> IO [GameSummary]
-getAllGameSummaries db@(DB dbVar) = do
+getAllGameSummaries db@(DB dbVar _) = do
   state <- readTVarIO dbVar
   let games = dbGames state
   mapM (uncurry $ gameIdAndGameToSummary db) (Map.toList games)
@@ -340,31 +351,31 @@ generateToken = do
 
 -- Find player by token (search through all players)
 getPlayerByToken :: DB -> SessionToken -> IO (Maybe Player)
-getPlayerByToken (DB dbVar) token = do
+getPlayerByToken (DB dbVar _) token = do
   state <- readTVarIO dbVar
   return $ find (\p -> playerToken p == token) (Map.elems (dbPlayers state))
 
 -- Find player by name
 getPlayerByName :: DB -> Text -> IO (Maybe Player)
-getPlayerByName (DB dbVar) name = do
+getPlayerByName (DB dbVar _) name = do
   state <- readTVarIO dbVar
   return $ find (\p -> playerName p == name) (Map.elems (dbPlayers state))
 
 -- Get player by ID
 getPlayerById :: DB -> PlayerId -> IO (Maybe Player)
-getPlayerById (DB dbVar) pid = do
+getPlayerById (DB dbVar _) pid = do
   state <- readTVarIO dbVar
   return $ Map.lookup pid (dbPlayers state)
 
 -- Get all player names (for dropdown in client)
 getAllPlayerNames :: DB -> IO [Text]
-getAllPlayerNames (DB dbVar) = do
+getAllPlayerNames (DB dbVar _) = do
   state <- readTVarIO dbVar
   return $ map playerName $ Map.elems (dbPlayers state)
 
 -- Create a new player with unique ID and token
 createPlayer :: DB -> Text -> IO Player
-createPlayer (DB dbVar) name = do
+createPlayer (DB dbVar _) name = do
   token <- generateToken
   atomically $ do
     state <- readTVar dbVar
@@ -386,7 +397,7 @@ validatePlayerToken = getPlayerByToken
 -- If token provided: MUST be valid (rejects invalid tokens)
 -- If no token: name MUST be available (rejects duplicate names)
 joinGameWithToken :: DB -> GameId -> Text -> Maybe SessionToken -> IO (Either JoinError JoinGameResponse)
-joinGameWithToken db@(DB dbVar) gameId playerNameText maybeProvidedToken = do
+joinGameWithToken db@(DB dbVar _) gameId playerNameText maybeProvidedToken = do
   -- Validate name is not empty/whitespace
   let trimmedName = T.strip playerNameText
   if T.null trimmedName
@@ -490,7 +501,7 @@ getPlayerSlotInGame game pid
 
 -- Concede a game - the player with the given token admits defeat
 concedeGame :: DB -> GameId -> SessionToken -> IO (Maybe Color)
-concedeGame db@(DB dbVar) gameId token = do
+concedeGame db@(DB dbVar _) gameId token = do
   maybePlayer <- getPlayerByToken db token
   maybeGame <- getGameById db gameId
 

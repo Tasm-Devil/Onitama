@@ -179,7 +179,8 @@ If you want to support multiple games:
 - Type-safe API with Servant
 - TVar/STM for concurrent game state
 - UUID-based session tokens per player per game
-- Auto-saves to `gamedb.json` every 30 seconds
+- Auto-saves to `gamedb.json` (configurable interval, default: 30 seconds)
+- **No magic numbers**: All timeouts, intervals, and ports are configurable via CLI or config file
 
 ### Important Patterns
 
@@ -263,26 +264,73 @@ If you want to support multiple games:
 - Better color scheme
 - Accessible focus states
 
-### 4. Add Command-Line Options to Server
-**Priority: LOW** (quality of life improvement)
+### 4. ✅ COMPLETED: Command-Line Options to Server
+**Status: COMPLETED - All Phases** (2026-01-18)
 
-**Backend (Haskell)**:
-- Add command-line argument parsing (use `optparse-applicative` package)
-- Support options like:
-  - `-v, --verbose`: Enable verbose request logging (logStdoutDev)
-  - `-p, --port PORT`: Specify custom port (default 8080)
-  - `-d, --database FILE`: Specify custom database file path
-  - `--log-file FILE`: Log to file instead of stdout
-- Update `server/app/Main.hs` to conditionally enable logStdoutDev based on verbose flag
-- Currently, verbose logging must be manually uncommented in source code
+**Implementation Details**:
+- Added `optparse-applicative` and `yaml` dependencies
+- Created `server/src/Options.hs` with full option parsing and YAML config file support
+- Updated `server/app/Main.hs` to parse options, handle version flag, and bind to specified host
+- Refactored `Database.hs` to accept configurable save interval and cleanup configuration
+- Modified `DB` type to include file path (not just TVar)
+- Updated `App.hs` with `appWithConfig` function and cleanup options converter
+- Background threads now use configurable intervals instead of hardcoded values
+- **Eliminated all magic numbers**: Single source of truth in `Options.hs` for all defaults
+- **Removed dead code**: Deleted unused `app :: IO Application` function from App.hs
+- **Removed duplicate defaults**: Consolidated cleanup config defaults into Options.hs only
 
-**Example Usage**:
+**All Implemented Options**:
 ```bash
-./server -v -p 3000  # Run on port 3000 with verbose logging
-./server --database /data/games.json  # Custom database location
+# Basic Options (Phase 1 & 2)
+-v, --verbose                 Enable verbose HTTP logging (logStdoutDev)
+-p, --port PORT               Server port (default: 8080)
+--host HOST                   Bind address (default: "0.0.0.0")
+-d, --database FILE           Database file path (default: "gamedb.json")
+--reset-db                    Start with fresh empty database
+
+# Advanced Options (Phase 3 & 4)
+--save-interval SECS          Database save interval in seconds (default: 30)
+--cleanup-waiting HOURS       Hours before cleaning waiting games (default: 2.0)
+--cleanup-active HOURS        Hours before cleaning active games (default: 24.0)
+--cleanup-completed HOURS     Hours before cleaning completed games (default: 72.0)
+--cleanup-interval MINS       Minutes between cleanup checks (default: 10)
+--no-cleanup                  Disable automatic game cleanup
+
+# Config & Info
+-c, --config FILE             Config file path (default: ./onitama-server.yaml)
+--version                     Show version information (0.1.0.0)
+-h, --help                    Show help message
 ```
 
-**Note**: The logStdoutDev import is already available in Main.hs with instructions on how to enable it manually.
+**Configuration File Support**:
+- YAML format with option precedence: **defaults < config file < CLI arguments**
+- Example config file at `onitama-server.example.yaml`
+- CLI flags always override config file values
+- Config file is optional (uses `./onitama-server.yaml` by default if exists)
+
+**Usage Examples**:
+```bash
+# Default settings
+./server
+
+# Development mode with verbose logging
+./server -v -p 3000
+
+# Production with custom database and host binding
+./server --host 127.0.0.1 --database /var/lib/onitama/games.json
+
+# Testing with fresh database and custom cleanup
+./server -v --reset-db --cleanup-waiting 1.0 --cleanup-interval 5
+
+# Disable cleanup for testing
+./server --no-cleanup --save-interval 60
+
+# Use config file
+./server --config /etc/onitama/server.yaml
+
+# Show version
+./server --version
+```
 
 ## Known Limitations
 

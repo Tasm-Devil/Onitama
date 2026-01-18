@@ -81,7 +81,7 @@ The server intentionally knows **nothing about Onitama rules**. It's a pure "mov
 |-------|------------|---------|
 | Frontend | Elm 0.19.1 | [TEA](https://guide.elm-lang.org/architecture/) (The Elm Architecture) |
 | Backend | Haskell + Servant | Type-safe REST API |
-| Persistence | JSON file | Auto-save every 30s via STM |
+| Persistence | JSON file | Auto-save (configurable interval, default: 30s) via STM |
 
 ---
 
@@ -212,18 +212,84 @@ curl -X POST http://localhost:8080/1/onitama/games/1/moves \
 
 ```json
 {
-  "cards": ["Tiger", "Crab", "Monkey", "Crane", "Dragon"],
-  "history": ["b:c5c4:crane", "w:c1c3:tiger"],
-  "player_white": "Alice",
-  "player_black": "Bob",
-  "winner": null
+  "gameWhiteName": "Alice",
+  "gameBlackName": "Bob",
+  "gameCards": ["Tiger", "Crab", "Monkey", "Crane", "Dragon"],
+  "gameHistory": ["b:c5c4:crane", "w:c1c3:tiger"],
+  "gameWinner": null,
+  "gameCreatedAt": "2026-01-18T12:30:00Z",
+  "gameLastActivity": "2026-01-18T12:35:00Z"
 }
 ```
 
 - **Cards order**: `[White1, White2, Black1, Black2, Common]`
 - **History order**: Most recent move first (head of list = last move, FP style)
+- **Timestamps**: ISO8601 format (UTC)
 
 The common card (5th) determines who moves first based on its color stamp.
+
+---
+
+## Server Configuration
+
+The server supports extensive configuration via **command-line options** or **YAML config file**.
+
+### Command-Line Options
+
+```bash
+# Basic options
+server --port 3000 --host 127.0.0.1     # Custom port and host binding
+server --verbose                         # Enable HTTP request logging
+server --database /data/games.json       # Custom database location
+server --reset-db                        # Start with fresh empty database
+
+# Persistence
+server --save-interval 2.0               # Save database every 2 minutes (default: 1.0)
+
+# Automatic cleanup of abandoned games
+server --cleanup-waiting 1.0             # Delete waiting games after 1 hour (default: 2.0)
+server --cleanup-active 12.0             # Delete active games after 12 hours (default: 24.0)
+server --cleanup-completed 48.0          # Delete completed games after 48 hours (default: 72.0)
+server --cleanup-interval 5              # Run cleanup every 5 minutes (default: 10)
+server --no-cleanup                      # Disable automatic cleanup entirely
+
+# Config file (must be explicitly specified)
+server --config /etc/onitama/server.yaml # Load settings from YAML file
+server --config onitama-server.yaml      # Load from file in current directory
+
+# Info
+server --version                         # Show version
+server --help                            # Show all options
+```
+
+### YAML Configuration File
+
+Create `onitama-server.yaml` (or specify path with `--config`):
+
+```yaml
+# Server settings
+optVerbose: false          # Enable verbose HTTP request logging
+optPort: 8080             # Server port
+optHost: "0.0.0.0"        # Bind address (0.0.0.0 for all, 127.0.0.1 for localhost only)
+optDatabase: "gamedb.json" # Database file path
+optResetDB: false         # Start with fresh empty database
+optSaveInterval: 1.0      # Database save interval in minutes
+optShowVersion: false     # Show version and exit
+
+# Cleanup configuration
+optCleanup:
+  cleanupWaiting: 2.0     # Hours before cleaning waiting games
+  cleanupActive: 24.0     # Hours before cleaning active games
+  cleanupCompleted: 72.0  # Hours before cleaning completed games
+  cleanupInterval: 10     # Minutes between cleanup checks
+  cleanupEnabled: true    # Whether cleanup is enabled
+```
+
+**Configuration precedence**: `defaults < config file < command-line arguments`
+
+- Config files are **only loaded when explicitly specified** with `--config`
+- All command-line flags override config file values
+- This allows you to have a base configuration file and selectively override settings at runtime
 
 ---
 
@@ -238,6 +304,7 @@ The common card (5th) determines who moves first based on its color stamp.
 | `make client-release` | Build Elm frontend optimized for production |
 | `make server-build` | Build Haskell backend only |
 | `make server-start` | Build and run (port 8080) |
+| `make server-start-config` | Build and run (config-file: `onitama-server.yaml`) |
 | `make test` | Run all tests |
 | `make clean` | Remove build artifacts |
 
@@ -265,9 +332,13 @@ docker run -p 8080:8080 onitama:latest
 - [x] Move token to HTTP header (`X-Session-Token`)
 - [x] **Per-player token system** (global player identity)
 - [x] **Timestamps** for games and moves (automatic cleanup of abandoned games)
+- [x] **Command-line options & config file** (port, host, cleanup, save interval, etc.)
+- [ ] ToDos in 'onitama-server.yaml' and 'Database.hs'
+- [ ] Shouldn't show (waiting) vs (waiting) games in Client and reduce size of the table so that it fits mobile phones
+- [ ] Refine Docker-file and add Dockervolume for persistet Database and Config, Versioning
+- [ ] Update GameState JSON in README.md
 - [ ] **Footer component** with project info, GitHub link and QR-Code
 - [ ] **CSS improvements** (responsive, animations, better aesthetics)
-- [ ] Add **Command-Line Options** to server
 - [ ] Let visitors join a game for watching
 - [ ] playback gamemoves
 - [ ] Maybe **WebSockets** for real-time updates and In-game chat

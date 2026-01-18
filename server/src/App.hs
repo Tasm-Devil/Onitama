@@ -11,7 +11,8 @@ import Data.Maybe (fromJust, isNothing)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Database
-  ( DB,
+  ( CleanupConfig (..),
+    DB,
     concedeGame,
     forceSave,
     getAllGameSummaries,
@@ -26,6 +27,8 @@ import Database
 import Game (Color, Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
 import Network.Wai (Application)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
+import qualified Options
+import Options (cleanupOptionsToConfig)
 import Servant
   ( Application,
     Handler,
@@ -43,18 +46,22 @@ import Servant
   )
 import System.Directory (doesFileExist)
 
--- | WAI Application entry point
-app :: IO Application
-app = serve apiWithAssets <$> makeServer
+-- | WAI Application with configuration
+appWithConfig :: Options.ServerOptions -> IO Application
+appWithConfig opts =
+  let cleanupCfg = cleanupOptionsToConfig (Options.optCleanup opts)
+      saveIntervalMins = Options.optSaveInterval opts
+      cleanupIntervalMins = Options.cleanupInterval (Options.optCleanup opts)
+      cleanupEnabled = Options.cleanupEnabled (Options.optCleanup opts)
+   in serve apiWithAssets <$> makeServer (Options.optDatabase opts) (Options.optResetDB opts) cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
 
 -- | Custom monad for handlers: gives access to DB via ReaderT
 type AppM = ReaderT DB Handler
 
 -- | Build the complete server: typed API routes + static file serving
-makeServer :: IO (Server APIWithAssets)
-makeServer = do
-  putStrLn "Starting server..."
-  db <- initDB
+makeServer :: FilePath -> Bool -> CleanupConfig -> Double -> Int -> Bool -> IO (Server APIWithAssets)
+makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
+  db <- initDB dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
   putStrLn "Server initialized successfully"
 
   let staticFileServer = staticApp $ defaultFileServerSettings "assets/"

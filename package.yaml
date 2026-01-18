@@ -45,6 +45,8 @@ dependencies:
 - directory          # for wai-make-assets
 - text
 - time               # for timestamps
+- optparse-applicative # for command-line options
+- yaml               # for config file support
 
 
 library:

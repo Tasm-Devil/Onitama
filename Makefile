@@ -22,6 +22,9 @@ server-build:
 server-start: build
 	stack exec server
 
+server-start-config: build
+	stack exec -- server --config 'onitama-server.yaml'
+
 test:
 	stack test
 	(cd client ; make run-tests)
