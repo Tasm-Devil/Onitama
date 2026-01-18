@@ -1,4 +1,4 @@
-module Api exposing (JoinError, JoinGameResponse, Msg(..), ServerGame, concede, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -161,6 +161,22 @@ type JoinError
     | JENetworkError String
 
 
+type MoveError
+    = MEInvalidToken
+    | MENotYourTurn
+    | MEGameNotFound
+    | MEGameOver
+    | MEInvalidMove
+    | MENetworkError String
+
+
+type ConcedeError
+    = CEInvalidToken
+    | CEGameNotFound
+    | CEAlreadyEnded
+    | CENetworkError String
+
+
 joinErrorToString : JoinError -> String
 joinErrorToString error =
     case error of
@@ -187,9 +203,9 @@ type Msg
     = ReceivedGameIdFromServer (Result Http.Error GameId) -- the game id of the new game
     | ReceivedJoinGameResponse (Result Http.Error (Result JoinError JoinGameResponse))
     | ReceivedGameFromServer (Result Http.Error ServerGame)
-    | ReceivedPostCreatedFromServer (Result Http.Error Game.GameMove)
+    | ReceivedPostCreatedFromServer (Result Http.Error (Result MoveError Game.GameMove))
     | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary)) -- lightweight game summaries
-    | ReceivedConcedeResponse (Result Http.Error (Maybe Color))
+    | ReceivedConcedeResponse (Result Http.Error (Result ConcedeError Color))
 
 
 
@@ -204,7 +220,7 @@ getGameSummariesFromServer =
             [ Http.header "Cache-Control" "no-cache, no-store, must-revalidate"
             , Http.header "Pragma" "no-cache"
             ]
-        , url = "/1/onitama/summary"
+        , url = "/1/onitama/games"
         , body = Http.emptyBody
         , expect = Http.expectJson ReceivedGameSummariesFromServer (Decode.list decodeGameSummary)
         , timeout = Nothing
@@ -215,7 +231,7 @@ getGameSummariesFromServer =
 getGameIdFromServer : Cmd Msg
 getGameIdFromServer =
     Http.post
-        { url = "/1/onitama/new"
+        { url = "/1/onitama/games"
         , body = Http.emptyBody
         , expect = Http.expectJson ReceivedGameIdFromServer Decode.int
         }
@@ -239,12 +255,17 @@ joinGame gameid name maybeToken =
                 [ Decode.field "Right" decodeJoinGameResponse |> Decode.map Ok
                 , Decode.field "Left" decodeJoinError |> Decode.map Err
                 ]
+
+        requestBody =
+            Encode.object
+                [ ( "joinPlayerName", Encode.string name )
+                ]
     in
     Http.request
-        { method = "PUT"
+        { method = "POST"
         , headers = tokenHeader
-        , url = "/1/onitama?table=" ++ String.fromInt gameid ++ "&name=" ++ name
-        , body = Http.emptyBody
+        , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/players"
+        , body = Http.jsonBody requestBody
         , expect = Http.expectJson ReceivedJoinGameResponse eitherDecoder
         , timeout = Nothing
         , tracker = Nothing
@@ -259,7 +280,7 @@ getGameFromServer gameid =
             [ Http.header "Cache-Control" "no-cache, no-store, must-revalidate"
             , Http.header "Pragma" "no-cache"
             ]
-        , url = "/1/onitama?table=" ++ String.fromInt gameid
+        , url = "/1/onitama/games/" ++ String.fromInt gameid
         , body = Http.emptyBody
         , expect = Http.expectJson ReceivedGameFromServer decodeGame
         , timeout = Nothing
@@ -269,12 +290,19 @@ getGameFromServer gameid =
 
 postNewGameMove : GameId -> PlayerToken -> Game.GameMove -> Cmd Msg
 postNewGameMove gameid token gameMove =
+    let
+        eitherDecoder =
+            Decode.oneOf
+                [ Decode.field "Right" decodeGameMove |> Decode.map Ok
+                , Decode.field "Left" decodeMoveError |> Decode.map Err
+                ]
+    in
     Http.request
         { method = "POST"
         , headers = [ Http.header "X-Session-Token" token ]
-        , url = "/1/onitama?table=" ++ String.fromInt gameid
+        , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/moves"
         , body = Http.jsonBody (encodeGameMove gameMove)
-        , expect = Http.expectJson ReceivedPostCreatedFromServer decodeGameMove
+        , expect = Http.expectJson ReceivedPostCreatedFromServer eitherDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -282,12 +310,19 @@ postNewGameMove gameid token gameMove =
 
 concede : GameId -> PlayerToken -> Cmd Msg
 concede gameid token =
+    let
+        eitherDecoder =
+            Decode.oneOf
+                [ Decode.field "Right" decodeColor |> Decode.map Ok
+                , Decode.field "Left" decodeConcedeError |> Decode.map Err
+                ]
+    in
     Http.request
         { method = "POST"
         , headers = [ Http.header "X-Session-Token" token ]
-        , url = "/1/onitama/concede?table=" ++ String.fromInt gameid
+        , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/concede"
         , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedConcedeResponse (Decode.nullable decodeColor)
+        , expect = Http.expectJson ReceivedConcedeResponse eitherDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -320,6 +355,52 @@ decodeJoinError =
 
                     _ ->
                         Decode.fail ("Unknown join error: " ++ str)
+            )
+
+
+decodeMoveError : Decoder MoveError
+decodeMoveError =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "MEInvalidToken" ->
+                        Decode.succeed MEInvalidToken
+
+                    "MENotYourTurn" ->
+                        Decode.succeed MENotYourTurn
+
+                    "MEGameNotFound" ->
+                        Decode.succeed MEGameNotFound
+
+                    "MEGameOver" ->
+                        Decode.succeed MEGameOver
+
+                    "MEInvalidMove" ->
+                        Decode.succeed MEInvalidMove
+
+                    _ ->
+                        Decode.fail ("Unknown move error: " ++ str)
+            )
+
+
+decodeConcedeError : Decoder ConcedeError
+decodeConcedeError =
+    Decode.string
+        |> Decode.andThen
+            (\str ->
+                case str of
+                    "CEInvalidToken" ->
+                        Decode.succeed CEInvalidToken
+
+                    "CEGameNotFound" ->
+                        Decode.succeed CEGameNotFound
+
+                    "CEAlreadyEnded" ->
+                        Decode.succeed CEAlreadyEnded
+
+                    _ ->
+                        Decode.fail ("Unknown concede error: " ++ str)
             )
 
 

@@ -3,7 +3,7 @@
 
 module App where
 
-import Api (API, APIWithAssets, GameId (..), GameSummary, GameWithNames, JoinError (..), JoinGameResponse (..), RawHtml (RawHtml), SessionToken (..), api, apiWithAssets)
+import Api (API, APIWithAssets, ConcedeError (..), GameId (..), GameSummary, GameWithNames, JoinError (..), JoinGameResponse (..), JoinRequest (..), MoveError (..), RawHtml (RawHtml), SessionToken (..), api, apiWithAssets)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
@@ -87,36 +87,34 @@ getGameSummaries = do
   db <- ask
   liftIO $ getAllGameSummaries db
 
-joinGame :: Maybe GameId -> Maybe String -> Maybe SessionToken -> AppM (Either JoinError JoinGameResponse)
-joinGame maybeGameId maybeName maybeToken = do
+joinGame :: GameId -> Maybe SessionToken -> JoinRequest -> AppM (Either JoinError JoinGameResponse)
+joinGame gameId maybeToken (JoinRequest name) = do
   db <- ask
-  case (maybeGameId, maybeName) of
-    (Just gameId, Just name) -> do
-      let playerName = T.pack name
-      liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
+  let playerName = T.pack name
+  liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
 
-      result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
-      case result of
-        Left err -> do
-          liftIO $ putStrLn $ "Join failed: " ++ show err
-          return $ Left err
-        Right joinResponse -> do
-          liftIO $ putStrLn "Join successful"
-          return $ Right joinResponse
-    _ -> return $ Left JEInvalidName -- Missing gameId or name
+  result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
+  case result of
+    Left err -> do
+      liftIO $ putStrLn $ "Join failed: " ++ show err
+      return $ Left err
+    Right joinResponse -> do
+      liftIO $ putStrLn "Join successful"
+      return $ Right joinResponse
 
-getGame :: Maybe GameId -> AppM (Maybe GameWithNames)
-getGame maybeGameId = do
-  case maybeGameId of
-    Nothing -> return Nothing
-    Just gameId -> do
-      db <- ask
-      liftIO $ getGameWithNames db gameId
+getGame :: GameId -> AppM GameWithNames
+getGame gameId = do
+  db <- ask
+  maybeGame <- liftIO $ getGameWithNames db gameId
+  case maybeGame of
+    Nothing -> throwError err404
+    Just game -> return game
 
-newMove :: Maybe GameId -> Maybe SessionToken -> GameMove -> AppM (Maybe GameMove)
-newMove maybeGameId maybeToken move = do
-  case (maybeGameId, maybeToken) of
-    (Just gameId, Just token) -> do
+newMove :: GameId -> Maybe SessionToken -> GameMove -> AppM (Either MoveError GameMove)
+newMove gameId maybeToken move = do
+  case maybeToken of
+    Nothing -> return $ Left MEInvalidToken
+    Just token -> do
       db <- ask
       -- Validate token and check if it's the player's turn
       isValid <- liftIO $ validateTokenForMove db gameId token
@@ -124,7 +122,7 @@ newMove maybeGameId maybeToken move = do
       if not isValid
         then do
           liftIO $ putStrLn "Move rejected: invalid token or not your turn"
-          return Nothing
+          return $ Left MENotYourTurn
         else do
           -- Token is valid, process the move
           let updateGameFn (Game p1 p2 cards history w) = Just $ Game {player_white = p1, player_black = p2, cards = cards, history = move : history, winner = w}
@@ -132,17 +130,19 @@ newMove maybeGameId maybeToken move = do
           if success
             then do
               liftIO $ putStrLn "Move accepted"
-              return (Just move)
-            else return Nothing
-    _ -> return Nothing
+              return $ Right move
+            else return $ Left MEGameNotFound
 
-concede :: Maybe GameId -> Maybe SessionToken -> AppM (Maybe Color)
-concede maybeGameId maybeToken = do
-  case (maybeGameId, maybeToken) of
-    (Just gameId, Just token) -> do
+concede :: GameId -> Maybe SessionToken -> AppM (Either ConcedeError Color)
+concede gameId maybeToken = do
+  case maybeToken of
+    Nothing -> return $ Left CEInvalidToken
+    Just token -> do
       db <- ask
-      liftIO $ concedeGame db gameId token
-    _ -> return Nothing
+      result <- liftIO $ concedeGame db gameId token
+      case result of
+        Nothing -> return $ Left CEGameNotFound
+        Just color -> return $ Right color
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml _ = do

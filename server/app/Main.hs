@@ -16,8 +16,8 @@ import Network.Wai.Middleware.RequestLogger (logStdoutDev)
 policy :: CorsResourcePolicy
 policy =
   simpleCorsResourcePolicy
-    { corsMethods = ["OPTIONS", "GET", "PUT", "POST"],
-      corsRequestHeaders = ["Authorization", "Content-Type"]
+    { corsMethods = ["OPTIONS", "GET", "POST"],
+      corsRequestHeaders = ["X-Session-Token", "Content-Type"]
     }
 
 main :: IO ()

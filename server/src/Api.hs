@@ -73,6 +73,22 @@ data JoinError
   | JEInvalidName
   deriving (Eq, Show, Generic)
 
+-- Errors that can occur when submitting a move
+data MoveError
+  = MEInvalidToken
+  | MENotYourTurn
+  | MEGameNotFound
+  | MEGameOver
+  | MEInvalidMove
+  deriving (Eq, Show, Generic)
+
+-- Errors that can occur when conceding
+data ConcedeError
+  = CEInvalidToken
+  | CEGameNotFound
+  | CEAlreadyEnded
+  deriving (Eq, Show, Generic)
+
 -- Lightweight game summary for listing games
 data GameSummary = GameSummary
   { summaryId :: GameId,
@@ -93,6 +109,14 @@ instance FromJSON JoinGameResponse
 instance ToJSON JoinError
 
 instance FromJSON JoinError
+
+instance ToJSON MoveError
+
+instance FromJSON MoveError
+
+instance ToJSON ConcedeError
+
+instance FromJSON ConcedeError
 
 instance ToJSON GameSummary
 
@@ -121,18 +145,28 @@ gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ histo
 
 type Games = Map GameId Game
 
--- New API structure: /1/onitama/...
-type NewGame = "1" :> "onitama" :> "new" :> Post '[JSON] GameId
+-- Request body for joining a game
+data JoinRequest = JoinRequest
+  { joinPlayerName :: String
+  }
+  deriving (Show, Generic)
 
-type GetGameSummaries = "1" :> "onitama" :> "summary" :> Get '[JSON] [GameSummary]
+instance ToJSON JoinRequest
 
-type JoinGame = "1" :> "onitama" :> QueryParam "table" GameId :> QueryParam "name" String :> Header "X-Session-Token" SessionToken :> Put '[JSON] (Either JoinError JoinGameResponse)
+instance FromJSON JoinRequest
 
-type GetGame = "1" :> "onitama" :> QueryParam "table" GameId :> Get '[JSON] (Maybe GameWithNames)
+-- RESTful API structure: /1/onitama/games/...
+type NewGame = "1" :> "onitama" :> "games" :> Post '[JSON] GameId
 
-type NewMove = "1" :> "onitama" :> QueryParam "table" GameId :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Maybe GameMove)
+type GetGameSummaries = "1" :> "onitama" :> "games" :> Get '[JSON] [GameSummary]
 
-type Concede = "1" :> "onitama" :> "concede" :> QueryParam "table" GameId :> Header "X-Session-Token" SessionToken :> Post '[JSON] (Maybe Color)
+type JoinGame = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "players" :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] JoinRequest :> Post '[JSON] (Either JoinError JoinGameResponse)
+
+type GetGame = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> Get '[JSON] GameWithNames
+
+type NewMove = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "moves" :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Either MoveError GameMove)
+
+type Concede = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "concede" :> Header "X-Session-Token" SessionToken :> Post '[JSON] (Either ConcedeError Color)
 
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 

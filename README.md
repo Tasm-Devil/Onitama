@@ -112,19 +112,28 @@ assets/                 # Static files served to browser
 
 ## API Reference
 
-Base URL: `http://localhost:8080`
+**RESTful Design** (updated 2026-01-18)
 
-| Method | Endpoint | Query Params | Body | Description |
-|--------|----------|--------------|------|-------------|
-| `POST` | `/1/onitama/new` | - | - | Create new game, returns `GameId` |
-| `GET` | `/1/onitama/summary` | - | - | List all games as `[GameSummary]` |
-| `PUT` | `/1/onitama` | `table`, `name` | - | Join game (or rejoin with token header) |
-| `GET` | `/1/onitama` | `table` | - | Get game state |
-| `POST` | `/1/onitama` | `table` | `GameMove` | Submit a move (requires token header) |
-| `POST` | `/1/onitama/concede` | `table` | - | Concede the game (requires token header) |
-| `GET` | `/:gameId` | - | - | Serve game HTML page |
+Base URL: `http://localhost:8080/1/onitama`
 
-**Authentication**: Routes that modify game state require the `X-Session-Token` header.
+| Method | Endpoint | Body | Headers | Returns |
+|--------|----------|------|---------|---------|
+| `POST` | `/games` | - | - | `GameId` - Create new game |
+| `GET` | `/games` | - | - | `[GameSummary]` - List all games |
+| `GET` | `/games/{id}` | - | - | `GameWithNames` - Get game state |
+| `POST` | `/games/{id}/players` | `{joinPlayerName: string}` | `X-Session-Token?` | `Either JoinError JoinGameResponse` - Join game |
+| `POST` | `/games/{id}/moves` | `GameMove` (string) | `X-Session-Token` | `Either MoveError GameMove` - Submit move |
+| `POST` | `/games/{id}/concede` | - | `X-Session-Token` | `Either ConcedeError Color` - Concede game |
+| `GET` | `/{gameId}` | - | - | HTML page for game |
+
+**Authentication**: All authenticated routes require `X-Session-Token` header.
+
+**Error Responses**: Endpoints return structured errors using `Either` type:
+- **JoinError**: `JEGameNotFound`, `JEGameFull`, `JEInvalidToken`, `JENameTaken`, `JEInvalidName`
+- **MoveError**: `MEInvalidToken`, `MENotYourTurn`, `MEGameNotFound`, `MEGameOver`, `MEInvalidMove`
+- **ConcedeError**: `CEInvalidToken`, `CEGameNotFound`, `CEAlreadyEnded`
+
+**CORS**: Server allows cross-origin requests with `X-Session-Token` and `Content-Type` headers.
 
 ### Data Types
 
@@ -148,34 +157,53 @@ GameSummary = {
 }
 
 JoinGameResponse = {
-  responseGame:  Game,
-  responseToken: SessionToken
+  responseGame:       GameWithNames,
+  responseToken:      SessionToken,
+  responsePlayerName: String
 }
+
+-- Error types returned in Left branch of Either
+JoinError  = "JEGameNotFound" | "JEGameFull" | "JEInvalidToken" | "JENameTaken" | "JEInvalidName"
+MoveError  = "MEInvalidToken" | "MENotYourTurn" | "MEGameNotFound" | "MEGameOver" | "MEInvalidMove"
+ConcedeError = "CEInvalidToken" | "CEGameNotFound" | "CEAlreadyEnded"
 ```
 
 ### Example Session
 
 ```bash
 # Create a new game
-curl -X POST localhost:8080/1/onitama/new
+curl -X POST http://localhost:8080/1/onitama/games
 # Returns: 1
 
 # Alice joins as White
-curl -X PUT "localhost:8080/1/onitama?table=1&name=Alice"
-# Returns: {"responseGame": {...}, "responseToken": "abc-123..."}
+curl -X POST http://localhost:8080/1/onitama/games/1/players \
+  -H "Content-Type: application/json" \
+  -d '{"joinPlayerName": "Alice"}'
+# Returns: {"Right": {"responseGame": {...}, "responseToken": "abc-123...", "responsePlayerName": "Alice"}}
 
 # Bob joins as Black
-curl -X PUT "localhost:8080/1/onitama?table=1&name=Bob"
-# Returns: {"responseGame": {...}, "responseToken": "def-456..."}
+curl -X POST http://localhost:8080/1/onitama/games/1/players \
+  -H "Content-Type: application/json" \
+  -d '{"joinPlayerName": "Bob"}'
+# Returns: {"Right": {...}}
 
 # Alice makes a move (format: "color:from+to:card")
-curl -X POST "localhost:8080/1/onitama?table=1" \
+curl -X POST http://localhost:8080/1/onitama/games/1/moves \
   -H "X-Session-Token: abc-123..." \
   -H "Content-Type: application/json" \
   -d '"w:c1c3:tiger"'
+# Returns: {"Right": "w:c1c3:tiger"}
 
 # Bob fetches the updated game state
-curl "localhost:8080/1/onitama?table=1"
+curl http://localhost:8080/1/onitama/games/1
+# Returns: {"gameWhiteName": "Alice", "gameBlackName": "Bob", ...}
+
+# Error example: Bob tries to move when it's not his turn
+curl -X POST http://localhost:8080/1/onitama/games/1/moves \
+  -H "X-Session-Token: def-456..." \
+  -H "Content-Type: application/json" \
+  -d '"b:c5c4:crane"'
+# Returns: {"Left": "MENotYourTurn"}
 ```
 
 ### Game State JSON

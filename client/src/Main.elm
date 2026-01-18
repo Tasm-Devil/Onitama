@@ -577,8 +577,8 @@ handleServerMsg servermsg model =
         ReceivedPostCreatedFromServer result ->
             handleMoveConfirmation result model
 
-        ReceivedConcedeResponse _ ->
-            ( model, Cmd.none )
+        ReceivedConcedeResponse result ->
+            handleConcedeResponse result model
 
 
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
@@ -748,10 +748,10 @@ handleGameUpdate result model =
             ( model, Cmd.none )
 
 
-handleMoveConfirmation : Result Http.Error Game.GameMove -> Model -> ( Model, Cmd Msg )
+handleMoveConfirmation : Result Http.Error (Result Api.MoveError Game.GameMove) -> Model -> ( Model, Cmd Msg )
 handleMoveConfirmation result model =
     case ( result, model ) of
-        ( Ok gameMove, Playing key gameid name token game history_ storedPlayers ) ->
+        ( Ok (Ok gameMove), Playing key gameid name token game history_ storedPlayers ) ->
             let
                 updatedGame =
                     game |> Game.update (NewGameMove <| transformGameMove gameMove)
@@ -763,5 +763,26 @@ handleMoveConfirmation result model =
             , concedeCmd
             )
 
+        ( Ok (Err _), Playing _ _ _ _ _ _ _ ) ->
+            -- Move was rejected by server, but we don't need to do anything
+            -- The game state remains unchanged
+            ( model, Cmd.none )
+
         _ ->
+            ( model, Cmd.none )
+
+
+handleConcedeResponse : Result Http.Error (Result Api.ConcedeError Color) -> Model -> ( Model, Cmd Msg )
+handleConcedeResponse result model =
+    case result of
+        Ok (Ok _) ->
+            -- Concede was successful, no action needed (will be reflected in next game update)
+            ( model, Cmd.none )
+
+        Ok (Err _) ->
+            -- Concede failed, but we don't need to do anything
+            ( model, Cmd.none )
+
+        Err _ ->
+            -- Network error
             ( model, Cmd.none )

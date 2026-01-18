@@ -55,37 +55,66 @@ assets/               # Static files served to browser
 
 Base URL: `http://localhost:8080/1/onitama`
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| POST | `/new` | Create new game |
-| GET | `/summary` | List all games |
-| PUT | `/` | Join game (query: table, name, token?) |
-| GET | `/` | Get game state (query: table) |
-| POST | `/` | Submit move (query: table, token) |
+**RESTful Design (Phase 1 Complete - 2026-01-18)**
+
+| Method | Path | Purpose | Returns |
+|--------|------|---------|---------|
+| GET | `/games` | List all games | `[GameSummary]` |
+| POST | `/games` | Create new game | `GameId` |
+| GET | `/games/{id}` | Get game state | `GameWithNames` or 404 |
+| POST | `/games/{id}/players` | Join game (body: name, header: token?) | `Either JoinError JoinGameResponse` |
+| POST | `/games/{id}/moves` | Submit move (body: move, header: token) | `Either MoveError GameMove` |
+| POST | `/games/{id}/concede` | Concede game (header: token) | `Either ConcedeError Color` |
+
+**Error Types:**
+- **JoinError**: `JEGameNotFound`, `JEGameFull`, `JEInvalidToken`, `JENameTaken`, `JEInvalidName`
+- **MoveError**: `MEInvalidToken`, `MENotYourTurn`, `MEGameNotFound`, `MEGameOver`, `MEInvalidMove`
+- **ConcedeError**: `CEInvalidToken`, `CEGameNotFound`, `CEAlreadyEnded`
+
+All authenticated endpoints use `X-Session-Token` header.
 
 ## Architecture Philosophy
 
-**Game-Agnostic Server**: The server is intentionally designed to be game-agnostic. It acts as a pure "move broker" or "state store" with no knowledge of game rules:
-- Stores game state (moves/history)
-- Manages sessions and players
-- Notifies clients of updates
+**Onitama-Specific Server with Game-Agnostic Potential**: The server is currently designed for Onitama (API paths include `/onitama/`), but the core architecture **could be** game-agnostic with minimal changes. It acts as a pure "move broker" or "state store" with no knowledge of game rules:
+
+**What the server does:**
+- Stores game state (moves/history as opaque strings)
+- Manages sessions and player authentication
+- Routes messages between players
+- Persists data to JSON
+
+**What the server does NOT do:**
+- Validate moves (client-side only)
+- Check win conditions (client-side only)
+- Understand card or piece rules (client-side only)
+- Enforce turn order beyond basic "who moves next" based on card color*
+
+*Turn order is determined by the common card's color stamp, which the server looks up from a hardcoded list.
 
 **All game logic lives in clients**:
 - Move validation happens client-side only
 - Win condition detection is client-side
 - Card/piece rules are client-side
+- Board state reconstruction from move history
 
-**Future: Referee Client**: For competitive play, a separate "Referee" client can be implemented that:
+**Future: Referee Client** (optional): For competitive play, a separate "Referee" client can be implemented that:
 - Gets notified by the server when moves are posted
 - Validates moves against game rules
 - Flags invalid moves or disputed games
 - This keeps the server single-purpose while enabling optional validation
 
-**Benefits of this approach**:
-- Server infrastructure is reusable for any turn-based game
+**Path to Game-Agnostic**:
+If you want to support multiple games:
+1. Change API paths from `/1/onitama/games/` to `/1/games/{gameType}/` or just `/1/games/`
+2. Remove hardcoded `cardStartPlayer` logic (move to client or make it generic)
+3. Done! The core server architecture already treats moves as opaque strings
+
+**Benefits of current approach**:
+- Server infrastructure is nearly reusable for any turn-based game
 - Game logic updates don't require server redeployment
 - Referee can be optional (casual vs competitive modes)
 - Clean separation of concerns
+- Easy to add more games later if needed
 
 ## Architecture Notes
 
