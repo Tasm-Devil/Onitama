@@ -44,7 +44,7 @@ main = do
 
   if cleanupEnabled cleanup
     then do
-      putStrLn $ "Cleanup enabled:"
+      putStrLn "Cleanup enabled:"
       putStrLn $ "  - Waiting games: " ++ show (cleanupWaiting cleanup) ++ " hours"
       putStrLn $ "  - Active games: " ++ show (cleanupActive cleanup) ++ " hours"
       putStrLn $ "  - Completed games: " ++ show (cleanupCompleted cleanup) ++ " hours"

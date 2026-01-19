@@ -244,12 +244,12 @@ server --database /data/games.json       # Custom database location
 server --reset-db                        # Start with fresh empty database
 
 # Persistence
-server --save-interval 2.0               # Save database every 2 minutes (default: 1.0)
+server --save-interval 2               # Save database every 2 minutes (default: 1)
 
 # Automatic cleanup of abandoned games
 server --cleanup-waiting 1.0             # Delete waiting games after 1 hour (default: 2.0)
 server --cleanup-active 12.0             # Delete active games after 12 hours (default: 24.0)
-server --cleanup-completed 48.0          # Delete completed games after 48 hours (default: 72.0)
+server --cleanup-completed 48.0          # Delete completed games after 48 hours (default: 0 = never)
 server --cleanup-interval 5              # Run cleanup every 5 minutes (default: 10)
 server --no-cleanup                      # Disable automatic cleanup entirely
 
@@ -273,14 +273,14 @@ optPort: 8080             # Server port
 optHost: "0.0.0.0"        # Bind address (0.0.0.0 for all, 127.0.0.1 for localhost only)
 optDatabase: "gamedb.json" # Database file path
 optResetDB: false         # Start with fresh empty database
-optSaveInterval: 1.0      # Database save interval in minutes
+optSaveInterval: 1        # Database save interval in minutes
 optShowVersion: false     # Show version and exit
 
 # Cleanup configuration
 optCleanup:
   cleanupWaiting: 2.0     # Hours before cleaning waiting games
   cleanupActive: 24.0     # Hours before cleaning active games
-  cleanupCompleted: 72.0  # Hours before cleaning completed games
+  cleanupCompleted: 0     # Hours before cleaning completed games (0 = never, keep forever)
   cleanupInterval: 10     # Minutes between cleanup checks
   cleanupEnabled: true    # Whether cleanup is enabled
 ```
@@ -333,10 +333,9 @@ docker run -p 8080:8080 onitama:latest
 - [x] **Per-player token system** (global player identity)
 - [x] **Timestamps** for games and moves (automatic cleanup of abandoned games)
 - [x] **Command-line options & config file** (port, host, cleanup, save interval, etc.)
-- [ ] ToDos in 'onitama-server.yaml' and 'Database.hs'
+- [x] **Clean database JSON** (runtime state separated from persisted data)
 - [ ] Shouldn't show (waiting) vs (waiting) games in Client and reduce size of the table so that it fits mobile phones
 - [ ] Refine Docker-file and add Dockervolume for persistet Database and Config, Versioning
-- [ ] Update GameState JSON in README.md
 - [ ] **Footer component** with project info, GitHub link and QR-Code
 - [ ] **CSS improvements** (responsive, animations, better aesthetics)
 - [ ] Let visitors join a game for watching

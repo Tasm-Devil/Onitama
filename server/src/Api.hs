@@ -37,8 +37,7 @@ import Servant
   )
 import Servant.API (Accept (..), Raw)
 
-newtype GameId = GameId Int
-  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON, ToJSONKey, FromJSONKey, Num)
+type GameId = Int
 
 newtype SessionToken = SessionToken Text
   deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
@@ -150,8 +149,6 @@ gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ histo
     determineStatus Nothing _ Nothing = WaitingForPlayers
     determineStatus _ Nothing Nothing = WaitingForPlayers
     determineStatus _ _ Nothing = InProgress
-
-type Games = Map GameId Game
 
 -- Request body for joining a game
 newtype JoinRequest

@@ -2,7 +2,7 @@
 
 module Database where
 
-import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), Games, JoinError (..), JoinGameResponse (..), SessionToken (..), gameToSummary)
+import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), JoinError (..), JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, unless, when)
@@ -48,29 +48,37 @@ instance FromJSON CleanupConfig
 
 instance ToJSON CleanupConfig
 
-data DBState = DBState
-  { dbGames :: Games,
-    dbNextGameId :: Int, -- ToDO: don't like it being stored in gamedb
-    dbPlayers :: Map PlayerId Player,
-    dbNextPlayerId :: Int, -- ToDO: don't like it being stored in gamedb
-    dbHasChanged :: Bool, -- ToDO: don't like it being stored in gamedb
-    dbCleanupConfig :: CleanupConfig -- ToDO: don't like it being stored in gamedb
+-- Pure data stored in JSON (games and players only)
+data DBData = DBData
+  { dbGames :: Map GameId Game,
+    dbPlayers :: Map PlayerId Player
   }
   deriving (Generic)
 
-instance FromJSON DBState
+instance FromJSON DBData
 
-instance ToJSON DBState
+instance ToJSON DBData
 
--- Database wrapper with file path
+-- Database wrapper with runtime state
 data DB = DB
-  { dbState :: TVar DBState,
-    dbFilePath :: FilePath
+  { dbData :: TVar DBData,
+    dbFilePath :: FilePath,
+    dbNextGameId :: TVar Int,
+    dbNextPlayerId :: TVar Int,
+    dbHasChanged :: TVar Bool,
+    dbCleanupConfig :: CleanupConfig
   }
 
+-- Calculate next ID from existing items
+calculateNextId :: (Ord k, Enum k, Num k) => Map k v -> k
+calculateNextId items =
+  if Map.null items
+    then 1
+    else maximum (Map.keys items) + 1
+
 -- Load database from file or create a new one if file doesn't exist
-loadDB :: FilePath -> Bool -> CleanupConfig -> IO (TVar DBState)
-loadDB dbFilePath resetDB cleanupCfg = do
+loadDB :: FilePath -> Bool -> CleanupConfig -> IO (TVar DBData)
+loadDB dbFilePath resetDB _cleanupCfg = do
   fileExists <- doesFileExist dbFilePath
 
   -- If reset flag is set, skip loading and start fresh
@@ -79,7 +87,7 @@ loadDB dbFilePath resetDB cleanupCfg = do
   when resetDB $ do
     putStrLn $ "Resetting database (--reset-db flag set), ignoring existing file at " ++ dbFilePath
 
-  let emptyDB = DBState {dbGames = empty, dbNextGameId = 1, dbPlayers = empty, dbNextPlayerId = 1, dbHasChanged = False, dbCleanupConfig = cleanupCfg}
+  let emptyDB = DBData {dbGames = empty, dbPlayers = empty}
 
   initialDB <-
     if shouldLoad
@@ -89,9 +97,9 @@ loadDB dbFilePath resetDB cleanupCfg = do
         case maybeDB of
           Just db -> do
             let gameCount = Map.size (dbGames db)
-            putStrLn $ "Successfully loaded database at " ++ dbFilePath ++ " with " ++ show gameCount ++ " games"
-            -- Update loaded DB with the provided cleanup config (in case defaults changed)
-            return $ db {dbCleanupConfig = cleanupCfg}
+                playerCount = Map.size (dbPlayers db)
+            putStrLn $ "Successfully loaded database at " ++ dbFilePath ++ " with " ++ show gameCount ++ " games and " ++ show playerCount ++ " players"
+            return db
           Nothing -> do
             putStrLn $ "Failed to parse database file at " ++ dbFilePath ++ " , starting with empty DB"
             return emptyDB
@@ -105,36 +113,36 @@ loadDB dbFilePath resetDB cleanupCfg = do
 
 -- Save database to file with pretty printing
 saveDB :: DB -> IO ()
-saveDB (DB dbVar filePath) = do
-  dbState <- atomically $ do
-    state <- readTVar dbVar
-    let shouldSave = dbHasChanged state
-    when shouldSave $
-      writeTVar dbVar (state {dbHasChanged = False})
-    return state
+saveDB (DB dataVar filePath _ _ hasChangedVar _) = do
+  (dbData, shouldSave) <- atomically $ do
+    state <- readTVar dataVar
+    changed <- readTVar hasChangedVar
+    when changed $
+      writeTVar hasChangedVar False
+    return (state, changed)
 
-  let gameCount = Map.size (dbGames dbState)
+  let gameCount = Map.size (dbGames dbData)
 
-  when (dbHasChanged dbState) $ do
+  when shouldSave $ do
     -- Use pretty printing for human-readable JSON
     let encoderConfig =
           Pretty.defConfig
             { Pretty.confIndent = Pretty.Spaces 2,
               Pretty.confCompare = compare
             }
-    let encodedDB = Pretty.encodePretty' encoderConfig dbState
+    let encodedDB = Pretty.encodePretty' encoderConfig dbData
     Lazy.writeFile filePath encodedDB
     putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
 
 -- Cleanup old games based on their status and lastActivity
 cleanupOldGames :: DB -> IO ()
-cleanupOldGames db@(DB dbVar _) = do
+cleanupOldGames (DB dataVar _ _ _ hasChangedVar config) = do
   now <- getCurrentTime
-  state <- readTVarIO dbVar
-  let config = dbCleanupConfig state
-      games = dbGames state
+  state <- readTVarIO dataVar
+  let games = dbGames state
 
       -- Determine timeout for each game based on status
+      -- Timeout <= 0 means never clean up (disabled)
       shouldDelete gameId game =
         let status = determineGameStatus game
             timeout = case status of
@@ -142,19 +150,17 @@ cleanupOldGames db@(DB dbVar _) = do
               InProgress -> cleanupInProgress config
               Completed -> cleanupCompleted config
             expirationTime = addUTCTime timeout (lastActivity game)
-         in now > expirationTime
+         in timeout > 0 && now > expirationTime
 
       gamesToDelete = Map.filterWithKey shouldDelete games
       gameCount = Map.size gamesToDelete
 
   when (gameCount > 0) $ do
     putStrLn $ "Cleaning up " ++ show gameCount ++ " expired games"
-    atomically $ modifyTVar dbVar $ \s ->
-      s
-        { dbGames = Map.difference (dbGames s) gamesToDelete,
-          dbHasChanged = True
-        }
-    markDBChanged db
+    atomically $ do
+      modifyTVar dataVar $ \s ->
+        s {dbGames = Map.difference (dbGames s) gamesToDelete}
+      writeTVar hasChangedVar True
 
 -- Determine game status from Game data
 determineGameStatus :: Game -> GameStatus
@@ -169,14 +175,13 @@ determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _) =
         _ -> InProgress
 
 -- Start periodic saving of database
-startPeriodicSave :: DB -> Double -> IO ()
+startPeriodicSave :: DB -> Int -> IO ()
 startPeriodicSave db saveIntervalMinutes = do
-  let saveIntervalSeconds = round (saveIntervalMinutes * 60)
   putStrLn $ "Starting periodic database save thread (interval: " ++ show saveIntervalMinutes ++ " minutes)"
   -- Fork a thread that will save the database at the specified interval
   _ <- forkIO $ forever $ do
     saveDB db
-    threadDelay (saveIntervalSeconds * 1000000) -- Convert seconds to microseconds
+    threadDelay (saveIntervalMinutes * 60 * 1000000) -- Convert seconds to microseconds
   return ()
 
 -- Start periodic cleanup of old games
@@ -196,49 +201,65 @@ startPeriodicCleanup db cleanupIntervalMinutes enabled = do
 
 -- Log current database state
 logDBState :: String -> DB -> IO ()
-logDBState prefix (DB dbVar _) = do
-  dbState <- readTVarIO dbVar
-  let gameCount = Map.size (dbGames dbState)
-  let changeStatus = if dbHasChanged dbState then "changed" else "unchanged"
+logDBState prefix (DB dataVar _ _ _ hasChangedVar _) = do
+  dbData <- readTVarIO dataVar
+  changed <- readTVarIO hasChangedVar
+  let gameCount = Map.size (dbGames dbData)
+      changeStatus = if changed then "changed" else "unchanged"
   putStrLn $ prefix ++ ": " ++ show gameCount ++ " games, status: " ++ changeStatus
 
 -- Mark database as changed
-markDBChanged :: DB -> IO ()
-markDBChanged db@(DB dbVar _) = do
+markDBChanged :: DB -> IO () -- ToDO: can we delete this
+markDBChanged db@(DB _ _ _ _ hasChangedVar _) = do
   putStrLn "Marking database as changed"
-  atomically $ do
-    modifyTVar dbVar $ \state -> state {dbHasChanged = True}
+  atomically $ writeTVar hasChangedVar True
   logDBState "After marking changed" db
 
 -- Initialize database with TVar and configuration
-initDB :: FilePath -> Bool -> CleanupConfig -> Double -> Int -> Bool -> IO DB
+initDB :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO DB
 initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes cleanupEnabled = do
-  dbVar <- loadDB filePath resetDB cleanupConfig
-  let db = DB {dbState = dbVar, dbFilePath = filePath}
+  dataVar <- loadDB filePath resetDB cleanupConfig
+
+  -- Calculate next IDs from existing data
+  state <- readTVarIO dataVar
+  let nextGameId = calculateNextId (dbGames state)
+      nextPlayerId = calculateNextId (dbPlayers state)
+
+  putStrLn $ "Calculated next game ID: " ++ show nextGameId
+  putStrLn $ "Calculated next player ID: " ++ show nextPlayerId
+
+  -- Create runtime state TVars
+  nextGameIdVar <- newTVarIO nextGameId
+  nextPlayerIdVar <- newTVarIO nextPlayerId
+  hasChangedVar <- newTVarIO False
+
+  let db = DB
+        { dbData = dataVar,
+          dbFilePath = filePath,
+          dbNextGameId = nextGameIdVar,
+          dbNextPlayerId = nextPlayerIdVar,
+          dbHasChanged = hasChangedVar,
+          dbCleanupConfig = cleanupConfig
+        }
+
   startPeriodicSave db saveIntervalMinutes
   startPeriodicCleanup db cleanupIntervalMinutes cleanupEnabled
   return db
 
 -- Helper functions for accessing and modifying the database
-getGames :: DB -> IO Games
-getGames (DB dbVar _) = do
-  state <- readTVarIO dbVar
-  return $ dbGames state
-
 getGameById :: DB -> GameId -> IO (Maybe Game)
-getGameById (DB dbVar _) gameId = do
-  state <- readTVarIO dbVar
+getGameById (DB dataVar _ _ _ _ _) gameId = do
+  state <- readTVarIO dataVar
   return $ Map.lookup gameId (dbGames state)
 
 -- Generate next game ID and insert game
 insertGameWithNewId :: DB -> IO GameId
-insertGameWithNewId db@(DB dbVar _) = do
+insertGameWithNewId db@(DB dataVar _ nextGameIdVar _ hasChangedVar _) = do
   newCards <- liftIO give5Cards
   now <- getCurrentTime
   gameId <- atomically $ do
-    state <- readTVar dbVar
-    let newId = GameId (dbNextGameId state)
-        newGame =
+    currentId <- readTVar nextGameIdVar
+    let newGame =
           Game
             { player_white = Nothing,
               player_black = Nothing,
@@ -248,39 +269,30 @@ insertGameWithNewId db@(DB dbVar _) = do
               createdAt = now,
               lastActivity = now
             }
-    modifyTVar dbVar $ \s ->
-      s
-        { dbGames = Map.insert newId newGame (dbGames s),
-          dbNextGameId = dbNextGameId s + 1,
-          dbHasChanged = True
-        }
-    return newId
+    modifyTVar dataVar $ \s ->
+      s {dbGames = Map.insert currentId newGame (dbGames s)}
+    writeTVar nextGameIdVar (currentId + 1)
+    writeTVar hasChangedVar True
+    return currentId
   markDBChanged db
   return gameId
 
 updateGame :: DB -> GameId -> (Game -> Maybe Game) -> IO Bool
-updateGame db@(DB dbVar _) gameId updateFn = do
+updateGame db@(DB dataVar _ _ _ hasChangedVar _) gameId updateFn = do
   result <- atomically $ do
-    state <- readTVar dbVar
+    state <- readTVar dataVar
     let games = dbGames state
     case Map.lookup gameId games of
       Nothing -> return False
       Just game -> case updateFn game of
         Nothing -> return False
         Just updatedGame -> do
-          writeTVar dbVar $
-            state
-              { dbGames = Map.insert gameId updatedGame games,
-                dbHasChanged = True
-              }
+          writeTVar dataVar $
+            state {dbGames = Map.insert gameId updatedGame games}
+          writeTVar hasChangedVar True -- why this and also markDBChanged? Is markDBChanged really needed?
           return True
   when result $ markDBChanged db
   return result
-
-forceSave :: DB -> IO ()
-forceSave db = do
-  putStrLn "Forcing immediate database save"
-  saveDB db
 
 -- Convert a Game to GameWithNames by looking up player names
 gameToGameWithNames :: DB -> Game -> IO GameWithNames
@@ -321,8 +333,8 @@ getGameWithNames db gameId = do
 
 -- Get all game summaries
 getAllGameSummaries :: DB -> IO [GameSummary]
-getAllGameSummaries db@(DB dbVar _) = do
-  state <- readTVarIO dbVar
+getAllGameSummaries db@(DB dataVar _ _ _ _ _) = do
+  state <- readTVarIO dataVar
   let games = dbGames state
   mapM (uncurry $ gameIdAndGameToSummary db) (Map.toList games)
   where
@@ -351,42 +363,39 @@ generateToken = do
 
 -- Find player by token (search through all players)
 getPlayerByToken :: DB -> SessionToken -> IO (Maybe Player)
-getPlayerByToken (DB dbVar _) token = do
-  state <- readTVarIO dbVar
+getPlayerByToken (DB dataVar _ _ _ _ _) token = do
+  state <- readTVarIO dataVar
   return $ find (\p -> playerToken p == token) (Map.elems (dbPlayers state))
 
 -- Find player by name
 getPlayerByName :: DB -> Text -> IO (Maybe Player)
-getPlayerByName (DB dbVar _) name = do
-  state <- readTVarIO dbVar
+getPlayerByName (DB dataVar _ _ _ _ _) name = do
+  state <- readTVarIO dataVar
   return $ find (\p -> playerName p == name) (Map.elems (dbPlayers state))
 
 -- Get player by ID
 getPlayerById :: DB -> PlayerId -> IO (Maybe Player)
-getPlayerById (DB dbVar _) pid = do
-  state <- readTVarIO dbVar
+getPlayerById (DB dataVar _ _ _ _ _) pid = do
+  state <- readTVarIO dataVar
   return $ Map.lookup pid (dbPlayers state)
 
 -- Get all player names (for dropdown in client)
 getAllPlayerNames :: DB -> IO [Text]
-getAllPlayerNames (DB dbVar _) = do
-  state <- readTVarIO dbVar
+getAllPlayerNames (DB dataVar _ _ _ _ _) = do
+  state <- readTVarIO dataVar
   return $ map playerName $ Map.elems (dbPlayers state)
 
 -- Create a new player with unique ID and token
 createPlayer :: DB -> Text -> IO Player
-createPlayer (DB dbVar _) name = do
+createPlayer (DB dataVar _ _ nextPlayerIdVar hasChangedVar _) name = do
   token <- generateToken
   atomically $ do
-    state <- readTVar dbVar
-    let pid = dbNextPlayerId state
-        newPlayer = Player {playerId = pid, playerName = name, playerToken = token}
-    modifyTVar dbVar $ \s ->
-      s
-        { dbPlayers = Map.insert pid newPlayer (dbPlayers s),
-          dbNextPlayerId = pid + 1,
-          dbHasChanged = True
-        }
+    pid <- readTVar nextPlayerIdVar
+    let newPlayer = Player {playerId = pid, playerName = name, playerToken = token}
+    modifyTVar dataVar $ \s ->
+      s {dbPlayers = Map.insert pid newPlayer (dbPlayers s)}
+    writeTVar nextPlayerIdVar (pid + 1)
+    writeTVar hasChangedVar True
     return newPlayer
 
 -- Validate that a token belongs to a player and return the player
@@ -397,7 +406,7 @@ validatePlayerToken = getPlayerByToken
 -- If token provided: MUST be valid (rejects invalid tokens)
 -- If no token: name MUST be available (rejects duplicate names)
 joinGameWithToken :: DB -> GameId -> Text -> Maybe SessionToken -> IO (Either JoinError JoinGameResponse)
-joinGameWithToken db@(DB dbVar _) gameId playerNameText maybeProvidedToken = do
+joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText maybeProvidedToken = do
   -- Validate name is not empty/whitespace
   let trimmedName = T.strip playerNameText
   if T.null trimmedName
@@ -468,11 +477,10 @@ joinGameWithToken db@(DB dbVar _) gameId playerNameText maybeProvidedToken = do
                       return $ Left JEGameFull
                     Just newGame -> do
                       -- Update the game
-                      atomically $ modifyTVar dbVar $ \state ->
-                        state
-                          { dbGames = Map.insert gameId newGame (dbGames state),
-                            dbHasChanged = True
-                          }
+                      atomically $ do
+                        modifyTVar dataVar $ \state ->
+                          state {dbGames = Map.insert gameId newGame (dbGames state)}
+                        writeTVar hasChangedVar True
                       putStrLn $ "Player " ++ T.unpack (playerName player) ++ " joined game"
                       gameWithNames <- gameToGameWithNames db newGame
                       return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
@@ -501,7 +509,7 @@ getPlayerSlotInGame game pid
 
 -- Concede a game - the player with the given token admits defeat
 concedeGame :: DB -> GameId -> SessionToken -> IO (Maybe Color)
-concedeGame db@(DB dbVar _) gameId token = do
+concedeGame db@(DB dataVar _ _ _ hasChangedVar _) gameId token = do
   maybePlayer <- getPlayerByToken db token
   maybeGame <- getGameById db gameId
 
@@ -521,16 +529,14 @@ concedeGame db@(DB dbVar _) gameId token = do
 
           -- Update the game with the winner
           success <- atomically $ do
-            currentState <- readTVar dbVar
+            currentState <- readTVar dataVar
             case Map.lookup gameId (dbGames currentState) of
               Nothing -> return False
               Just (Game p1 p2 cards history _ created lastAct) -> do
                 let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor, createdAt = created, lastActivity = lastAct}
-                writeTVar dbVar $
-                  currentState
-                    { dbGames = Map.insert gameId updatedGame (dbGames currentState),
-                      dbHasChanged = True
-                    }
+                writeTVar dataVar $
+                  currentState {dbGames = Map.insert gameId updatedGame (dbGames currentState)}
+                writeTVar hasChangedVar True
                 return True
 
           if success

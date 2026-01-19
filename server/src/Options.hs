@@ -38,7 +38,7 @@ data ServerOptions = ServerOptions
     optHost :: String, -- Bind address
     optDatabase :: FilePath, -- Database file path
     optResetDB :: Bool, -- Start with fresh empty database
-    optSaveInterval :: Double, -- Database save interval in minutes
+    optSaveInterval :: Int, -- Database save interval in minutes
     optCleanup :: CleanupOptions, -- Cleanup configuration
     optConfig :: Maybe FilePath, -- Config file path
     optShowVersion :: Bool -- Show version and exit
@@ -53,7 +53,7 @@ defaultCleanup =
   CleanupOptions
     { cleanupWaiting = 2.0, -- 2 hours
       cleanupActive = 24.0, -- 24 hours
-      cleanupCompleted = 72.0, -- 72 hours
+      cleanupCompleted = 0, -- never (0 = disabled)
       cleanupInterval = 10, -- 10 minutes
       cleanupEnabled = True
     }
@@ -67,7 +67,7 @@ defaultOptions =
       optHost = "0.0.0.0",
       optDatabase = "gamedb.json",
       optResetDB = False,
-      optSaveInterval = 1.0, -- 1.0 minute (60 seconds)
+      optSaveInterval = 1, -- 1 minute
       optCleanup = defaultCleanup,
       optConfig = Nothing,
       optShowVersion = False
@@ -99,7 +99,7 @@ cleanupOptionsParser =
           <> metavar "HOURS"
           <> value (cleanupCompleted defaultCleanup)
           <> showDefault
-          <> help "Hours before cleaning completed games"
+          <> help "Hours before cleaning completed games (0 = never, keep forever)"
       )
     <*> option
       auto
@@ -159,7 +159,7 @@ serverOptionsParser =
           <> metavar "MINS"
           <> value (optSaveInterval defaultOptions)
           <> showDefault
-          <> help "Database save interval in minutes (accepts decimals, e.g., 0.5 for 30 seconds)"
+          <> help "Database save interval in minutes"
       )
     <*> cleanupOptionsParser
     <*> optional

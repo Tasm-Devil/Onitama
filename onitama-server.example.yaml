@@ -1,22 +1,22 @@
 # Example configuration file for Onitama Server
-# All settings shown here can be overridden by command-line arguments
+# All settings shown are default values
 
 # Server settings
 optVerbose: false          # Enable verbose HTTP request logging
-optPort: 8080             # Server port
-optHost: "0.0.0.0"        # Bind address (0.0.0.0 for all, 127.0.0.1 for localhost only)
+optPort: 8080              # Server port
+optHost: "0.0.0.0"         # Bind address (0.0.0.0 for all, 127.0.0.1 for localhost only)
 optDatabase: "gamedb.json" # Database file path
-optResetDB: false         # Start with fresh empty database
-optSaveInterval: 1.0      # Database save interval in minutes
-optShowVersion: false     # Show version and exit
+optResetDB: false          # Start with fresh empty database
+optSaveInterval: 1         # Database save interval in minutes
+optShowVersion: false      # Show version and exit
 
 # Cleanup configuration
 optCleanup:
-  cleanupWaiting: 2.0     # Hours before cleaning waiting games
-  cleanupActive: 24.0     # Hours before cleaning active games
-  cleanupCompleted: 72.0  # Hours before cleaning completed games
-  cleanupInterval: 10     # Minutes between cleanup checks
-  cleanupEnabled: true    # Whether cleanup is enabled
+  cleanupWaiting: 2.0      # Hours before cleaning waiting games
+  cleanupActive: 24.0      # Hours before cleaning active games
+  cleanupCompleted: 0      # Hours before cleaning completed games (0 = never, keep forever)
+  cleanupInterval: 10      # Minutes between cleanup checks
+  cleanupEnabled: true     # Whether cleanup is enabled
 
 # Note: To use this config file:
 # 1. Copy it to your desired location (e.g., onitama-server.yaml)

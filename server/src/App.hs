@@ -3,7 +3,22 @@
 
 module App where
 
-import Api (API, APIWithAssets, ConcedeError (..), GameId (..), GameSummary, GameWithNames, JoinError (..), JoinGameResponse (..), JoinRequest (..), MoveError (..), RawHtml (RawHtml), SessionToken (..), api, apiWithAssets)
+import Api
+  ( API,
+    APIWithAssets,
+    ConcedeError (..),
+    GameId (..),
+    GameSummary,
+    GameWithNames,
+    JoinError (..),
+    JoinGameResponse (..),
+    JoinRequest (..),
+    MoveError (..),
+    RawHtml (RawHtml),
+    SessionToken (..),
+    api,
+    apiWithAssets,
+  )
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
@@ -14,7 +29,6 @@ import Database
   ( CleanupConfig (..),
     DB,
     concedeGame,
-    forceSave,
     getAllGameSummaries,
     getGameWithNames,
     initDB,
@@ -27,8 +41,8 @@ import Database
 import Game (Color, Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
 import Network.Wai (Application)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
-import qualified Options
 import Options (cleanupOptionsToConfig)
+import qualified Options
 import Servant
   ( Application,
     Handler,
@@ -59,7 +73,7 @@ appWithConfig opts =
 type AppM = ReaderT DB Handler
 
 -- | Build the complete server: typed API routes + static file serving
-makeServer :: FilePath -> Bool -> CleanupConfig -> Double -> Int -> Bool -> IO (Server APIWithAssets)
+makeServer :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
   db <- initDB dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
   putStrLn "Server initialized successfully"
@@ -85,9 +99,6 @@ newGame = do
   liftIO $ do
     putStrLn $ "Creating new game with ID: " ++ show gameId
     logDBState "After creating game" db
-    -- Force an immediate save for testing
-    forceSave db
-
   return gameId
 
 getGameSummaries :: AppM [GameSummary]

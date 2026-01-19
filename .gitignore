@@ -6,4 +6,5 @@ gamedb.json
 onitama.tar
 *.cabal
 *.old
+onitama-server.yaml
 ASSESSMENT.md
