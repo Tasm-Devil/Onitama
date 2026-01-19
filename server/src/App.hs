@@ -41,6 +41,7 @@ import Database
 import Game (Color, Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
 import Network.Wai (Application)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
+import WaiAppStatic.Types (MaxAge (..), ssMaxAge)
 import Options (cleanupOptionsToConfig)
 import qualified Options
 import Servant
@@ -78,7 +79,8 @@ makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanu
   db <- initDB dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
   putStrLn "Server initialized successfully"
 
-  let staticFileServer = staticApp $ defaultFileServerSettings "assets/"
+  let staticSettings = (defaultFileServerSettings "assets/") {ssMaxAge = NoMaxAge}
+      staticFileServer = staticApp staticSettings
       apiHandlers = hoistServer api (runAppM db) handlers
 
   -- Combine: try API routes first, fall back to static files

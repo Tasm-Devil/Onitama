@@ -146,7 +146,7 @@ view game =
                 )
             ]
             (drawCardPrompt game.myCards UserChoseOneCard)
-        , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "3", SvgA.textAnchor "end" ]
+        , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "4", SvgA.textAnchor "end" ]
             [ Svg.text <|
                 case game.state of
                     GameOver winner ->

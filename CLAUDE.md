@@ -49,6 +49,10 @@ server/src/           # Haskell backend
   Options.hs          # CLI and YAML config parsing
 
 assets/               # Static files served to browser
+  index.html
+  favicon.svg
+  elm.js
+  style.css
   localStorage.js     # Bidirectional player identity persistence
 ```
 

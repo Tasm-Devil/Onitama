@@ -50,7 +50,7 @@ view : Model -> Html Msg
 view model =
     case model.status of
         Home summaries ->
-            Html.div [ HtmlA.class "lobby" ]
+            Html.div [ HtmlA.class "gamelist" ]
                 [ Html.h1 []
                     [ Html.text "ONITAMA" ]
                 , Html.p []

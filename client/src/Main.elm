@@ -110,11 +110,15 @@ view model =
                 Html.div [ HtmlA.class "lobby" ]
                     [ Html.h1 []
                         [ Html.text url.path ]
+                    , viewFooter
                     ]
 
             Lobby _ m _ ->
-                Lobby.view m
-                    |> Html.map GotLobbyMsg
+                Html.div [ HtmlA.class "lobby" ]
+                    [ Lobby.view m
+                        |> Html.map GotLobbyMsg
+                    , viewFooter
+                    ]
 
             EnterName _ _ state storedPlayers ->
                 case state of
@@ -145,6 +149,7 @@ view model =
                                         []
                                     ]
                                 ]
+                            , viewFooter
                             ]
 
                     Joining playerName ->
@@ -152,6 +157,7 @@ view model =
                             [ Html.h2 [] [ Html.text "Joining game..." ]
                             , Html.p [] [ Html.text ("Joining as " ++ playerName) ]
                             , Html.div [ HtmlA.class "spinner" ] []
+                            , viewFooter
                             ]
 
                     JoinError playerName errorMsg ->
@@ -181,6 +187,7 @@ view model =
                                         []
                                     ]
                                 ]
+                            , viewFooter
                             ]
 
             Playing _ _ _ _ game history _ ->
@@ -189,11 +196,46 @@ view model =
                         |> Game.view
                         |> List.map (Html.map GotGameMsg)
                      )
-                        ++ [ Html.div []
-                                [ viewHistory history
-                                ]
+                        ++ [ viewHistory history
+                           , viewFooter
                            ]
                     )
+        ]
+
+
+viewFooter : Html Msg
+viewFooter =
+    Html.footer [ HtmlA.class "game-footer" ]
+        [ Html.a
+            [ HtmlA.href "https://pegasus.de/Onitama/51855G"
+            , HtmlA.target "_blank"
+            , HtmlA.rel "noopener noreferrer"
+            , HtmlA.class "game-title"
+            ]
+            [ Html.text "Onitama" ]
+        , Html.span [ HtmlA.class "separator" ] [ Html.text "•" ]
+        , Html.text "Made with "
+        , Html.a
+            [ HtmlA.href "https://elm-lang.org"
+            , HtmlA.target "_blank"
+            , HtmlA.rel "noopener noreferrer"
+            ]
+            [ Html.i [ HtmlA.class "nf nf-dev-elm tech-icon" ] [] ]
+        , Html.text " & "
+        , Html.a
+            [ HtmlA.href "https://www.haskell.org"
+            , HtmlA.target "_blank"
+            , HtmlA.rel "noopener noreferrer"
+            ]
+            [ Html.i [ HtmlA.class "nf nf-dev-haskell tech-icon" ] [] ]
+        , Html.span [ HtmlA.class "separator" ] [ Html.text "•" ]
+        , Html.text "View source on "
+        , Html.a
+            [ HtmlA.href "https://github.com/Tasm-Devil/Onitama"
+            , HtmlA.target "_blank"
+            , HtmlA.rel "noopener noreferrer"
+            ]
+            [ Html.i [ HtmlA.class "nf nf-dev-github tech-icon" ] [] ]
         ]
 
 
@@ -201,7 +243,7 @@ viewHistory : List GameMove -> Html Msg
 viewHistory history =
     Html.div [ HtmlA.class "game-log" ]
         [ Html.ul [ HtmlA.id "log-lines" ]
-            (List.map viewGameMove <| List.reverse history)
+            (List.map viewGameMove history)
         , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
         ]
 
