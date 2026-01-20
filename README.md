@@ -334,10 +334,10 @@ docker run -p 8080:8080 onitama:latest
 - [x] **Timestamps** for games and moves (automatic cleanup of abandoned games)
 - [x] **Command-line options & config file** (port, host, cleanup, save interval, etc.)
 - [x] **Clean database JSON** (runtime state separated from persisted data)
+- [x] **Footer component** with project info, GitHub link and QR-Code
+- [ ] **CSS improvements** (responsive, animations, better aesthetics)
 - [ ] Shouldn't show (waiting) vs (waiting) games in Client and reduce size of the table so that it fits mobile phones
 - [ ] Refine Docker-file and add Dockervolume for persistet Database and Config, Versioning
-- [ ] **Footer component** with project info, GitHub link and QR-Code
-- [ ] **CSS improvements** (responsive, animations, better aesthetics)
 - [ ] Let visitors join a game for watching
 - [ ] playback gamemoves
 - [ ] Maybe **WebSockets** for real-time updates and In-game chat

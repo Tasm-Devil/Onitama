@@ -52,16 +52,15 @@
 }
 
 .game-container {
-  display: none;
-  min-height: 100vh; /* Fallback for older browsers */
-  min-height: 100dvh; /* Dynamic viewport height for mobile */
+  display: flex;
+  height: 100dvh;
   flex-direction: column;
   box-sizing: border-box;
 }
 
 .game-container #game-board {
   flex: 1;
-  padding: 8px;
+  margin: 8px;
 }
 
 .game-log {
@@ -69,7 +68,8 @@
   border-radius: 5px;
   padding: 0;
   overflow: hidden;
-  padding: 8px;
+  margin: 8px;
+  min-height: fit-content;
 }
 
 .game-log #log-lines {

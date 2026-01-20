@@ -95,7 +95,7 @@ checkWinCondition game =
 
 view : Game -> List (Html Msg)
 view game =
-    [ Svg.svg [ SvgA.id "game-board", SvgA.viewBox "-1 -1 152 152" ]
+    [ Svg.svg [ SvgA.id "game-board", SvgA.viewBox "-1 -1 147 152" ]
         [ predefinedSymbols
         , Svg.g [ SvgA.transform <| "translate(0, " ++ (String.fromInt <| gridsize + 5) ++ ")" ]
             [ Svg.g [ SvgA.class "pieces" ]

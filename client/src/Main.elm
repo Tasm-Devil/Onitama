@@ -191,7 +191,7 @@ view model =
                             ]
 
             Playing _ _ _ _ game history _ ->
-                Html.div [ HtmlA.class "game-container", HtmlA.style "display" "flex" ]
+                Html.div [ HtmlA.class "game-container"]
                     ((game
                         |> Game.view
                         |> List.map (Html.map GotGameMsg)
