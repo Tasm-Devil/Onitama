@@ -1,6 +1,6 @@
 module Main exposing (main)
 
-import Api exposing (Msg(..), ServerGame)
+import Api exposing (GameEvent(..), LobbyEvent(..), Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
 import Game.Card exposing (dummyCard)
@@ -14,6 +14,7 @@ import Json.Decode as Decode
 import Json.Encode as Encode
 import Lobby exposing (GameId, Model, Msg(..), Status(..))
 import Ports
+import Task
 import Time
 import Url exposing (Url)
 
@@ -64,25 +65,28 @@ subscriptions model =
         playersSub =
             Ports.loadPlayers StoredPlayersLoaded
 
-        pollingSub =
+        sseSub =
             case model of
                 Playing _ _ _ _ game _ _ ->
-                    -- Poll every 2 seconds during active games
+                    -- Listen for game events via SSE during active games
                     case game.state of
                         GameOver _ ->
                             Sub.none
 
                         _ ->
-                            Time.every 2000 Tick
+                            Ports.gameEventReceived GameEventReceived
 
                 Lobby _ _ _ ->
-                    -- Poll every 3 seconds in lobby for new games
-                    Time.every 3000 Tick
+                    -- Listen for lobby events via SSE + update time every 5 minutes
+                    Sub.batch
+                        [ Ports.lobbyEventReceived LobbyEventReceived
+                        , Time.every (5 * 60 * 1000) Tick
+                        ]
 
                 _ ->
                     Sub.none
     in
-    Sub.batch [ playersSub, pollingSub ]
+    Sub.batch [ playersSub, sseSub ]
 
 
 main : Program () Model Msg
@@ -191,7 +195,7 @@ view model =
                             ]
 
             Playing _ _ _ _ game history _ ->
-                Html.div [ HtmlA.class "game-container"]
+                Html.div [ HtmlA.class "game-container" ]
                     ((game
                         |> Game.view
                         |> List.map (Html.map GotGameMsg)
@@ -367,6 +371,8 @@ type Msg
     | RequestGameFromServer
     | StoredPlayersLoaded Encode.Value
     | GotServerMsg Api.Msg
+    | LobbyEventReceived Encode.Value
+    | GameEventReceived Encode.Value
     | Tick Time.Posix
 
 
@@ -397,17 +403,17 @@ update msg model =
         GotServerMsg servermsg ->
             handleServerMsg servermsg model
 
-        Tick currentTime ->
-            -- Auto-poll for updates
-            case model of
-                Playing _ _ _ _ _ _ _ ->
-                    -- Poll for game state updates
-                    handleRequestGame model
+        LobbyEventReceived value ->
+            handleLobbyEvent value model
 
+        GameEventReceived value ->
+            handleGameEvent value model
+
+        Tick currentTime ->
+            case model of
                 Lobby key lobbyModel storedPlayers ->
-                    -- Update current time and poll for lobby/game summaries updates
                     ( Lobby key { lobbyModel | currentTime = currentTime } storedPlayers
-                    , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                    , Cmd.none
                     )
 
                 _ ->
@@ -432,9 +438,9 @@ handleUrlChange url model =
             else
                 case String.toInt gameidStr of
                     Just gameid ->
-                        -- Transition to EnterName (player names come via subscription)
+                        -- Transition to EnterName, close lobby stream
                         ( EnterName key gameid (Entering "") storedPlayers
-                        , Cmd.none
+                        , Ports.closeLobbyStream ()
                         )
 
                     Nothing ->
@@ -449,7 +455,13 @@ handleUrlChange url model =
                 ( Redirect key url storedPlayers, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         Playing key _ _ _ _ _ storedPlayers ->
-            ( Redirect key url storedPlayers, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+            -- Close game stream when leaving Playing state
+            ( Redirect key url storedPlayers
+            , Cmd.batch
+                [ Ports.closeGameStream ()
+                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                ]
+            )
 
         _ ->
             ( model, Cmd.none )
@@ -647,20 +659,32 @@ handleGameSummaries result model =
                         )
 
                     else
-                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers, Nav.pushUrl key "/" )
+                        -- Transition to Lobby, open SSE stream
+                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers
+                        , Cmd.batch [ Nav.pushUrl key "/", Ports.openLobbyStream (), Task.perform Tick Time.now ]
+                        )
 
                 Nothing ->
                     if String.isEmpty gameidStr then
-                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers, Cmd.none )
+                        -- Transition to Lobby, open SSE stream
+                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers
+                        , Cmd.batch [ Ports.openLobbyStream (), Task.perform Tick Time.now ]
+                        )
 
                     else
-                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers, Nav.pushUrl key "/" )
+                        -- Transition to Lobby, open SSE stream
+                        ( Lobby key { status = Home summaries, currentTime = Time.millisToPosix 0 } storedPlayers
+                        , Cmd.batch [ Nav.pushUrl key "/", Ports.openLobbyStream (), Task.perform Tick Time.now ]
+                        )
 
         ( Err _, Redirect key _ storedPlayers ) ->
-            ( Lobby key { status = Home [], currentTime = Time.millisToPosix 0 } storedPlayers, Cmd.none )
+            -- Transition to Lobby, open SSE stream
+            ( Lobby key { status = Home [], currentTime = Time.millisToPosix 0 } storedPlayers
+            , Cmd.batch [ Ports.openLobbyStream (), Task.perform Tick Time.now ]
+            )
 
         ( Ok summaries, Lobby key lobby storedPlayers ) ->
-            -- Update lobby with fresh game summaries (from polling)
+            -- Update lobby with fresh game summaries
             ( Lobby key { lobby | status = Home summaries } storedPlayers, Cmd.none )
 
         _ ->
@@ -750,9 +774,16 @@ joinGameSuccess key gameid joinResponse storedPlayers =
 
         concedeCmd =
             checkAndConcede finalgame gameid token
+
+        -- Close lobby stream and open game stream
+        sseCmd =
+            Cmd.batch
+                [ Ports.closeLobbyStream ()
+                , Ports.openGameStream gameid
+                ]
     in
     ( Playing key gameid name token finalgame servergame.gameHistory storedPlayers
-    , Cmd.batch [ saveCmd, concedeCmd ]
+    , Cmd.batch [ saveCmd, concedeCmd, sseCmd ]
     )
 
 
@@ -829,4 +860,153 @@ handleConcedeResponse result model =
 
         Err _ ->
             -- Network error
+            ( model, Cmd.none )
+
+
+
+-- SSE EVENT HANDLERS
+
+
+handleLobbyEvent : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleLobbyEvent value model =
+    case Decode.decodeValue Api.decodeLobbyEvent value of
+        Ok event ->
+            case model of
+                Lobby key lobbyModel storedPlayers ->
+                    case event of
+                        Api.GameCreated _ summary ->
+                            -- Add new game to the list
+                            let
+                                updatedStatus =
+                                    case lobbyModel.status of
+                                        Home summaries ->
+                                            Home (summary :: summaries)
+                            in
+                            ( Lobby key { lobbyModel | status = updatedStatus } storedPlayers
+                            , Cmd.none
+                            )
+
+                        Api.PlayerJoined gameId playerName _ ->
+                            -- Update game in list with new player
+                            let
+                                updateSummary s =
+                                    if s.summaryId == gameId then
+                                        if String.isEmpty s.summaryPlayer1 then
+                                            { s | summaryPlayer1 = playerName }
+
+                                        else if String.isEmpty s.summaryPlayer2 then
+                                            { s | summaryPlayer2 = playerName }
+
+                                        else
+                                            s
+
+                                    else
+                                        s
+
+                                updatedStatus =
+                                    case lobbyModel.status of
+                                        Home summaries ->
+                                            Home (List.map updateSummary summaries)
+                            in
+                            ( Lobby key { lobbyModel | status = updatedStatus } storedPlayers
+                            , Cmd.none
+                            )
+
+                        Api.GameStarted gameId ->
+                            -- Update game status to InProgress
+                            let
+                                updateSummary s =
+                                    if s.summaryId == gameId then
+                                        { s | summaryStatus = Lobby.InProgress }
+
+                                    else
+                                        s
+
+                                updatedStatus =
+                                    case lobbyModel.status of
+                                        Home summaries ->
+                                            Home (List.map updateSummary summaries)
+                            in
+                            ( Lobby key { lobbyModel | status = updatedStatus } storedPlayers
+                            , Cmd.none
+                            )
+
+                        Api.GameEnded gameId _ ->
+                            -- Update game status to Completed
+                            let
+                                updateSummary s =
+                                    if s.summaryId == gameId then
+                                        { s | summaryStatus = Lobby.Completed }
+
+                                    else
+                                        s
+
+                                updatedStatus =
+                                    case lobbyModel.status of
+                                        Home summaries ->
+                                            Home (List.map updateSummary summaries)
+                            in
+                            ( Lobby key { lobbyModel | status = updatedStatus } storedPlayers
+                            , Cmd.none
+                            )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        Err _ ->
+            ( model, Cmd.none )
+
+
+handleGameEvent : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleGameEvent value model =
+    case Decode.decodeValue Api.decodeGameEvent value of
+        Ok event ->
+            case model of
+                Playing key gameid name token game history storedPlayers ->
+                    case game.state of
+                        GameOver _ ->
+                            -- Game already over, ignore events
+                            ( model, Cmd.none )
+
+                        _ ->
+                            case event of
+                                Api.MoveEvent moveStr _ ->
+                                    -- Apply the move from opponent
+                                    case Api.stringToGameMove moveStr of
+                                        Just gameMove ->
+                                            let
+                                                updatedGame =
+                                                    game |> Game.update (NewGameMove <| transformGameMove gameMove)
+
+                                                concedeCmd =
+                                                    checkAndConcede updatedGame gameid token
+                                            in
+                                            ( Playing key gameid name token updatedGame (gameMove :: history) storedPlayers
+                                            , concedeCmd
+                                            )
+
+                                        Nothing ->
+                                            ( model, Cmd.none )
+
+                                Api.ConcedeEvent winnerStr ->
+                                    -- Opponent conceded, update game state
+                                    let
+                                        winnerColor =
+                                            if winnerStr == "White" then
+                                                White
+
+                                            else
+                                                Black
+
+                                        updatedGame =
+                                            { game | state = GameOver winnerColor }
+                                    in
+                                    ( Playing key gameid name token updatedGame history storedPlayers
+                                    , Cmd.none
+                                    )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        Err _ ->
             ( model, Cmd.none )

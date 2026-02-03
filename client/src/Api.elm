@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), GameEvent(..), JoinError, JoinGameResponse, LobbyEvent(..), MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, decodeLobbyEvent, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -179,6 +179,22 @@ type ConcedeError
     | CEGameNotFound
     | CEAlreadyEnded
     | CENetworkError String
+
+
+
+-- SSE EVENT TYPES
+
+
+type LobbyEvent
+    = GameCreated Int GameSummary
+    | PlayerJoined Int String String -- gameId, playerName, color
+    | GameStarted Int
+    | GameEnded Int (Maybe String) -- gameId, winner color
+
+
+type GameEvent
+    = MoveEvent String String -- move, timestamp
+    | ConcedeEvent String -- winner color
 
 
 joinErrorToString : JoinError -> String
@@ -494,3 +510,62 @@ decodeJoinGameResponse =
 encodeGameMove : Game.GameMove -> Encode.Value
 encodeGameMove gameMove =
     Encode.string (gameMoveToString gameMove)
+
+
+
+-- SSE EVENT DECODERS
+
+
+decodeLobbyEvent : Decoder LobbyEvent
+decodeLobbyEvent =
+    Decode.field "event" Decode.string
+        |> Decode.andThen decodeLobbyEventHelper
+
+
+decodeLobbyEventHelper : String -> Decoder LobbyEvent
+decodeLobbyEventHelper eventType =
+    case eventType of
+        "gameCreated" ->
+            Decode.map2 GameCreated
+                (Decode.field "gameId" Decode.int)
+                (Decode.field "summary" decodeGameSummary)
+
+        "playerJoined" ->
+            Decode.map3 PlayerJoined
+                (Decode.field "gameId" Decode.int)
+                (Decode.field "player" Decode.string)
+                (Decode.field "color" Decode.string)
+
+        "gameStarted" ->
+            Decode.map GameStarted
+                (Decode.field "gameId" Decode.int)
+
+        "gameEnded" ->
+            Decode.map2 GameEnded
+                (Decode.field "gameId" Decode.int)
+                (Decode.field "winner" (Decode.nullable Decode.string))
+
+        _ ->
+            Decode.fail ("Unknown lobby event type: " ++ eventType)
+
+
+decodeGameEvent : Decoder GameEvent
+decodeGameEvent =
+    Decode.field "event" Decode.string
+        |> Decode.andThen decodeGameEventHelper
+
+
+decodeGameEventHelper : String -> Decoder GameEvent
+decodeGameEventHelper eventType =
+    case eventType of
+        "move" ->
+            Decode.map2 MoveEvent
+                (Decode.field "move" Decode.string)
+                (Decode.field "timestamp" Decode.string)
+
+        "concede" ->
+            Decode.map ConcedeEvent
+                (Decode.field "winner" Decode.string)
+
+        _ ->
+            Decode.fail ("Unknown game event type: " ++ eventType)

@@ -7,6 +7,7 @@
     <link rel="icon" href="/favicon.svg" sizes="any" type="image/svg+xml">
     <link rel="stylesheet" href="style.css" />
     <script src="localStorage.js"></script>
+    <script src="sse.js"></script>
     <script src="elm.js"></script>
   </head>
 
@@ -17,10 +18,15 @@
     var app = Elm.Main.init({
       node: document.getElementById("myapp"),
     });
-    
+
     // Initialize localStorage integration
     if (window.initLocalStorage) {
       window.initLocalStorage(app);
+    }
+
+    // Initialize SSE (Server-Sent Events) integration
+    if (window.initSSE) {
+      window.initSSE(app);
     }
   </script>
 </html>

@@ -336,7 +336,7 @@ getAllGameSummaries :: DB -> IO [GameSummary]
 getAllGameSummaries db@(DB dataVar _ _ _ _ _) = do
   state <- readTVarIO dataVar
   let games = dbGames state
-  mapM (uncurry $ gameIdAndGameToSummary db) (Map.toList games)
+  reverse <$> mapM (uncurry $ gameIdAndGameToSummary db) (Map.toList games)
   where
     gameIdAndGameToSummary :: DB -> GameId -> Game -> IO GameSummary
     gameIdAndGameToSummary database gid game = do

@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module App where
 
@@ -8,7 +9,7 @@ import Api
     APIWithAssets,
     ConcedeError (..),
     GameId (..),
-    GameSummary,
+    GameSummary (..),
     GameWithNames,
     JoinError (..),
     JoinGameResponse (..),
@@ -19,10 +20,16 @@ import Api
     api,
     apiWithAssets,
   )
+import Control.Concurrent.STM (atomically, readTQueue)
+import Control.Exception (bracket, finally)
+import Control.Monad (forever, when)
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask)
+import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks)
+import Data.Aeson (encode)
+import Data.ByteString.Builder (byteString, lazyByteString)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
-import Data.Maybe (fromJust, isNothing)
+import qualified Data.ByteString.Lazy as LBS
+import Data.Maybe (fromJust, isJust, isNothing)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Database
@@ -30,6 +37,7 @@ import Database
     DB,
     concedeGame,
     getAllGameSummaries,
+    getGameById,
     getGameWithNames,
     initDB,
     insertGameWithNewId,
@@ -38,10 +46,10 @@ import Database
     updateGame,
     validateTokenForMove,
   )
-import Game (Color, Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
-import Network.Wai (Application)
+import Game (Color (..), Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
+import Network.HTTP.Types (status200)
+import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
-import WaiAppStatic.Types (MaxAge (..), ssMaxAge)
 import Options (cleanupOptionsToConfig)
 import qualified Options
 import Servant
@@ -59,7 +67,26 @@ import Servant
     unTagged,
     type (:<|>) (..),
   )
+import Subscribers
+  ( GameEvent (..),
+    LobbyEvent (..),
+    SubscriberStore,
+    broadcastGame,
+    broadcastLobby,
+    newSubscriberStore,
+    subscribeGame,
+    subscribeLobby,
+    unsubscribeGame,
+    unsubscribeLobby,
+  )
 import System.Directory (doesFileExist)
+import WaiAppStatic.Types (MaxAge (..), ssMaxAge)
+
+-- | Application environment with DB and subscriber store
+data AppEnv = AppEnv
+  { appDB :: DB,
+    appSubscribers :: SubscriberStore
+  }
 
 -- | WAI Application with configuration
 appWithConfig :: Options.ServerOptions -> IO Application
@@ -70,49 +97,72 @@ appWithConfig opts =
       cleanupEnabled = Options.cleanupEnabled (Options.optCleanup opts)
    in serve apiWithAssets <$> makeServer (Options.optDatabase opts) (Options.optResetDB opts) cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
 
--- | Custom monad for handlers: gives access to DB via ReaderT
-type AppM = ReaderT DB Handler
+-- | Custom monad for handlers: gives access to AppEnv via ReaderT
+type AppM = ReaderT AppEnv Handler
 
 -- | Build the complete server: typed API routes + static file serving
 makeServer :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
   db <- initDB dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
+  subscriberStore <- newSubscriberStore
+  let env = AppEnv {appDB = db, appSubscribers = subscriberStore}
   putStrLn "Server initialized successfully"
 
   let staticSettings = (defaultFileServerSettings "assets/") {ssMaxAge = NoMaxAge}
       staticFileServer = staticApp staticSettings
-      apiHandlers = hoistServer api (runAppM db) handlers
+      apiHandlers = hoistServer api (runAppM env) (handlers env)
 
   -- Combine: try API routes first, fall back to static files
   return (apiHandlers :<|> Tagged {unTagged = staticFileServer})
 
 -- | Convert our AppM monad to Servant's Handler monad
-runAppM :: DB -> AppM a -> Handler a
-runAppM db action = runReaderT action db
+runAppM :: AppEnv -> AppM a -> Handler a
+runAppM env action = runReaderT action env
 
 -- | All API route handlers
-handlers :: ServerT API AppM
-handlers = newGame :<|> getGameSummaries :<|> joinGame :<|> getGame :<|> newMove :<|> concede :<|> getIndexHtml
+handlers :: AppEnv -> ServerT API AppM
+handlers env =
+  newGame
+    :<|> getGameSummaries
+    :<|> joinGame
+    :<|> getGame
+    :<|> newMove
+    :<|> concede
+    :<|> lobbyStreamHandler env
+    :<|> gameStreamHandler env
+    :<|> getIndexHtml
 
 newGame :: AppM GameId
 newGame = do
-  db <- ask
+  env <- ask
+  let db = appDB env
+      store = appSubscribers env
   gameId <- liftIO $ insertGameWithNewId db
   liftIO $ do
     putStrLn $ "Creating new game with ID: " ++ show gameId
     logDBState "After creating game" db
+    -- Broadcast to lobby subscribers
+    summaries <- getAllGameSummaries db
+    case filter (\s -> summaryId s == gameId) summaries of
+      (summary : _) -> broadcastLobby store (GameCreated gameId summary)
+      [] -> return ()
   return gameId
 
 getGameSummaries :: AppM [GameSummary]
 getGameSummaries = do
-  db <- ask
+  db <- asks appDB
   liftIO $ getAllGameSummaries db
 
 joinGame :: GameId -> Maybe SessionToken -> JoinRequest -> AppM (Either JoinError JoinGameResponse)
 joinGame gameId maybeToken (JoinRequest name) = do
-  db <- ask
-  let playerName = T.pack name
+  env <- ask
+  let db = appDB env
+      store = appSubscribers env
+      playerName = T.pack name
   liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
+
+  -- Get game state before join to check if it will become full
+  gameBeforeJoin <- liftIO $ getGameById db gameId
 
   result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
   case result of
@@ -120,12 +170,29 @@ joinGame gameId maybeToken (JoinRequest name) = do
       liftIO $ putStrLn $ "Join failed: " ++ show err
       return $ Left err
     Right joinResponse -> do
-      liftIO $ putStrLn "Join successful"
+      liftIO $ do
+        putStrLn "Join successful"
+        -- Determine color based on what was filled
+        let color = case gameBeforeJoin of
+              Just g ->
+                if isNothing (player_white g)
+                  then White
+                  else Black
+              Nothing -> White -- shouldn't happen
+              -- Broadcast player joined
+        broadcastLobby store (PlayerJoined gameId playerName color)
+        -- Check if game is now full (both players joined)
+        gameAfterJoin <- getGameById db gameId
+        case gameAfterJoin of
+          Just g ->
+            when (isJust (player_white g) && isJust (player_black g)) $
+              broadcastLobby store (GameStarted gameId)
+          Nothing -> return ()
       return $ Right joinResponse
 
 getGame :: GameId -> AppM GameWithNames
 getGame gameId = do
-  db <- ask
+  db <- asks appDB
   maybeGame <- liftIO $ getGameWithNames db gameId
   case maybeGame of
     Nothing -> throwError err404
@@ -136,7 +203,9 @@ newMove gameId maybeToken move = do
   case maybeToken of
     Nothing -> return $ Left MEInvalidToken
     Just token -> do
-      db <- ask
+      env <- ask
+      let db = appDB env
+          store = appSubscribers env
       -- Validate token and check if it's the player's turn
       isValid <- liftIO $ validateTokenForMove db gameId token
 
@@ -161,7 +230,10 @@ newMove gameId maybeToken move = do
           success <- liftIO $ updateGame db gameId updateGameFn
           if success
             then do
-              liftIO $ putStrLn "Move accepted"
+              liftIO $ do
+                putStrLn "Move accepted"
+                -- Broadcast move to game subscribers
+                broadcastGame store gameId (MoveEvent move now)
               return $ Right move
             else return $ Left MEGameNotFound
 
@@ -170,11 +242,61 @@ concede gameId maybeToken = do
   case maybeToken of
     Nothing -> return $ Left CEInvalidToken
     Just token -> do
-      db <- ask
+      env <- ask
+      let db = appDB env
+          store = appSubscribers env
       result <- liftIO $ concedeGame db gameId token
       case result of
         Nothing -> return $ Left CEGameNotFound
-        Just color -> return $ Right color
+        Just winnerColor -> do
+          liftIO $ do
+            -- Broadcast concede to game subscribers
+            broadcastGame store gameId (ConcedeEvent winnerColor)
+            -- Broadcast game ended to lobby
+            broadcastLobby store (GameEnded gameId (Just winnerColor))
+          return $ Right winnerColor
+
+-- | SSE handler for lobby stream
+lobbyStreamHandler :: AppEnv -> Tagged AppM Application
+lobbyStreamHandler env = Tagged $ \req respond -> do
+  let store = appSubscribers env
+  -- Subscribe to lobby events
+  queue <- subscribeLobby store
+  -- Send SSE response
+  respond $
+    responseStream status200 [("Content-Type", "text/event-stream"), ("Cache-Control", "no-cache"), ("Connection", "keep-alive")] $ \write flush -> do
+      -- Send initial comment to establish connection
+      write (byteString ": connected\n\n")
+      flush
+      -- Loop forever sending events
+      let loop = do
+            event <- atomically $ readTQueue queue
+            let eventData = "data: " <> lazyByteString (encode event) <> "\n\n"
+            write eventData
+            flush
+            loop
+      loop `finally` unsubscribeLobby store queue
+
+-- | SSE handler for game stream
+gameStreamHandler :: AppEnv -> GameId -> Tagged AppM Application
+gameStreamHandler env gameId = Tagged $ \req respond -> do
+  let store = appSubscribers env
+  -- Subscribe to game events
+  queue <- subscribeGame store gameId
+  -- Send SSE response
+  respond $
+    responseStream status200 [("Content-Type", "text/event-stream"), ("Cache-Control", "no-cache"), ("Connection", "keep-alive")] $ \write flush -> do
+      -- Send initial comment to establish connection
+      write (byteString ": connected\n\n")
+      flush
+      -- Loop forever sending events
+      let loop = do
+            event <- atomically $ readTQueue queue
+            let eventData = "data: " <> lazyByteString (encode event) <> "\n\n"
+            write eventData
+            flush
+            loop
+      loop `finally` unsubscribeGame store gameId queue
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml _ = do

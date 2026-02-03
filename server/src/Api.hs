@@ -37,6 +37,12 @@ import Servant
   )
 import Servant.API (Accept (..), Raw)
 
+-- SSE Content Type
+data EventStream = EventStream
+
+instance Accept EventStream where
+  contentType _ = "text" // "event-stream"
+
 type GameId = Int
 
 newtype SessionToken = SessionToken Text
@@ -172,9 +178,14 @@ type NewMove = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "moves"
 
 type Concede = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "concede" :> Header "X-Session-Token" SessionToken :> Post '[JSON] (Either ConcedeError Color)
 
+-- SSE Streaming endpoints (using Raw for WAI-level streaming)
+type LobbyStream = "1" :> "onitama" :> "games" :> "stream" :> Raw
+
+type GameStream = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "stream" :> Raw
+
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
-type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> Index
+type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> LobbyStream :<|> GameStream :<|> Index
 
 api :: Proxy API
 api = Proxy
