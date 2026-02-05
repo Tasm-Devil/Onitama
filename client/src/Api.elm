@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), GameEvent(..), JoinError, JoinGameResponse, LobbyEvent(..), MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, decodeLobbyEvent, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), GameEvent(..), JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, gameMoveToString, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -8,7 +8,7 @@ import Iso8601
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
-import Lobby exposing (GameId, GameStatus(..), GameSummary, Status(..))
+import Lobby exposing (GameId, GameStatus(..), GameSummary)
 import Time exposing (Posix)
 
 
@@ -185,13 +185,6 @@ type ConcedeError
 -- SSE EVENT TYPES
 
 
-type LobbyEvent
-    = GameCreated Int GameSummary
-    | PlayerJoined Int String String -- gameId, playerName, color
-    | GameStarted Int
-    | GameEnded Int (Maybe String) -- gameId, winner color
-
-
 type GameEvent
     = MoveEvent String String -- move, timestamp
     | ConcedeEvent String -- winner color
@@ -220,11 +213,10 @@ joinErrorToString error =
 
 
 type Msg
-    = ReceivedGameIdFromServer (Result Http.Error GameId) -- the game id of the new game
+    = ReceivedGameIdFromServer (Result Http.Error GameId)
     | ReceivedJoinGameResponse (Result Http.Error (Result JoinError JoinGameResponse))
-    | ReceivedGameFromServer (Result Http.Error ServerGame)
     | ReceivedPostCreatedFromServer (Result Http.Error (Result MoveError Game.GameMove))
-    | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary)) -- lightweight game summaries
+    | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary))
     | ReceivedConcedeResponse (Result Http.Error (Result ConcedeError Color))
 
 
@@ -287,22 +279,6 @@ joinGame gameid name maybeToken =
         , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/players"
         , body = Http.jsonBody requestBody
         , expect = Http.expectJson ReceivedJoinGameResponse eitherDecoder
-        , timeout = Nothing
-        , tracker = Nothing
-        }
-
-
-getGameFromServer : GameId -> Cmd Msg
-getGameFromServer gameid =
-    Http.request
-        { method = "GET"
-        , headers =
-            [ Http.header "Cache-Control" "no-cache, no-store, must-revalidate"
-            , Http.header "Pragma" "no-cache"
-            ]
-        , url = "/1/onitama/games/" ++ String.fromInt gameid
-        , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedGameFromServer decodeGame
         , timeout = Nothing
         , tracker = Nothing
         }
@@ -514,39 +490,6 @@ encodeGameMove gameMove =
 
 
 -- SSE EVENT DECODERS
-
-
-decodeLobbyEvent : Decoder LobbyEvent
-decodeLobbyEvent =
-    Decode.field "event" Decode.string
-        |> Decode.andThen decodeLobbyEventHelper
-
-
-decodeLobbyEventHelper : String -> Decoder LobbyEvent
-decodeLobbyEventHelper eventType =
-    case eventType of
-        "gameCreated" ->
-            Decode.map2 GameCreated
-                (Decode.field "gameId" Decode.int)
-                (Decode.field "summary" decodeGameSummary)
-
-        "playerJoined" ->
-            Decode.map3 PlayerJoined
-                (Decode.field "gameId" Decode.int)
-                (Decode.field "player" Decode.string)
-                (Decode.field "color" Decode.string)
-
-        "gameStarted" ->
-            Decode.map GameStarted
-                (Decode.field "gameId" Decode.int)
-
-        "gameEnded" ->
-            Decode.map2 GameEnded
-                (Decode.field "gameId" Decode.int)
-                (Decode.field "winner" (Decode.nullable Decode.string))
-
-        _ ->
-            Decode.fail ("Unknown lobby event type: " ++ eventType)
 
 
 decodeGameEvent : Decoder GameEvent

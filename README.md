@@ -114,10 +114,10 @@ docker run -p 8080:8080 onitama
 - [x] CLI & YAML config
 - [x] Game list in lobby: newest first
 - [x] Fix "just now" timestamp not updating
-- [ ] Mobile responsive table width
+- [X] Mobile responsive table width
+- [x] Lobby Events cause inconsistent gametable state. No need for detailt SSE with the Lobby, just refetch GameSummarys
 - [ ] Server-side move validation (break game-agnostic design)
 - [ ] CSS improvements (responsive, animations)
-- [ ] Hide "(waiting) vs (waiting)" games in UI
 - [ ] Docker: volumes for DB/config, versioning
 - [ ] Spectator mode
 - [ ] Move playback

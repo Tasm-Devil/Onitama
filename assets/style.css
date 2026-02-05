@@ -206,3 +206,10 @@ h1 {
   text-align: center;
   padding: 20px;
 }
+
+@media (max-width: 600px) {
+  .lobby #game-table td:nth-child(4),
+  .lobby #game-table td:nth-child(5) {
+    display: none;
+  }
+}

@@ -9,7 +9,7 @@ import Api
     APIWithAssets,
     ConcedeError (..),
     GameId (..),
-    GameSummary (..),
+    GameSummary,
     GameWithNames,
     JoinError (..),
     JoinGameResponse (..),
@@ -22,14 +22,13 @@ import Api
   )
 import Control.Concurrent.STM (atomically, readTQueue)
 import Control.Exception (bracket, finally)
-import Control.Monad (forever, when)
+import Control.Monad (forever)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks)
 import Data.Aeson (encode)
 import Data.ByteString.Builder (byteString, lazyByteString)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
 import qualified Data.ByteString.Lazy as LBS
-import Data.Maybe (fromJust, isJust, isNothing)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Database
@@ -37,7 +36,6 @@ import Database
     DB,
     concedeGame,
     getAllGameSummaries,
-    getGameById,
     getGameWithNames,
     initDB,
     insertGameWithNewId,
@@ -130,6 +128,7 @@ handlers env =
     :<|> concede
     :<|> lobbyStreamHandler env
     :<|> gameStreamHandler env
+    :<|> getNewGamePageHtml
     :<|> getIndexHtml
 
 newGame :: AppM GameId
@@ -141,11 +140,7 @@ newGame = do
   liftIO $ do
     putStrLn $ "Creating new game with ID: " ++ show gameId
     logDBState "After creating game" db
-    -- Broadcast to lobby subscribers
-    summaries <- getAllGameSummaries db
-    case filter (\s -> summaryId s == gameId) summaries of
-      (summary : _) -> broadcastLobby store (GameCreated gameId summary)
-      [] -> return ()
+    broadcastLobby store LobbyChanged
   return gameId
 
 getGameSummaries :: AppM [GameSummary]
@@ -161,9 +156,6 @@ joinGame gameId maybeToken (JoinRequest name) = do
       playerName = T.pack name
   liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
 
-  -- Get game state before join to check if it will become full
-  gameBeforeJoin <- liftIO $ getGameById db gameId
-
   result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
   case result of
     Left err -> do
@@ -172,22 +164,7 @@ joinGame gameId maybeToken (JoinRequest name) = do
     Right joinResponse -> do
       liftIO $ do
         putStrLn "Join successful"
-        -- Determine color based on what was filled
-        let color = case gameBeforeJoin of
-              Just g ->
-                if isNothing (player_white g)
-                  then White
-                  else Black
-              Nothing -> White -- shouldn't happen
-              -- Broadcast player joined
-        broadcastLobby store (PlayerJoined gameId playerName color)
-        -- Check if game is now full (both players joined)
-        gameAfterJoin <- getGameById db gameId
-        case gameAfterJoin of
-          Just g ->
-            when (isJust (player_white g) && isJust (player_black g)) $
-              broadcastLobby store (GameStarted gameId)
-          Nothing -> return ()
+        broadcastLobby store LobbyChanged
       return $ Right joinResponse
 
 getGame :: GameId -> AppM GameWithNames
@@ -232,8 +209,8 @@ newMove gameId maybeToken move = do
             then do
               liftIO $ do
                 putStrLn "Move accepted"
-                -- Broadcast move to game subscribers
                 broadcastGame store gameId (MoveEvent move now)
+                broadcastLobby store LobbyChanged
               return $ Right move
             else return $ Left MEGameNotFound
 
@@ -250,10 +227,8 @@ concede gameId maybeToken = do
         Nothing -> return $ Left CEGameNotFound
         Just winnerColor -> do
           liftIO $ do
-            -- Broadcast concede to game subscribers
             broadcastGame store gameId (ConcedeEvent winnerColor)
-            -- Broadcast game ended to lobby
-            broadcastLobby store (GameEnded gameId (Just winnerColor))
+            broadcastLobby store LobbyChanged
           return $ Right winnerColor
 
 -- | SSE handler for lobby stream
@@ -297,6 +272,14 @@ gameStreamHandler env gameId = Tagged $ \req respond -> do
             flush
             loop
       loop `finally` unsubscribeGame store gameId queue
+
+getNewGamePageHtml :: AppM RawHtml
+getNewGamePageHtml = do
+  let path = "assets/index.html"
+  exists <- liftIO $ doesFileExist path
+  if exists
+    then RawHtml <$> liftIO (Lazy.readFile path)
+    else throwError err404
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml _ = do

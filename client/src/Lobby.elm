@@ -1,8 +1,7 @@
-module Lobby exposing (GameId, GameStatus(..), GameSummary, Model, Msg(..), Status(..), view)
+module Lobby exposing (GameId, GameStatus(..), GameSummary, Model, Status(..), view)
 
 import Html exposing (Html)
 import Html.Attributes as HtmlA
-import Html.Events exposing (onClick)
 import Time exposing (Posix)
 
 
@@ -42,11 +41,10 @@ type alias GameSummary =
 
 
 
--- ToDo: Refactor this in the model
 -- VIEW
 
 
-view : Model -> Html Msg
+view : Model -> Html msg
 view model =
     case model.status of
         Home summaries ->
@@ -61,7 +59,7 @@ view model =
                         [ Html.text "the rules" ]
                     , Html.text " if you haven't played before."
                     ]
-                , Html.a [ HtmlA.class "new-game", onClick RequestNewGameFromServer ]
+                , Html.a [ HtmlA.class "new-game", HtmlA.href "/newgame" ]
                     [ Html.text "New Game" ]
                 , Html.table [ HtmlA.id "game-table" ]
                     (Html.thead []
@@ -85,7 +83,7 @@ view model =
                 ]
 
 
-createGameTableRow : Posix -> GameSummary -> Html Msg
+createGameTableRow : Posix -> GameSummary -> Html msg
 createGameTableRow currentTime summary =
     let
         player1Display =
@@ -178,5 +176,3 @@ formatRelativeTime current past =
         String.fromInt diffDays ++ " days ago"
 
 
-type Msg
-    = RequestNewGameFromServer -- get rid of this using href /newgame

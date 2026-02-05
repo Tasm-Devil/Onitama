@@ -5,6 +5,7 @@ import Game.Cell exposing (..)
 import Game.Figure exposing (..)
 import Global exposing (gridsize)
 import Html exposing (Html)
+import Html.Attributes as HtmlA
 import List.Extra
 import Svg
 import Svg.Attributes as SvgA
@@ -424,3 +425,37 @@ setupNewGame cards playerColor nextColor =
             else
                 identity
            )
+
+
+viewHistory : List GameMove -> Html msg
+viewHistory history =
+    Html.div [ HtmlA.class "game-log" ]
+        [ Html.ul [ HtmlA.id "log-lines" ]
+            (List.map viewGameMove history)
+        , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
+        ]
+
+
+viewGameMove : GameMove -> Html msg
+viewGameMove gameMove =
+    let
+        ( from_x, from_y ) =
+            ( 1 + Tuple.first gameMove.from, 1 + Tuple.second gameMove.from )
+
+        ( move_x, move_y ) =
+            gameMove.move
+
+        ( to_x, to_y ) =
+            ( from_x + move_x, from_y + move_y )
+
+        ( from_x_char, to_x_char ) =
+            ( Char.fromCode (96 + from_x), Char.fromCode (96 + to_x) )
+
+        from =
+            String.fromChar from_x_char ++ String.fromInt from_y
+
+        to =
+            String.fromChar to_x_char ++ String.fromInt to_y
+    in
+    Html.li [ HtmlA.class "log-message" ]
+        [ Html.text (Game.Figure.colorToString gameMove.color ++ " moved from " ++ from ++ " to " ++ to ++ " by playing the " ++ gameMove.card.name ++ " card.") ]

@@ -15,9 +15,8 @@ module Subscribers
   )
 where
 
-import Api (GameId, GameSummary)
+import Api (GameId)
 import Control.Concurrent.STM
-import Control.Exception (bracket)
 import Control.Monad (forM_)
 import Data.Aeson (ToJSON (..), object, (.=))
 import Data.Map.Strict (Map)
@@ -27,39 +26,13 @@ import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 import Game (Color, GameMove)
 
--- | Events broadcast to lobby subscribers
-data LobbyEvent
-  = GameCreated GameId GameSummary
-  | PlayerJoined GameId Text Color -- gameId, playerName, color
-  | GameStarted GameId
-  | GameEnded GameId (Maybe Color) -- winner color, Nothing if draw/abandoned
+-- | Notification broadcast to lobby subscribers (client refetches on receive)
+data LobbyEvent = LobbyChanged
   deriving (Show, Generic)
 
 instance ToJSON LobbyEvent where
-  toJSON (GameCreated gid summary) =
-    object
-      [ "event" .= ("gameCreated" :: Text),
-        "gameId" .= gid,
-        "summary" .= summary
-      ]
-  toJSON (PlayerJoined gid name color) =
-    object
-      [ "event" .= ("playerJoined" :: Text),
-        "gameId" .= gid,
-        "player" .= name,
-        "color" .= color
-      ]
-  toJSON (GameStarted gid) =
-    object
-      [ "event" .= ("gameStarted" :: Text),
-        "gameId" .= gid
-      ]
-  toJSON (GameEnded gid winner) =
-    object
-      [ "event" .= ("gameEnded" :: Text),
-        "gameId" .= gid,
-        "winner" .= winner
-      ]
+  toJSON LobbyChanged =
+    object ["event" .= ("lobbyChanged" :: Text)]
 
 -- | Events broadcast to game subscribers
 data GameEvent
