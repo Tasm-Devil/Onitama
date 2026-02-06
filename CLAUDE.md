@@ -27,10 +27,11 @@ make clean          # Remove build artifacts
 client/src/           # Elm frontend
   Main.elm            # Application entry, routing, SSE subscriptions
   Api.elm             # HTTP client, SSE event decoders
-  Lobby.elm           # Game lobby UI
+  Lobby.elm           # Game lobby UI (pure view, no Msg type)
+  EnterName.elm       # Name entry / game join flow
   Ports.elm           # JS interop (localStorage, SSE)
   Game/
-    Game.elm          # Core game logic and board rendering
+    Game.elm          # Core game logic, board rendering, move history view
     Card.elm          # Card definitions and movement patterns
     Figure.elm        # Piece (King/Pawn) definitions
     Cell.elm          # Board cell rendering
@@ -65,12 +66,13 @@ Base URL: `http://localhost:8080/1/onitama`
 | POST | `/games/{id}/players` | Join game |
 | POST | `/games/{id}/moves` | Submit move |
 | POST | `/games/{id}/concede` | Concede game |
+| GET | `/newgame` | Serve index.html (client creates game) |
 
 ### SSE Endpoints
 
 | Path | Events |
 |------|--------|
-| `/games/stream` | `gameCreated`, `playerJoined`, `gameStarted`, `gameEnded` |
+| `/games/stream` | `lobbyChanged` (client refetches summaries) |
 | `/games/{id}/stream` | `move`, `concede` |
 
 All authenticated endpoints use `X-Session-Token` header.
@@ -89,15 +91,17 @@ All game logic (move validation, win detection, card rules) lives in the Elm cli
 
 ### Real-time Updates (SSE)
 
-- **Lobby stream**: Broadcasts when games are created, players join, games start/end
-- **Game stream**: Broadcasts moves and concede events to players in a game
+- **Lobby stream**: Invalidate+refetch pattern — server sends `lobbyChanged`, client refetches game summaries via GET
+- **Game stream**: Granular events — broadcasts `move` and `concede` events directly to players
 - STM-based subscriber management with automatic cleanup on disconnect
 - EventSource auto-reconnects on connection loss
 
 ### Frontend (Elm)
 
-- TEA architecture with page states: `Redirect | Lobby | EnterName | Playing`
+- TEA architecture with record Model + Page type: `Redirect | LobbyPage | EnterNamePage | PlayingPage`
+- EnterName module handles name entry/join flow with its own Msg/update/view
 - SSE subscriptions replace polling for real-time updates
+- Moves applied exclusively via game SSE stream (HTTP response only for error handling)
 - Player identities stored in localStorage with bidirectional port sync
 - Board perspective rotated for Black player
 

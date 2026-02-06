@@ -67,12 +67,13 @@ Base: `http://localhost:8080/1/onitama`
 | POST | `/games/{id}/players` | `{joinPlayerName}` | `X-Session-Token?` | `Either JoinError JoinGameResponse` |
 | POST | `/games/{id}/moves` | `GameMove` | `X-Session-Token` | `Either MoveError GameMove` |
 | POST | `/games/{id}/concede` | - | `X-Session-Token` | `Either ConcedeError Color` |
+| GET | `/newgame` | - | - | Serves `index.html` (creates game via client) |
 
 ### SSE Streams
 
 | Endpoint | Events |
 |----------|--------|
-| `/games/stream` | `gameCreated`, `playerJoined`, `gameStarted`, `gameEnded` |
+| `/games/stream` | `lobbyChanged` (client refetches summaries) |
 | `/games/{id}/stream` | `move`, `concede` |
 
 ```bash
@@ -102,6 +103,7 @@ See `onitama-server.example.yaml` for all options.
 make release
 docker build -t onitama .
 docker run -p 8080:8080 onitama
+docker save onitama:latest > onitama.tar
 ```
 
 ---
@@ -115,7 +117,7 @@ docker run -p 8080:8080 onitama
 - [x] Game list in lobby: newest first
 - [x] Fix "just now" timestamp not updating
 - [X] Mobile responsive table width
-- [x] Lobby Events cause inconsistent gametable state. No need for detailt SSE with the Lobby, just refetch GameSummarys
+- [x] Simplify lobby SSE to invalidate+refetch pattern
 - [ ] Server-side move validation (break game-agnostic design)
 - [ ] CSS improvements (responsive, animations)
 - [ ] Docker: volumes for DB/config, versioning
