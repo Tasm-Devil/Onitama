@@ -47,6 +47,7 @@ dependencies:
 - time               # for timestamps
 - optparse-applicative # for command-line options
 - yaml               # for config file support
+- async              # for race in SSE keepalive
 
 
 library:

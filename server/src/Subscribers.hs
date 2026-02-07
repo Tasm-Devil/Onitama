@@ -17,6 +17,15 @@ where
 
 import Api (GameId)
 import Control.Concurrent.STM
+  ( TQueue,
+    TVar,
+    atomically,
+    modifyTVar',
+    newTQueueIO,
+    newTVarIO,
+    readTVarIO,
+    writeTQueue,
+  )
 import Control.Monad (forM_)
 import Data.Aeson (ToJSON (..), object, (.=))
 import Data.Map.Strict (Map)
@@ -64,7 +73,7 @@ newSubscriberStore :: IO SubscriberStore
 newSubscriberStore = do
   lobbySubs <- newTVarIO []
   gameSubs <- newTVarIO Map.empty
-  return $ SubscriberStore lobbySubs gameSubs
+  return $ SubscriberStore { lobbySubscribers = lobbySubs, gameSubscribers = gameSubs }
 
 -- | Subscribe to lobby events, returns a queue to read from
 subscribeLobby :: SubscriberStore -> IO (TQueue LobbyEvent)

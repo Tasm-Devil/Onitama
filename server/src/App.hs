@@ -20,9 +20,10 @@ import Api
     api,
     apiWithAssets,
   )
+import Control.Concurrent (threadDelay)
+import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (atomically, readTQueue)
-import Control.Exception (bracket, finally)
-import Control.Monad (forever)
+import Control.Exception (finally)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks)
 import Data.Aeson (encode)
@@ -243,13 +244,18 @@ lobbyStreamHandler env = Tagged $ \req respond -> do
       -- Send initial comment to establish connection
       write (byteString ": connected\n\n")
       flush
-      -- Loop forever sending events
+      -- Loop forever, sending keepalive every 15s to prevent proxy timeouts
       let loop = do
-            event <- atomically $ readTQueue queue
-            let eventData = "data: " <> lazyByteString (encode event) <> "\n\n"
-            write eventData
-            flush
-            loop
+            result <- race (threadDelay 15000000) (atomically $ readTQueue queue)
+            case result of
+              Left () -> do
+                write (byteString ": keepalive\n\n")
+                flush
+                loop
+              Right event -> do
+                write ("data: " <> lazyByteString (encode event) <> "\n\n")
+                flush
+                loop
       loop `finally` unsubscribeLobby store queue
 
 -- | SSE handler for game stream
@@ -264,13 +270,18 @@ gameStreamHandler env gameId = Tagged $ \req respond -> do
       -- Send initial comment to establish connection
       write (byteString ": connected\n\n")
       flush
-      -- Loop forever sending events
+      -- Loop forever, sending keepalive every 15s to prevent proxy timeouts
       let loop = do
-            event <- atomically $ readTQueue queue
-            let eventData = "data: " <> lazyByteString (encode event) <> "\n\n"
-            write eventData
-            flush
-            loop
+            result <- race (threadDelay 15000000) (atomically $ readTQueue queue)
+            case result of
+              Left () -> do
+                write (byteString ": keepalive\n\n")
+                flush
+                loop
+              Right event -> do
+                write ("data: " <> lazyByteString (encode event) <> "\n\n")
+                flush
+                loop
       loop `finally` unsubscribeGame store gameId queue
 
 getNewGamePageHtml :: AppM RawHtml
