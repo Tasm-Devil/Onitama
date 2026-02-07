@@ -29,7 +29,7 @@ client/src/           # Elm frontend
   Api.elm             # HTTP client, SSE event decoders
   Lobby.elm           # Game lobby UI (pure view, no Msg type)
   EnterName.elm       # Name entry / game join flow
-  Ports.elm           # JS interop (localStorage, SSE)
+  Ports.elm           # JS interop (localStorage, SSE, sound)
   Game/
     Game.elm          # Core game logic, board rendering, move history view
     Card.elm          # Card definitions and movement patterns
@@ -42,6 +42,7 @@ server/src/           # Haskell backend
   Subscribers.hs      # SSE subscription management (STM-based)
   Game.hs             # Game data types
   Database.hs         # JSON persistence and session management
+  Onitama.hs          # Onitama game logic (move validation, win detection)
   Options.hs          # CLI and YAML config parsing
 
 assets/               # Static files served to browser
@@ -50,6 +51,8 @@ assets/               # Static files served to browser
   style.css
   localStorage.js     # Player identity persistence
   sse.js              # SSE EventSource wrapper
+  sound.js            # Move sound effect notifications
+  mp3/                # Move sound effect audio files
 ```
 
 ## API Endpoints
@@ -79,15 +82,13 @@ All authenticated endpoints use `X-Session-Token` header.
 
 ## Architecture
 
-### Game-Agnostic Server
+### Server-Side Move Validation
 
-The server knows **nothing about Onitama rules**. It's a pure "move broker":
-- Stores game state (moves as opaque strings)
-- Manages sessions and authentication
-- Broadcasts events via SSE
-- Persists data to JSON
-
-All game logic (move validation, win detection, card rules) lives in the Elm client.
+The server validates all moves against Onitama rules before accepting them:
+- `Onitama.hs` contains card definitions, move parsing, and game state replay
+- Moves are validated by replaying the full history then checking the new move
+- Win detection (king capture / temple reached) sets the `winner` field on the server
+- Invalid moves return `MEInvalidMove`, completed games return `MEGameOver`
 
 ### Real-time Updates (SSE)
 
@@ -104,6 +105,7 @@ All game logic (move validation, win detection, card rules) lives in the Elm cli
 - Moves applied exclusively via game SSE stream (HTTP response only for error handling)
 - Player identities stored in localStorage with bidirectional port sync
 - Board perspective rotated for Black player
+- Sound notification plays on opponent's moves via `playSound` port
 
 ### Backend (Haskell)
 
@@ -146,7 +148,6 @@ curl -N localhost:8080/1/onitama/games/1/stream
 
 ## Known Limitations
 
-- No server-side move validation (by design)
 - No chat feature
 - No expansion cards (Sensei's Path)
 

@@ -6,6 +6,7 @@ port module Ports exposing
     , lobbyEventReceived
     , openGameStream
     , openLobbyStream
+    , playSound
     , savePlayer
     )
 
@@ -73,3 +74,10 @@ port closeGameStream : () -> Cmd msg
 
 
 port gameEventReceived : (Encode.Value -> msg) -> Sub msg
+
+
+
+-- SOUND PORTS
+
+
+port playSound : String -> Cmd msg

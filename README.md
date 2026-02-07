@@ -118,6 +118,7 @@ docker save onitama:latest > onitama.tar
 - [x] Fix "just now" timestamp not updating
 - [X] Mobile responsive table width
 - [x] Simplify lobby SSE to invalidate+refetch pattern
+- [ ] Lobby stream should push data: {"event":"lobbyChanged"} on connected
 - [ ] Server-side move validation (break game-agnostic design)
 - [ ] CSS improvements (responsive, animations)
 - [ ] Docker: volumes for DB/config, versioning
@@ -126,6 +127,16 @@ docker save onitama:latest > onitama.tar
 - [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth
 - [ ] AI opponent
+
+view game history should begin with:
+You joined game as white.
+Bob has joined the game as black.
+Both players are present, the game begins.
+
+and on Bobs side:
+Alice has joined game as white.
+You joined the game as black.
+Both players are present, the game begins.
 
 ---
 

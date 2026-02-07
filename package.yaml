@@ -51,8 +51,16 @@ dependencies:
 
 
 library:
-  source-dirs: 
+  source-dirs:
   - server/src
+  exposed-modules:
+  - Api
+  - App
+  - Database
+  - Game
+  - Onitama
+  - Options
+  - Subscribers
 
 executables:
   server:

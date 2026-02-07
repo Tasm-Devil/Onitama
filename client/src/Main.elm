@@ -680,9 +680,16 @@ handleGameEvent value model =
 
                                                 concedeCmd =
                                                     checkAndConcede updatedGame gameid token
+
+                                                soundCmd =
+                                                    if gameMove.color /= game.myColor then
+                                                        Ports.playSound "move"
+
+                                                    else
+                                                        Cmd.none
                                             in
                                             ( { model | page = PlayingPage gameid name token updatedGame (gameMove :: history) }
-                                            , concedeCmd
+                                            , Cmd.batch [ concedeCmd, soundCmd ]
                                             )
 
                                         Nothing ->

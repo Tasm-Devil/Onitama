@@ -37,6 +37,7 @@ import Database
     DB,
     concedeGame,
     getAllGameSummaries,
+    getGameById,
     getGameWithNames,
     initDB,
     insertGameWithNewId,
@@ -46,6 +47,7 @@ import Database
     validateTokenForMove,
   )
 import Game (Color (..), Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
+import qualified Onitama
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
@@ -192,28 +194,44 @@ newMove gameId maybeToken move = do
           liftIO $ putStrLn "Move rejected: invalid token or not your turn"
           return $ Left MENotYourTurn
         else do
-          -- Token is valid, process the move
-          now <- liftIO getCurrentTime
-          let updateGameFn (Game p1 p2 cards history w created _) =
-                Just $
-                  Game
-                    { player_white = p1,
-                      player_black = p2,
-                      cards = cards,
-                      history = (move, now) : history,
-                      winner = w,
-                      createdAt = created,
-                      lastActivity = now
-                    }
-          success <- liftIO $ updateGame db gameId updateGameFn
-          if success
-            then do
-              liftIO $ do
-                putStrLn "Move accepted"
-                broadcastGame store gameId (MoveEvent move now)
-                broadcastLobby store LobbyChanged
-              return $ Right move
-            else return $ Left MEGameNotFound
+          -- Token is valid, validate the move against game rules
+          maybeGame <- liftIO $ getGameById db gameId
+          case maybeGame of
+            Nothing -> return $ Left MEGameNotFound
+            Just game -> do
+              -- Check if game is already over
+              case winner game of
+                Just _ -> return $ Left MEGameOver
+                Nothing -> do
+                  -- Validate the move using Onitama rules
+                  let historyMoves = move : map fst (history game)
+                  case Onitama.validateMove (cards game) historyMoves of
+                    Left _ -> do
+                      liftIO $ putStrLn "Move rejected: invalid move"
+                      return $ Left MEInvalidMove
+                    Right maybeWinner -> do
+                      -- Move is valid, apply it
+                      now <- liftIO getCurrentTime
+                      let updateGameFn (Game p1 p2 cs hist _ created _) =
+                            Just $
+                              Game
+                                { player_white = p1,
+                                  player_black = p2,
+                                  cards = cs,
+                                  history = (move, now) : hist,
+                                  winner = maybeWinner,
+                                  createdAt = created,
+                                  lastActivity = now
+                                }
+                      success <- liftIO $ updateGame db gameId updateGameFn
+                      if success
+                        then do
+                          liftIO $ do
+                            putStrLn "Move accepted"
+                            broadcastGame store gameId (MoveEvent move now)
+                            broadcastLobby store LobbyChanged
+                          return $ Right move
+                        else return $ Left MEGameNotFound
 
 concede :: GameId -> Maybe SessionToken -> AppM (Either ConcedeError Color)
 concede gameId maybeToken = do

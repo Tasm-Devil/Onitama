@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="style.css" />
     <script src="localStorage.js"></script>
     <script src="sse.js"></script>
+    <script src="sound.js"></script>
     <script src="elm.js"></script>
   </head>
 
@@ -27,6 +28,11 @@
     // Initialize SSE (Server-Sent Events) integration
     if (window.initSSE) {
       window.initSSE(app);
+    }
+
+    // Initialize sound effects
+    if (window.initSound) {
+      window.initSound(app);
     }
   </script>
 </html>
