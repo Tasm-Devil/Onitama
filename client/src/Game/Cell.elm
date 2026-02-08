@@ -22,25 +22,21 @@ type CellType
 draw : CellType -> (( Int, Int ) -> msg) -> ( Int, Int ) -> Svg.Svg msg
 draw celltype callback ( u, v ) =
     Svg.rect
-        -- ToDO: Use class attibutes instead of stroke SvgA.class="highlighted-cell" SvgA.class="possible-move"
         [ SvgA.x <| String.fromInt <| u * gridsize
         , SvgA.y <| String.fromInt <| (4 - v) * gridsize
         , SvgA.width <| String.fromInt gridsize
         , SvgA.height <| String.fromInt gridsize
-        , SvgA.fill "white"
-        , SvgA.fillOpacity "0"
-        , SvgA.stroke
+        , SvgA.class
             (case celltype of
                 NormalCell ->
-                    "black"
+                    "cell"
 
                 SelectedCell ->
-                    "green"
+                    "cell cell--target"
 
                 MoveToCell ->
-                    "yellow"
+                    "cell cell--selected"
             )
-        , SvgA.strokeWidth "1"
         , SvgE.onClick <| callback ( u, v )
         ]
         []
@@ -49,14 +45,10 @@ draw celltype callback ( u, v ) =
 drawSimpleCell : ( Int, Int ) -> Svg.Svg msg
 drawSimpleCell ( u, v ) =
     Svg.rect
-        -- ToDO: Use class attibutes instead of stroke SvgA.class="highlighted-cell" SvgA.class="possible-move"
         [ SvgA.x <| String.fromInt <| u * gridsize
         , SvgA.y <| String.fromInt <| (4 - v) * gridsize
         , SvgA.width <| String.fromInt gridsize
         , SvgA.height <| String.fromInt gridsize
-        , SvgA.fill "white"
-        , SvgA.fillOpacity "0"
-        , SvgA.stroke "black"
-        , SvgA.strokeWidth "1"
+        , SvgA.class "cell"
         ]
         []

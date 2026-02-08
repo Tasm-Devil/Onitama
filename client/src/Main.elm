@@ -110,38 +110,35 @@ view : Model -> Browser.Document Msg
 view model =
     Browser.Document
         "Onitama"
-        [ case model.page of
-            Redirect url ->
-                Html.div [ HtmlA.class "lobby" ]
-                    [ Html.h1 []
-                        [ Html.text url.path ]
-                    , viewFooter
-                    ]
+        [ Html.div [ HtmlA.class "page-wrapper" ]
+            [ case model.page of
+                Redirect url ->
+                    Html.div [ HtmlA.class "lobby" ]
+                        [ Html.h1 []
+                            [ Html.text url.path ]
+                        ]
 
-            LobbyPage m ->
-                Html.div [ HtmlA.class "lobby" ]
-                    [ Lobby.view m
-                    , viewFooter
-                    ]
+                LobbyPage m ->
+                    Html.div [ HtmlA.class "lobby" ]
+                        [ Lobby.view m
+                        ]
 
-            EnterNamePage _ enterNameModel ->
-                Html.div [ HtmlA.class "landing-screen" ]
-                    ((EnterName.view enterNameModel (List.map .playerName model.storedPlayers)
-                        |> List.map (Html.map GotEnterNameMsg)
-                     )
-                        ++ [ viewFooter ]
-                    )
+                EnterNamePage _ enterNameModel ->
+                    Html.div [ HtmlA.class "landing-screen" ]
+                        (EnterName.view enterNameModel (List.map .playerName model.storedPlayers)
+                            |> List.map (Html.map GotEnterNameMsg)
+                        )
 
-            PlayingPage _ _ _ game history ->
-                Html.div [ HtmlA.class "game-container" ]
-                    ((game
-                        |> Game.view
-                        |> List.map (Html.map GotGameMsg)
-                     )
-                        ++ [ Game.viewHistory history
-                           , viewFooter
-                           ]
-                    )
+                PlayingPage _ _ _ game history ->
+                    Html.div [ HtmlA.class "game-container" ]
+                        ((game
+                            |> Game.view
+                            |> List.map (Html.map GotGameMsg)
+                         )
+                            ++ [ Game.viewHistory history ]
+                        )
+            , viewFooter
+            ]
         ]
 
 

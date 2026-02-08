@@ -57,11 +57,7 @@ view game =
     [ Svg.svg [ SvgA.id "game-board", SvgA.viewBox "-1 -1 147 152" ]
         [ predefinedSymbols
         , Svg.g [ SvgA.transform <| "translate(0, " ++ (String.fromInt <| gridsize + 5) ++ ")" ]
-            [ Svg.g [ SvgA.class "pieces" ]
-                (drawFigures game.myColor game.myFigures
-                    ++ drawFigures (invert game.myColor) game.opFigures
-                )
-            , Svg.g [ SvgA.class "grid-lines" ] <|
+            [ Svg.g [ SvgA.class "grid-lines" ] <|
                 -- the grid is drawn here
                 List.map (Game.Cell.draw NormalCell UserClickedOnCell) grid
                     ++ (case game.state of
@@ -84,6 +80,10 @@ view game =
                             _ ->
                                 []
                        )
+            , Svg.g [ SvgA.class "pieces" ]
+                (drawFigures game.myColor game.myFigures
+                    ++ drawFigures (invert game.myColor) game.opFigures
+                )
             ]
         , Svg.g [ SvgA.class "cards-group" ]
             (drawAllCards (Tuple.first game.myCards)
@@ -386,7 +386,8 @@ viewHistory history =
     Html.div [ HtmlA.class "game-log" ]
         [ Html.ul [ HtmlA.id "log-lines" ]
             (List.map viewGameMove history)
-        , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
+
+        -- , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
         ]
 
 
@@ -412,4 +413,4 @@ viewGameMove gameMove =
             String.fromChar to_x_char ++ String.fromInt to_y
     in
     Html.li [ HtmlA.class "log-message" ]
-        [ Html.text (Game.Figure.colorToString gameMove.color ++ " moved from " ++ from ++ " to " ++ to ++ " by playing the " ++ gameMove.card.name ++ " card.") ]
+        [ Html.text (Game.Figure.colorToString gameMove.color ++ " moved from " ++ from ++ " to " ++ to ++ ", playing " ++ gameMove.card.name ++ ".") ]

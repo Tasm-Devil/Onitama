@@ -81,8 +81,7 @@ cardByName name =
 drawCardPrompt : ( Card, Card ) -> (Card -> msg) -> List (Svg.Svg msg)
 drawCardPrompt ( cardA, cardB ) callback =
     [ Svg.rect
-        [ SvgA.class "overlay"
-        , SvgA.fill "rgba(0,0,0,0.7)"
+        [ SvgA.class "card-overlay"
         , SvgA.x "-1"
         , SvgA.y "-1"
         , SvgA.width "152"
@@ -124,17 +123,10 @@ drawAllCards card1 card2 card3 card4 card5 rotate =
 
 drawCard : Card -> List (Svg.Svg msg)
 drawCard { name, moves } =
-    let
-        stroke_ =
-            "black"
-    in
     [ Svg.rect
-        [ SvgA.class "background"
+        [ SvgA.class "card-bg"
         , SvgA.width "250"
         , SvgA.height "125"
-        , SvgA.fill "white"
-        , SvgA.stroke stroke_
-        , SvgA.strokeWidth "1"
         ]
         []
     , Svg.g [ SvgA.class "move-grid", SvgA.transform "translate(12.5,12.5)" ] <|
@@ -143,13 +135,11 @@ drawCard { name, moves } =
                     |> List.map
                         (\( u, v ) ->
                             Svg.rect
-                                [ SvgA.class "card-move"
+                                [ SvgA.class "card-dot"
                                 , SvgA.x <| String.fromInt <| (gridsize * (u + 2))
                                 , SvgA.y <| String.fromInt <| (gridsize * (2 - v))
                                 , SvgA.width <| String.fromInt gridsize
                                 , SvgA.height <| String.fromInt gridsize
-                                , SvgA.fill "grey"
-                                , SvgA.stroke stroke_
                                 ]
                                 []
                         )
@@ -160,8 +150,6 @@ drawCard { name, moves } =
                     , SvgA.y <| String.fromInt <| gridsize * 2
                     , SvgA.width <| String.fromInt gridsize
                     , SvgA.height <| String.fromInt gridsize
-                    , SvgA.fill "black"
-                    , SvgA.stroke stroke_
                     ]
                     []
                ]

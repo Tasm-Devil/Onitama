@@ -1,10 +1,87 @@
 @import "https://www.nerdfonts.com/assets/css/webfont.css";
 
+/* ── CSS Variables ── */
+
+:root {
+  --bg: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-hover: #f0f0f0;
+  --text: #222222;
+  --text-muted: #666666;
+  --border: #000000;
+  --border-light: #dddddd;
+  --row-even: #f9f9f9;
+  --row-odd: #ffffff;
+  --board-bg: transparent;
+  --board-stroke: #000000;
+  --card-bg: #ffffff;
+  --card-stroke: #000000;
+  --card-dot: grey;
+  --card-center: #000000;
+  --card-caption: #000000;
+  --selected-fill: #ffffff;
+  --target-stroke: green;
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --btn-bg: #ffffff;
+  --btn-text: #000000;
+  --btn-border: #000000;
+  --input-bg: #ffffff;
+  --input-border: lightgrey;
+  --shadow: #4d4d4d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a2e;
+    --bg-surface: #25253e;
+    --bg-hover: #33335a;
+    --text: #e0e0e0;
+    --text-muted: #999999;
+    --border: #555555;
+    --border-light: #3a3a5a;
+    --row-even: #2a2a44;
+    --row-odd: #25253e;
+    --board-bg: transparent;
+    --board-stroke: #888888;
+    --card-bg: #2a2a44;
+    --card-stroke: #888888;
+    --card-dot: #6a6aaa;
+    --card-center: #cccccc;
+    --card-caption: #e0e0e0;
+    --selected-fill: #2a2a44;
+    --target-stroke: #44cc44;
+    --overlay-bg: rgba(0, 0, 0, 0.8);
+    --btn-bg: #2a2a44;
+    --btn-text: #e0e0e0;
+    --btn-border: #555555;
+    --input-bg: #25253e;
+    --input-border: #3a3a5a;
+    --shadow: #000000;
+  }
+}
+
+/* ── Base ── */
+
+body {
+  font-family: sans-serif;
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+}
+
+h1 {
+  text-shadow: 0px 1px 1px var(--shadow);
+  font-family: Helvetica, sans-serif;
+  color: var(--text);
+}
+
+/* ── Landing Screen ── */
+
 .landing-screen {
   display: flex;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  flex: 1;
+  min-height: 0;
   justify-content: center;
   flex-direction: column;
 }
@@ -21,19 +98,31 @@
   display: block;
   border-radius: 5px;
   overflow: hidden;
-  border: 1px solid lightgrey;
+  border: 1px solid var(--input-border);
 }
 
 .landing-screen #name-form .name-line #name {
   border: none;
   padding: 5px;
+  background-color: var(--input-bg);
+  color: var(--text);
 }
 
 .landing-screen #name-form .name-line input {
   border: none;
-  border-left: 1px solid lightgrey;
-  background-color: white;
+  border-left: 1px solid var(--input-border);
+  background-color: var(--btn-bg);
+  color: var(--btn-text);
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.landing-screen #name-form .name-line input:hover {
+  background-color: var(--bg-hover);
+}
+
+.landing-screen #name-form .name-line input[type="submit"]:active {
+  transform: scale(0.97);
 }
 
 .landing-screen small {
@@ -51,20 +140,69 @@
   margin-bottom: 10px;
 }
 
+/* ── Buttons ── */
+
+.landing-screen #rejoin-button,
+.lobby .new-game {
+  padding: 10px 15px;
+  border: 1px solid var(--btn-border);
+  border-radius: 5px;
+  text-decoration: none;
+  color: var(--btn-text);
+  background-color: var(--btn-bg);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.landing-screen #rejoin-button:hover,
+.lobby .new-game:hover {
+  background-color: var(--bg-hover);
+}
+
+.landing-screen #rejoin-button:active,
+.lobby .new-game:active {
+  transform: scale(0.97);
+}
+
+.lobby .new-game {
+  float: right;
+}
+
+.landing-screen #rejoin-button {
+  display: inline-block;
+}
+
+/* ── Page Wrapper ── */
+
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── Game Container ── */
+
 .game-container {
   display: flex;
-  height: 100dvh;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
   box-sizing: border-box;
 }
 
 .game-container #game-board {
   flex: 1;
+  min-height: 0;
   margin: 8px;
+  user-select: none;
 }
 
+/* ── Game Log ── */
+
 .game-log {
-  border: 1px solid black;
+  border: 1px solid var(--border);
   border-radius: 5px;
   padding: 0;
   overflow: hidden;
@@ -80,36 +218,39 @@
   padding: 0;
   margin: 0;
   overflow: hidden;
-  overflow-y: scroll;
+  overflow-y: auto;
+  scrollbar-color: var(--border) var(--bg-surface);
 }
 
-
 .game-log #log-lines > li.log-message {
-  border-bottom: 1px solid #EEE;
+  border-bottom: 1px solid var(--border-light);
   padding: 2px 5px;
-  font-family: sans-serif;
   line-height: 1.4em;
 }
 
 .game-log #log-lines > li.log-message:nth-child(even) {
-  background: #F9F9F9;
+  background: var(--row-even);
 }
 
 .game-log #log-lines > li.log-message:nth-child(odd) {
-  background: #FFF;
+  background: var(--row-odd);
 }
 
 .game-log #chat-box {
   border: none;
-  border-top: 1px solid black;
+  border-top: 1px solid var(--border);
   width: 100%;
+  background-color: var(--input-bg);
+  color: var(--text);
 }
+
+/* ── Footer ── */
 
 .game-footer {
   text-align: center;
   padding: 8px 0;
   font-size: 0.85em;
-  color: #666;
+  color: var(--text-muted);
   margin-top: auto;
 }
 
@@ -118,13 +259,13 @@
 }
 
 .game-footer .tech-icon {
-  color: #999;
+  color: var(--text-muted);
   font-size: 1.1em;
   transition: color 0.2s;
 }
 
 .game-footer a {
-  color: #666;
+  color: var(--text-muted);
   text-decoration: none;
 }
 
@@ -133,59 +274,33 @@
 }
 
 .game-footer a.game-title:hover {
-  color: #333;
+  color: var(--text);
 }
 
 .game-footer a:hover .tech-icon {
-  color: #333;
+  color: var(--text);
 }
+
+/* ── Card ── */
 
 .card-caption {
   font-size: 28px;
+  fill: var(--card-caption);
 }
 
-body {
-  font-family: sans-serif;
-  margin: 0;
-}
-
-h1 {
-  text-shadow: 0px 1px 1px #4D4D4D;
-  font-family: Helvetica, sans-serif;
-  color: #222;
-}
+/* ── Lobby ── */
 
 .lobby {
   display: flex;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
-  justify-content: center;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .lobby .gamelist {
   padding: 8px;
-}
-
-
-.landing-screen #rejoin-button,
-.lobby .new-game {
-  padding: 10px 15px;
-  border: 1px solid black;
-  border-radius: 5px;
-  text-decoration: none;
-  color: black;
-  background-color: white;
-  cursor: pointer;
-}
-
-.lobby .new-game {
-  float: right;
-}
-
-.landing-screen #rejoin-button {
-  display: inline-block;
 }
 
 .lobby #game-table {
@@ -194,18 +309,110 @@ h1 {
 }
 
 .lobby #game-table td {
-  border-bottom: 1px solid #DDD;
+  border-bottom: 1px solid var(--border-light);
   padding: 3px 10px;
+  transition: background-color 0.2s;
 }
 
 .lobby #game-table .game-row:nth-child(odd) > td {
-  background-color: #F3F3F3;
+  background-color: var(--row-even);
+}
+
+.lobby #game-table .game-row:hover > td {
+  background-color: var(--bg-hover);
 }
 
 .lobby #game-table .no-games-row td {
   text-align: center;
   padding: 20px;
 }
+
+/* ── SVG Pieces ── */
+
+.pieces {
+  pointer-events: none;
+}
+
+/* ── SVG Board Cells ── */
+
+.cell {
+  fill: var(--board-bg);
+  fill-opacity: 0;
+  stroke: var(--board-stroke);
+  stroke-width: 1;
+}
+
+.cell.cell--selected {
+  fill: var(--selected-fill);
+  fill-opacity: 1;
+}
+
+.cell.cell--target {
+  stroke: var(--target-stroke);
+}
+
+/* ── SVG Card Elements ── */
+
+.card-bg {
+  fill: var(--card-bg);
+  stroke: var(--card-stroke);
+  stroke-width: 1;
+}
+
+.card-dot {
+  fill: var(--card-dot);
+  stroke: var(--card-stroke);
+}
+
+.card-center {
+  fill: var(--card-center);
+  stroke: var(--card-stroke);
+}
+
+.card-overlay {
+  fill: var(--overlay-bg);
+}
+
+/* ── Status Line ── */
+
+.status-line {
+  fill: var(--text);
+}
+
+/* ── Dark Mode: Black Figures ── */
+
+@media (prefers-color-scheme: dark) {
+  #blackKing path,
+  #blackPawn path {
+    stroke: #888888 !important;
+  }
+}
+
+/* ── Responsive: Sidebar Log ── */
+
+@media (min-width: 1030px) {
+  .game-container {
+    flex-direction: row-reverse;
+  }
+
+  .game-container #game-board {
+    flex: 1;
+  }
+
+  .game-log {
+    width: 350px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .game-log #log-lines {
+    height: auto;
+    flex: 1;
+  }
+}
+
+/* ── Mobile: Hide Columns ── */
 
 @media (max-width: 600px) {
   .lobby #game-table td:nth-child(4),
