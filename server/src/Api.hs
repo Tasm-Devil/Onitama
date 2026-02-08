@@ -7,7 +7,7 @@
 
 module Api where
 
-import Data.Aeson (FromJSON, FromJSONKey, ToJSON, ToJSONKey)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.ByteString.Lazy as Lazy (ByteString)
 import Data.Map (Map)
 import qualified Data.Map.Strict as Map

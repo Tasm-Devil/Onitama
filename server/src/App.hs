@@ -29,24 +29,24 @@ import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks)
 import Data.Aeson (encode)
 import Data.ByteString.Builder (byteString, lazyByteString)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
-import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Database
   ( CleanupConfig (..),
     DB,
+    Player (..),
     concedeGame,
     getAllGameSummaries,
     getGameById,
     getGameWithNames,
+    getPlayerByToken,
     initDB,
     insertGameWithNewId,
     joinGameWithToken,
     logDBState,
     updateGame,
-    validateTokenForMove,
   )
-import Game (Color (..), Game (..), GameMove, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
+import Game (Color (..), Game (..), GameMove)
 import qualified Onitama
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
@@ -104,8 +104,9 @@ type AppM = ReaderT AppEnv Handler
 -- | Build the complete server: typed API routes + static file serving
 makeServer :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
-  db <- initDB dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled
   subscriberStore <- newSubscriberStore
+  let onCleanup = broadcastLobby subscriberStore LobbyChanged
+  db <- initDB dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled onCleanup
   let env = AppEnv {appDB = db, appSubscribers = subscriberStore}
   putStrLn "Server initialized successfully"
 
@@ -186,24 +187,28 @@ newMove gameId maybeToken move = do
       env <- ask
       let db = appDB env
           store = appSubscribers env
-      -- Validate token and check if it's the player's turn
-      isValid <- liftIO $ validateTokenForMove db gameId token
-
-      if not isValid
-        then do
-          liftIO $ putStrLn "Move rejected: invalid token or not your turn"
-          return $ Left MENotYourTurn
-        else do
-          -- Token is valid, validate the move against game rules
-          maybeGame <- liftIO $ getGameById db gameId
-          case maybeGame of
-            Nothing -> return $ Left MEGameNotFound
-            Just game -> do
+      -- Get game first
+      maybeGame <- liftIO $ getGameById db gameId
+      case maybeGame of
+        Nothing -> return $ Left MEGameNotFound
+        Just game -> do
+          -- Validate token belongs to a player in this game
+          maybePlayer <- liftIO $ getPlayerByToken db token
+          let isInGame = case maybePlayer of
+                Just p ->
+                  let pid = playerId p
+                   in player_white game == Just pid || player_black game == Just pid
+                Nothing -> False
+          if not isInGame
+            then do
+              liftIO $ putStrLn "Move rejected: player not in game"
+              return $ Left MENotYourTurn
+            else do
               -- Check if game is already over
               case winner game of
                 Just _ -> return $ Left MEGameOver
                 Nothing -> do
-                  -- Validate the move using Onitama rules
+                  -- Validate the move using Onitama rules (includes turn order check)
                   let historyMoves = move : map fst (history game)
                   case Onitama.validateMove (cards game) historyMoves of
                     Left _ -> do
@@ -228,7 +233,7 @@ newMove gameId maybeToken move = do
                         then do
                           liftIO $ do
                             putStrLn "Move accepted"
-                            broadcastGame store gameId (MoveEvent move now)
+                            broadcastGame store gameId (MoveEvent move now maybeWinner)
                             broadcastLobby store LobbyChanged
                           return $ Right move
                         else return $ Left MEGameNotFound
@@ -259,8 +264,8 @@ lobbyStreamHandler env = Tagged $ \req respond -> do
   -- Send SSE response
   respond $
     responseStream status200 [("Content-Type", "text/event-stream"), ("Cache-Control", "no-cache"), ("Connection", "keep-alive")] $ \write flush -> do
-      -- Send initial comment to establish connection
-      write (byteString ": connected\n\n")
+      -- Send initial lobbyChanged so client fetches current state
+      write ("data: " <> lazyByteString (encode LobbyChanged) <> "\n\n")
       flush
       -- Loop forever, sending keepalive every 15s to prevent proxy timeouts
       let loop = do

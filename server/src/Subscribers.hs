@@ -45,17 +45,18 @@ instance ToJSON LobbyEvent where
 
 -- | Events broadcast to game subscribers
 data GameEvent
-  = MoveEvent GameMove UTCTime
+  = MoveEvent GameMove UTCTime (Maybe Color)
   | ConcedeEvent Color -- winner color
   deriving (Show, Generic)
 
 instance ToJSON GameEvent where
-  toJSON (MoveEvent move timestamp) =
-    object
+  toJSON (MoveEvent move timestamp maybeWinner) =
+    object $
       [ "event" .= ("move" :: Text),
         "move" .= move,
         "timestamp" .= timestamp
       ]
+        ++ maybe [] (\w -> ["winner" .= w]) maybeWinner
   toJSON (ConcedeEvent winner) =
     object
       [ "event" .= ("concede" :: Text),

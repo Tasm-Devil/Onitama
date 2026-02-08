@@ -49,48 +49,6 @@ type alias GameMove =
     }
 
 
-hasKing : List Figure -> Bool
-hasKing figures =
-    List.any (\f -> f.kind == King) figures
-
-
-kingPosition : List Figure -> Maybe ( Int, Int )
-kingPosition figures =
-    figures
-        |> List.filter (\f -> f.kind == King)
-        |> List.head
-        |> Maybe.map .pos
-
-
-opponentTemple : ( Int, Int )
-opponentTemple =
-    ( 2, 4 )
-
-
-myTemple : ( Int, Int )
-myTemple =
-    ( 2, 0 )
-
-
-checkWinCondition : Game -> Game
-checkWinCondition game =
-    if not (hasKing game.opFigures) then
-        { game | state = GameOver game.myColor }
-
-    else if kingPosition game.myFigures == Just opponentTemple then
-        { game | state = GameOver game.myColor }
-
-    else if not (hasKing game.myFigures) then
-        { game | state = GameOver (invert game.myColor) }
-
-    else if kingPosition game.opFigures == Just myTemple then
-        { game | state = GameOver (invert game.myColor) }
-
-    else
-        game
-
-
-
 -- VIEW
 
 
@@ -286,7 +244,6 @@ execGameMove game =
                     ( White, White ) ->
                         game
                             |> moveFigures gameMove
-                            |> checkWinCondition
 
                     ( White, Black ) ->
                         game
@@ -295,7 +252,6 @@ execGameMove game =
                             |> moveFigures (gameMove |> rotateGameMove)
                             |> flipFigures
                             |> flipCards
-                            |> checkWinCondition
 
                     ( Black, White ) ->
                         game
@@ -304,12 +260,10 @@ execGameMove game =
                             |> moveFigures (gameMove |> rotateGameMove)
                             |> flipFigures
                             |> flipCards
-                            |> checkWinCondition
 
                     ( Black, Black ) ->
                         game
                             |> moveFigures gameMove
-                            |> checkWinCondition
 
             else
                 { game | state = Thinking }

@@ -6,7 +6,6 @@ import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), 
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, unless, when)
-import Control.Monad.IO.Class (liftIO)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.Aeson.Encode.Pretty as Pretty
 import Data.ByteString.Lazy as Lazy (ByteString, readFile, writeFile)
@@ -14,14 +13,15 @@ import qualified Data.ByteString.Lazy as Lazy (length)
 import Data.List (find)
 import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (fromMaybe, isJust, isNothing)
+import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime)
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
-import Game (Color (..), Game (..), PlayerId, PlayerSlot (..), getCurrentPlayerSlot, give5Cards)
+import Game (Color (..), Game (..), PlayerId, PlayerSlot (..))
+import Onitama (give5Cards)
 import System.Directory (doesFileExist)
 
 -- Player type: stores player identity and token
@@ -135,8 +135,8 @@ saveDB (DB dataVar filePath _ _ hasChangedVar _) = do
     putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
 
 -- Cleanup old games based on their status and lastActivity
-cleanupOldGames :: DB -> IO ()
-cleanupOldGames (DB dataVar _ _ _ hasChangedVar config) = do
+cleanupOldGames :: DB -> IO () -> IO ()
+cleanupOldGames (DB dataVar _ _ _ hasChangedVar config) onCleanup = do
   now <- getCurrentTime
   state <- readTVarIO dataVar
   let games = dbGames state
@@ -161,6 +161,7 @@ cleanupOldGames (DB dataVar _ _ _ hasChangedVar config) = do
       modifyTVar dataVar $ \s ->
         s {dbGames = Map.difference (dbGames s) gamesToDelete}
       writeTVar hasChangedVar True
+    onCleanup
 
 -- Determine game status from Game data
 determineGameStatus :: Game -> GameStatus
@@ -185,14 +186,13 @@ startPeriodicSave db saveIntervalMinutes = do
   return ()
 
 -- Start periodic cleanup of old games
-startPeriodicCleanup :: DB -> Int -> Bool -> IO ()
-startPeriodicCleanup db cleanupIntervalMinutes enabled = do
+startPeriodicCleanup :: DB -> Int -> Bool -> IO () -> IO ()
+startPeriodicCleanup db cleanupIntervalMinutes enabled onCleanup = do
   if enabled
     then do
       putStrLn $ "Starting periodic game cleanup thread (interval: " ++ show cleanupIntervalMinutes ++ " minutes)"
-      -- Fork a thread that will cleanup old games at the specified interval
       _ <- forkIO $ forever $ do
-        cleanupOldGames db
+        cleanupOldGames db onCleanup
         threadDelay (cleanupIntervalMinutes * 60 * 1000000) -- Convert minutes to microseconds
       return ()
     else do
@@ -208,16 +208,9 @@ logDBState prefix (DB dataVar _ _ _ hasChangedVar _) = do
       changeStatus = if changed then "changed" else "unchanged"
   putStrLn $ prefix ++ ": " ++ show gameCount ++ " games, status: " ++ changeStatus
 
--- Mark database as changed
-markDBChanged :: DB -> IO () -- ToDO: can we delete this
-markDBChanged db@(DB _ _ _ _ hasChangedVar _) = do
-  putStrLn "Marking database as changed"
-  atomically $ writeTVar hasChangedVar True
-  logDBState "After marking changed" db
-
 -- Initialize database with TVar and configuration
-initDB :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO DB
-initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes cleanupEnabled = do
+initDB :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO () -> IO DB
+initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes cleanupEnabled onCleanup = do
   dataVar <- loadDB filePath resetDB cleanupConfig
 
   -- Calculate next IDs from existing data
@@ -243,7 +236,7 @@ initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes
         }
 
   startPeriodicSave db saveIntervalMinutes
-  startPeriodicCleanup db cleanupIntervalMinutes cleanupEnabled
+  startPeriodicCleanup db cleanupIntervalMinutes cleanupEnabled onCleanup
   return db
 
 -- Helper functions for accessing and modifying the database
@@ -254,10 +247,10 @@ getGameById (DB dataVar _ _ _ _ _) gameId = do
 
 -- Generate next game ID and insert game
 insertGameWithNewId :: DB -> IO GameId
-insertGameWithNewId db@(DB dataVar _ nextGameIdVar _ hasChangedVar _) = do
-  newCards <- liftIO give5Cards
+insertGameWithNewId (DB dataVar _ nextGameIdVar _ hasChangedVar _) = do
+  newCards <- give5Cards
   now <- getCurrentTime
-  gameId <- atomically $ do
+  atomically $ do
     currentId <- readTVar nextGameIdVar
     let newGame =
           Game
@@ -274,12 +267,10 @@ insertGameWithNewId db@(DB dataVar _ nextGameIdVar _ hasChangedVar _) = do
     writeTVar nextGameIdVar (currentId + 1)
     writeTVar hasChangedVar True
     return currentId
-  markDBChanged db
-  return gameId
 
 updateGame :: DB -> GameId -> (Game -> Maybe Game) -> IO Bool
-updateGame db@(DB dataVar _ _ _ hasChangedVar _) gameId updateFn = do
-  result <- atomically $ do
+updateGame (DB dataVar _ _ _ hasChangedVar _) gameId updateFn =
+  atomically $ do
     state <- readTVar dataVar
     let games = dbGames state
     case Map.lookup gameId games of
@@ -289,10 +280,8 @@ updateGame db@(DB dataVar _ _ _ hasChangedVar _) gameId updateFn = do
         Just updatedGame -> do
           writeTVar dataVar $
             state {dbGames = Map.insert gameId updatedGame games}
-          writeTVar hasChangedVar True -- why this and also markDBChanged? Is markDBChanged really needed?
+          writeTVar hasChangedVar True
           return True
-  when result $ markDBChanged db
-  return result
 
 -- Convert a Game to GameWithNames by looking up player names
 gameToGameWithNames :: DB -> Game -> IO GameWithNames
@@ -484,21 +473,6 @@ joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText ma
                       putStrLn $ "Player " ++ T.unpack (playerName player) ++ " joined game"
                       gameWithNames <- gameToGameWithNames db newGame
                       return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
-
--- Validate that a token is valid for making a move in a game
--- Returns True if the player owns the current turn
-validateTokenForMove :: DB -> GameId -> SessionToken -> IO Bool
-validateTokenForMove db gameId token = do
-  maybePlayer <- getPlayerByToken db token
-  maybeGame <- getGameById db gameId
-  case (maybePlayer, maybeGame) of
-    (Just player, Just game) -> do
-      let currentSlot = getCurrentPlayerSlot game
-          pid = playerId player
-      return $ case currentSlot of
-        PlayerWhite -> player_white game == Just pid
-        PlayerBlack -> player_black game == Just pid
-    _ -> return False
 
 -- Get which slot a player occupies in a game (if any)
 getPlayerSlotInGame :: Game -> PlayerId -> Maybe PlayerSlot

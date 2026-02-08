@@ -11,7 +11,6 @@ where
 
 import Data.Aeson (FromJSON)
 import qualified Data.ByteString as BS
-import Data.Maybe (fromMaybe)
 import Data.Time.Clock (NominalDiffTime)
 import qualified Data.Yaml as Yaml
 import qualified Database

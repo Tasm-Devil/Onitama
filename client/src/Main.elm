@@ -81,7 +81,7 @@ subscriptions model =
                 LobbyPage _ ->
                     Sub.batch
                         [ Ports.lobbyEventReceived LobbyEventReceived
-                        , Time.every (5 * 60 * 1000) Tick
+                        , Time.every (1 * 60 * 1000) Tick
                         ]
 
                 _ ->
@@ -206,20 +206,6 @@ decodePlayers value =
     in
     Decode.decodeValue playersDecoder value
         |> Result.withDefault []
-
-
-checkAndConcede : Game -> GameId -> PlayerToken -> Cmd Msg
-checkAndConcede game gameid token =
-    case game.state of
-        GameOver winner ->
-            if winner /= game.myColor then
-                Cmd.map GotServerMsg <| Api.concede gameid token
-
-            else
-                Cmd.none
-
-        _ ->
-            Cmd.none
 
 
 transformGameMove : Game.GameMove -> Game.GameMove
@@ -609,9 +595,6 @@ joinGameSuccess model gameid joinResponse =
             else
                 Cmd.none
 
-        concedeCmd =
-            checkAndConcede finalgame gameid token
-
         sseCmd =
             Cmd.batch
                 [ Ports.closeLobbyStream ()
@@ -619,7 +602,7 @@ joinGameSuccess model gameid joinResponse =
                 ]
     in
     ( { model | page = PlayingPage gameid name token finalgame servergame.gameHistory }
-    , Cmd.batch [ saveCmd, concedeCmd, sseCmd ]
+    , Cmd.batch [ saveCmd, sseCmd ]
     )
 
 
@@ -671,15 +654,28 @@ handleGameEvent value model =
 
                         _ ->
                             case event of
-                                Api.MoveEvent moveStr _ ->
+                                Api.MoveEvent moveStr _ maybeWinner ->
                                     case Api.stringToGameMove moveStr of
                                         Just gameMove ->
                                             let
-                                                updatedGame =
+                                                movedGame =
                                                     game |> Game.update (NewGameMove <| transformGameMove gameMove)
 
-                                                concedeCmd =
-                                                    checkAndConcede updatedGame gameid token
+                                                updatedGame =
+                                                    case maybeWinner of
+                                                        Just winnerStr ->
+                                                            let
+                                                                winnerColor =
+                                                                    if winnerStr == "White" then
+                                                                        White
+
+                                                                    else
+                                                                        Black
+                                                            in
+                                                            { movedGame | state = GameOver winnerColor }
+
+                                                        Nothing ->
+                                                            movedGame
 
                                                 soundCmd =
                                                     if gameMove.color /= game.myColor then
@@ -689,7 +685,7 @@ handleGameEvent value model =
                                                         Cmd.none
                                             in
                                             ( { model | page = PlayingPage gameid name token updatedGame (gameMove :: history) }
-                                            , Cmd.batch [ concedeCmd, soundCmd ]
+                                            , soundCmd
                                             )
 
                                         Nothing ->

@@ -31,7 +31,7 @@ client/src/           # Elm frontend
   EnterName.elm       # Name entry / game join flow
   Ports.elm           # JS interop (localStorage, SSE, sound)
   Game/
-    Game.elm          # Core game logic, board rendering, move history view
+    Game.elm          # Board rendering, move execution, move history view
     Card.elm          # Card definitions and movement patterns
     Figure.elm        # Piece (King/Pawn) definitions
     Cell.elm          # Board cell rendering
@@ -40,7 +40,7 @@ server/src/           # Haskell backend
   Api.hs              # Servant API route definitions
   App.hs              # Request handlers, SSE streaming
   Subscribers.hs      # SSE subscription management (STM-based)
-  Game.hs             # Game data types
+  Game.hs             # Game data types (pure data, no logic)
   Database.hs         # JSON persistence and session management
   Onitama.hs          # Onitama game logic (move validation, win detection)
   Options.hs          # CLI and YAML config parsing
@@ -85,15 +85,15 @@ All authenticated endpoints use `X-Session-Token` header.
 ### Server-Side Move Validation
 
 The server validates all moves against Onitama rules before accepting them:
-- `Onitama.hs` contains card definitions, move parsing, and game state replay
+- `Onitama.hs` is the single source of truth for card definitions (names, moves, starting player), plus move parsing and game state replay
 - Moves are validated by replaying the full history then checking the new move
 - Win detection (king capture / temple reached) sets the `winner` field on the server
 - Invalid moves return `MEInvalidMove`, completed games return `MEGameOver`
 
 ### Real-time Updates (SSE)
 
-- **Lobby stream**: Invalidate+refetch pattern — server sends `lobbyChanged`, client refetches game summaries via GET
-- **Game stream**: Granular events — broadcasts `move` and `concede` events directly to players
+- **Lobby stream**: Invalidate+refetch pattern — server sends `lobbyChanged` on connect, on changes, and on game cleanup; client refetches game summaries via GET
+- **Game stream**: Granular events — `move` (with optional `winner`) and `concede` broadcast directly to players
 - STM-based subscriber management with automatic cleanup on disconnect
 - EventSource auto-reconnects on connection loss
 

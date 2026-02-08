@@ -186,7 +186,7 @@ type ConcedeError
 
 
 type GameEvent
-    = MoveEvent String String -- move, timestamp
+    = MoveEvent String String (Maybe String) -- move, timestamp, winner
     | ConcedeEvent String -- winner color
 
 
@@ -502,9 +502,10 @@ decodeGameEventHelper : String -> Decoder GameEvent
 decodeGameEventHelper eventType =
     case eventType of
         "move" ->
-            Decode.map2 MoveEvent
+            Decode.map3 MoveEvent
                 (Decode.field "move" Decode.string)
                 (Decode.field "timestamp" Decode.string)
+                (Decode.maybe (Decode.field "winner" Decode.string))
 
         "concede" ->
             Decode.map ConcedeEvent

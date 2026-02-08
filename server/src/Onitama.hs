@@ -3,17 +3,22 @@
 module Onitama
   ( validateMove,
     MoveValidationError (..),
+    validCards,
+    give5Cards,
+    getCurrentPlayerSlot,
   )
 where
 
 import Control.Monad (guard)
 import Data.Bifunctor (bimap, first, second)
+import Data.Char (isAlpha, isDigit, toLower, toUpper)
 import Data.Foldable (foldrM)
-import Data.Char (isAlpha, isDigit, toLower)
 import Data.List (find)
-import Data.Maybe (isNothing)
 import qualified Data.Map.Strict as Map
-import Game (Card, Color (..), GameMove)
+import Data.Maybe (isNothing)
+import Game (Card, Color (..), Game (..), GameMove, PlayerSlot (..))
+import System.Random (newStdGen)
+import System.Random.Shuffle (shuffle')
 
 data PieceKind = King | Pawn deriving (Eq, Show)
 
@@ -45,48 +50,34 @@ data GameState = GameState
 data MoveValidationError = InvalidMoveFormat | InvalidMove
   deriving (Eq, Show)
 
--- | Card movement vectors (from White's perspective).
--- Matches client/src/Game/Card.elm exactly.
+-- | Single source of truth for all card definitions.
+-- (lowercase name, movement vectors from White's perspective, starting player)
+cardDefs :: [(String, [(Int, Int)], Color)]
+cardDefs =
+  [ ("boar", [(-1, 0), (1, 0), (0, 1)], White),
+    ("cobra", [(1, 1), (1, -1), (-1, 0)], White),
+    ("crab", [(-2, 0), (2, 0), (0, 1)], Black),
+    ("crane", [(0, 1), (-1, -1), (1, -1)], Black),
+    ("dragon", [(-2, 1), (-1, -1), (2, 1), (1, -1)], White),
+    ("eel", [(-1, 1), (-1, -1), (1, 0)], Black),
+    ("elephant", [(-1, 0), (-1, 1), (1, 0), (1, 1)], White),
+    ("frog", [(-2, 0), (-1, 1), (1, -1)], White),
+    ("goose", [(-1, 0), (-1, 1), (1, 0), (1, -1)], Black),
+    ("horse", [(-1, 0), (0, 1), (0, -1)], White),
+    ("mantis", [(-1, 1), (1, 1), (0, -1)], White),
+    ("monkey", [(-1, 1), (-1, -1), (1, 1), (1, -1)], Black),
+    ("ox", [(1, 0), (0, 1), (0, -1)], Black),
+    ("rabbit", [(2, 0), (1, 1), (-1, -1)], Black),
+    ("rooster", [(-1, 0), (-1, -1), (1, 0), (1, 1)], White),
+    ("tiger", [(0, 2), (0, -1)], Black)
+  ]
+
 cardMoves :: Map.Map String [(Int, Int)]
-cardMoves =
-  Map.fromList
-    [ ("boar", [(-1, 0), (1, 0), (0, 1)]),
-      ("cobra", [(1, 1), (1, -1), (-1, 0)]),
-      ("crab", [(-2, 0), (2, 0), (0, 1)]),
-      ("crane", [(0, 1), (-1, -1), (1, -1)]),
-      ("dragon", [(-2, 1), (-1, -1), (2, 1), (1, -1)]),
-      ("eel", [(-1, 1), (-1, -1), (1, 0)]),
-      ("elephant", [(-1, 0), (-1, 1), (1, 0), (1, 1)]),
-      ("frog", [(-2, 0), (-1, 1), (1, -1)]),
-      ("goose", [(-1, 0), (-1, 1), (1, 0), (1, -1)]),
-      ("horse", [(-1, 0), (0, 1), (0, -1)]),
-      ("mantis", [(-1, 1), (1, 1), (0, -1)]),
-      ("monkey", [(-1, 1), (-1, -1), (1, 1), (1, -1)]),
-      ("ox", [(1, 0), (0, 1), (0, -1)]),
-      ("rabbit", [(2, 0), (1, 1), (-1, -1)]),
-      ("rooster", [(-1, 0), (-1, -1), (1, 0), (1, 1)]),
-      ("tiger", [(0, 2), (0, -1)])
-    ]
+cardMoves = Map.fromList [(name, moves) | (name, moves, _) <- cardDefs]
 
 cardStartPlayer :: String -> Color
-cardStartPlayer card = case map toLower card of
-  "boar" -> White
-  "cobra" -> White
-  "crab" -> Black
-  "crane" -> Black
-  "dragon" -> White
-  "eel" -> Black
-  "elephant" -> White
-  "frog" -> White
-  "goose" -> Black
-  "horse" -> White
-  "mantis" -> White
-  "monkey" -> Black
-  "ox" -> Black
-  "rabbit" -> Black
-  "rooster" -> White
-  "tiger" -> Black
-  _ -> White
+cardStartPlayer name =
+  maybe White (\(_, _, c) -> c) $ find (\(n, _, _) -> n == map toLower name) cardDefs
 
 -- | Parse a move string like "w:c1c3:tiger" into a ParsedMove
 parseMove :: GameMove -> Maybe ParsedMove
@@ -101,14 +92,15 @@ parseMove str =
       let (fromStr, toStr) = splitAt 2 positions
       from <- chessToPos fromStr
       to <- chessToPos toStr
-      Just $ ParsedMove color from to (map toLower cardStr)
+      Just $ ParsedMove {pmColor = color, pmFrom = from, pmTo = to, pmCard = map toLower cardStr}
     _ -> Nothing
 
 splitOn :: Char -> String -> [String]
-splitOn _ [] = [""]
-splitOn sep (c : cs)
-  | c == sep = "" : splitOn sep cs
-  | otherwise = let (h : t) = splitOn sep cs in (c : h) : t
+splitOn c s = case rest of
+  [] -> [chunk]
+  _ : rest' -> chunk : splitOn c rest'
+  where
+    (chunk, rest) = break (== c) s
 
 chessToPos :: String -> Maybe (Int, Int)
 chessToPos [col, row]
@@ -120,16 +112,16 @@ chessToPos _ = Nothing
 
 initialBoard :: [Piece]
 initialBoard =
-  [ Piece White Pawn (0, 0),
-    Piece White Pawn (1, 0),
-    Piece White King (2, 0),
-    Piece White Pawn (3, 0),
-    Piece White Pawn (4, 0),
-    Piece Black Pawn (0, 4),
-    Piece Black Pawn (1, 4),
-    Piece Black King (2, 4),
-    Piece Black Pawn (3, 4),
-    Piece Black Pawn (4, 4)
+  [ Piece {pieceColor = White, pieceKind = Pawn, piecePos = (0, 0)},
+    Piece {pieceColor = White, pieceKind = Pawn, piecePos = (1, 0)},
+    Piece {pieceColor = White, pieceKind = King, piecePos = (2, 0)},
+    Piece {pieceColor = White, pieceKind = Pawn, piecePos = (3, 0)},
+    Piece {pieceColor = White, pieceKind = Pawn, piecePos = (4, 0)},
+    Piece {pieceColor = Black, pieceKind = Pawn, piecePos = (0, 4)},
+    Piece {pieceColor = Black, pieceKind = Pawn, piecePos = (1, 4)},
+    Piece {pieceColor = Black, pieceKind = King, piecePos = (2, 4)},
+    Piece {pieceColor = Black, pieceKind = Pawn, piecePos = (3, 4)},
+    Piece {pieceColor = Black, pieceKind = Pawn, piecePos = (4, 4)}
   ]
 
 -- | Initialize game state from dealt cards.
@@ -228,3 +220,24 @@ validateMove cards historyMoves =
       case foldrM applyMove (initGameState cards) parsedMoves of
         Nothing -> Left InvalidMove
         Just finalState -> Right (gsWinner finalState)
+
+validCards :: [Card]
+validCards = [capitalize name | (name, _, _) <- cardDefs]
+  where
+    capitalize [] = []
+    capitalize (c : cs) = toUpper c : cs
+
+give5Cards :: IO [Card]
+give5Cards = do
+  rng <- newStdGen
+  return . take 5 . shuffle' validCards (length validCards) $ rng
+
+-- | Determine which player slot should make the next move
+getCurrentPlayerSlot :: Game -> PlayerSlot
+getCurrentPlayerSlot game =
+  let commonCard = if length (cards game) >= 5 then cards game !! 4 else ""
+      startPlayer = cardStartPlayer (map toLower commonCard)
+      moveCount = length (history game)
+   in case startPlayer of
+        White -> if even moveCount then PlayerWhite else PlayerBlack
+        Black -> if even moveCount then PlayerBlack else PlayerWhite
