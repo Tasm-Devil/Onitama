@@ -47,10 +47,11 @@ import Database
     updateGame,
   )
 import Game (Color (..), Game (..), GameMove)
-import qualified Onitama
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
+import Onitama (give5Cards)
+import qualified Onitama
 import Options (cleanupOptionsToConfig)
 import qualified Options
 import Servant
@@ -140,7 +141,19 @@ newGame = do
   env <- ask
   let db = appDB env
       store = appSubscribers env
-  gameId <- liftIO $ insertGameWithNewId db
+  newCards <- liftIO give5Cards
+  now <- liftIO getCurrentTime
+  let game =
+        Game
+          { player_white = Nothing,
+            player_black = Nothing,
+            cards = newCards,
+            history = [],
+            winner = Nothing,
+            createdAt = now,
+            lastActivity = now
+          }
+  gameId <- liftIO $ insertGameWithNewId db game
   liftIO $ do
     putStrLn $ "Creating new game with ID: " ++ show gameId
     logDBState "After creating game" db
@@ -166,9 +179,7 @@ joinGame gameId maybeToken (JoinRequest name) = do
       liftIO $ putStrLn $ "Join failed: " ++ show err
       return $ Left err
     Right joinResponse -> do
-      liftIO $ do
-        putStrLn "Join successful"
-        broadcastLobby store LobbyChanged
+      liftIO $ broadcastLobby store LobbyChanged
       return $ Right joinResponse
 
 getGame :: GameId -> AppM GameWithNames
@@ -218,16 +229,15 @@ newMove gameId maybeToken move = do
                       -- Move is valid, apply it
                       now <- liftIO getCurrentTime
                       let updateGameFn (Game p1 p2 cs hist _ created _) =
-                            Just $
-                              Game
-                                { player_white = p1,
-                                  player_black = p2,
-                                  cards = cs,
-                                  history = (move, now) : hist,
-                                  winner = maybeWinner,
-                                  createdAt = created,
-                                  lastActivity = now
-                                }
+                            Game
+                              { player_white = p1,
+                                player_black = p2,
+                                cards = cs,
+                                history = (move, now) : hist,
+                                winner = maybeWinner,
+                                createdAt = created,
+                                lastActivity = now
+                              }
                       success <- liftIO $ updateGame db gameId updateGameFn
                       if success
                         then do

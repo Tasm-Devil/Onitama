@@ -678,11 +678,7 @@ handleGameEvent value model =
                                                             movedGame
 
                                                 soundCmd =
-                                                    if gameMove.color /= game.myColor then
-                                                        Ports.playSound "move"
-
-                                                    else
-                                                        Cmd.none
+                                                    Ports.playSound "move"
                                             in
                                             ( { model | page = PlayingPage gameid name token updatedGame (gameMove :: history) }
                                             , soundCmd

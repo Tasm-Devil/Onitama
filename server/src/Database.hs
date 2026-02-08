@@ -21,7 +21,6 @@ import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
 import Game (Color (..), Game (..), PlayerId, PlayerSlot (..))
-import Onitama (give5Cards)
 import System.Directory (doesFileExist)
 
 -- Player type: stores player identity and token
@@ -245,43 +244,29 @@ getGameById (DB dataVar _ _ _ _ _) gameId = do
   state <- readTVarIO dataVar
   return $ Map.lookup gameId (dbGames state)
 
--- Generate next game ID and insert game
-insertGameWithNewId :: DB -> IO GameId
-insertGameWithNewId (DB dataVar _ nextGameIdVar _ hasChangedVar _) = do
-  newCards <- give5Cards
-  now <- getCurrentTime
+-- Insert a game and return its new ID
+insertGameWithNewId :: DB -> Game -> IO GameId
+insertGameWithNewId (DB dataVar _ nextGameIdVar _ hasChangedVar _) game =
   atomically $ do
     currentId <- readTVar nextGameIdVar
-    let newGame =
-          Game
-            { player_white = Nothing,
-              player_black = Nothing,
-              cards = newCards,
-              history = [],
-              winner = Nothing,
-              createdAt = now,
-              lastActivity = now
-            }
     modifyTVar dataVar $ \s ->
-      s {dbGames = Map.insert currentId newGame (dbGames s)}
+      s {dbGames = Map.insert currentId game (dbGames s)}
     writeTVar nextGameIdVar (currentId + 1)
     writeTVar hasChangedVar True
     return currentId
 
-updateGame :: DB -> GameId -> (Game -> Maybe Game) -> IO Bool
+updateGame :: DB -> GameId -> (Game -> Game) -> IO Bool
 updateGame (DB dataVar _ _ _ hasChangedVar _) gameId updateFn =
   atomically $ do
     state <- readTVar dataVar
     let games = dbGames state
     case Map.lookup gameId games of
       Nothing -> return False
-      Just game -> case updateFn game of
-        Nothing -> return False
-        Just updatedGame -> do
-          writeTVar dataVar $
-            state {dbGames = Map.insert gameId updatedGame games}
-          writeTVar hasChangedVar True
-          return True
+      Just game -> do
+        writeTVar dataVar $
+          state {dbGames = Map.insert gameId (updateFn game) games}
+        writeTVar hasChangedVar True
+        return True
 
 -- Convert a Game to GameWithNames by looking up player names
 gameToGameWithNames :: DB -> Game -> IO GameWithNames
@@ -386,10 +371,6 @@ createPlayer (DB dataVar _ _ nextPlayerIdVar hasChangedVar _) name = do
     writeTVar nextPlayerIdVar (pid + 1)
     writeTVar hasChangedVar True
     return newPlayer
-
--- Validate that a token belongs to a player and return the player
-validatePlayerToken :: DB -> SessionToken -> IO (Maybe Player)
-validatePlayerToken = getPlayerByToken
 
 -- Join a game with player token
 -- If token provided: MUST be valid (rejects invalid tokens)
