@@ -117,7 +117,8 @@ make docker-start  # Build + run on http://localhost:8080
 - [X] Mobile responsive table width
 - [x] Simplify lobby SSE to invalidate+refetch pattern
 - [X] Server-side move validation
-- [ ] CSS improvements (darkmode, responsive (e.g. gamelog to the left when display wide enough), animations)
+- [x] Dark mode (prefers-color-scheme) and CSS custom properties
+- [x] Responsive sidebar game log on wide displays
 - [ ] view game history should begin with:
       You joined game as white.
       Bob has joined the game as black.

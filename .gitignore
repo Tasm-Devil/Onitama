@@ -6,5 +6,5 @@ gamedb.json
 onitama.tar
 *.cabal
 *.old
+make-docker.sh
 onitama-server.yaml
-ASSESSMENT.md
