@@ -154,7 +154,6 @@ curl -N localhost:8080/1/onitama/games/1/stream
 ## Docker
 
 ```bash
-make release
-docker build -t onitama:latest .
-docker run -p 8080:8080 onitama:latest
+make docker        # Build release + Docker image + save tar
+make docker-start  # Build + run on http://localhost:8080
 ```

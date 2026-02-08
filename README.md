@@ -33,13 +33,13 @@ make server-start # Run on http://localhost:8080
 ## Architecture
 
 ```
-+------------------+    SSE     +------------------+
-|   Elm Client     | <--------- |  Haskell Server  |
-|                  |    HTTP    |                  |
-|  - Game rules    | ---------> |  - State store   |
-|  - UI/UX         |            |  - Sessions      |
-|  - Win detection |            |  - SSE broadcast |
-+------------------+            +------------------+
++------------------+    SSE     +-------------------+
+|   Elm Client     | <--------- |  Haskell Server   |
+|                  |    HTTP    |                   |
+|  - UI/UX         | ---------> |  - Move validation|
+|  - Move display  |            |  - Win detection  |
+|                  |            |  - Sessions/SSE   |
++------------------+            +-------------------+
 ```
 
 | Layer | Technology |
@@ -49,7 +49,7 @@ make server-start # Run on http://localhost:8080
 | Real-time | Server-Sent Events |
 | Persistence | JSON file (STM) |
 
-The server is **game-agnostic** - it stores moves as opaque strings. All game logic lives in the client.
+The server validates all moves against Onitama rules and handles win detection. The client renders the board and applies moves received via SSE.
 
 ---
 
@@ -100,10 +100,8 @@ See `onitama-server.example.yaml` for all options.
 ## Docker
 
 ```bash
-make release
-docker build -t onitama .
-docker run -p 8080:8080 onitama
-docker save onitama:latest > onitama.tar
+make docker        # Build release + Docker image + save tar
+make docker-start  # Build + run on http://localhost:8080
 ```
 
 ---
@@ -119,6 +117,7 @@ docker save onitama:latest > onitama.tar
 - [X] Mobile responsive table width
 - [x] Simplify lobby SSE to invalidate+refetch pattern
 - [X] Server-side move validation
+- [ ] CSS improvements (darkmode, responsive (e.g. gamelog to the left when display wide enough), animations)
 - [ ] view game history should begin with:
       You joined game as white.
       Bob has joined the game as black.
@@ -127,7 +126,6 @@ docker save onitama:latest > onitama.tar
       Alice has joined game as white.
       You joined the game as black.
       Both players are present, the game begins.
-- [ ] CSS improvements (responsive, animations)
 - [ ] Docker: volumes for DB/config, versioning
 - [ ] Spectator mode
 - [ ] Move playback

@@ -34,4 +34,11 @@ clean:
 	rm -rf .stack-work
 	(cd client ; make clean)
 
-.PHONY: all build release client-build client-release setup server-build server-start test clean
+docker: release
+	docker build -t onitama .
+	docker save onitama:latest > onitama.tar
+
+docker-start: docker
+	docker run -p 8080:8080 onitama:latest
+
+.PHONY: all build release client-build client-release setup server-build server-start test clean docker docker-start
