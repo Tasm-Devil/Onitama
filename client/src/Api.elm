@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), GameEvent(..), JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, gameMoveToString, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, gameMoveToString, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -8,8 +8,12 @@ import Iso8601
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
-import Lobby exposing (GameId, GameStatus(..), GameSummary)
+import Lobby exposing (GameStatus(..), GameSummary)
 import Time exposing (Posix)
+
+
+type alias GameId =
+    Int
 
 
 

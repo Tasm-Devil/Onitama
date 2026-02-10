@@ -1,4 +1,4 @@
-module Lobby exposing (GameId, GameStatus(..), GameSummary, Model, Status(..), view)
+module Lobby exposing (GameStatus(..), GameSummary, Model, view)
 
 import Html exposing (Html)
 import Html.Attributes as HtmlA
@@ -9,18 +9,10 @@ import Time exposing (Posix)
 -- TYPES
 
 
-type alias GameId =
-    Int
-
-
 type alias Model =
-    { status : Status
+    { games : List GameSummary
     , currentTime : Posix
     }
-
-
-type Status
-    = Home (List GameSummary)
 
 
 type GameStatus
@@ -30,7 +22,7 @@ type GameStatus
 
 
 type alias GameSummary =
-    { summaryId : GameId
+    { summaryId : Int
     , summaryPlayer1 : String
     , summaryPlayer2 : String
     , summaryMoveCount : Int
@@ -46,41 +38,39 @@ type alias GameSummary =
 
 view : Model -> Html msg
 view model =
-    case model.status of
-        Home summaries ->
-            Html.div [ HtmlA.class "gamelist" ]
-                [ Html.h1 []
-                    [ Html.text "ONITAMA" ]
-                , Html.p []
-                    [ Html.text "Onitama is a two player abstract board game. You can play it online here! Below is a list of in-progress games. To start a new game click the \"new game\" button and distribute the url to another player to join." ]
-                , Html.p []
-                    [ Html.text "Be sure to read "
-                    , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf" ]
-                        [ Html.text "the rules" ]
-                    , Html.text " if you haven't played before."
+    Html.div [ HtmlA.class "gamelist" ]
+        [ Html.h1 []
+            [ Html.text "ONITAMA" ]
+        , Html.p []
+            [ Html.text "Onitama is a two player abstract board game. You can play it online here! Below is a list of in-progress games. To start a new game click the \"new game\" button and distribute the url to another player to join." ]
+        , Html.p []
+            [ Html.text "Be sure to read "
+            , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf" ]
+                [ Html.text "the rules" ]
+            , Html.text " if you haven't played before."
+            ]
+        , Html.a [ HtmlA.class "new-game", HtmlA.href "/newgame" ]
+            [ Html.text "New Game" ]
+        , Html.table [ HtmlA.id "game-table" ]
+            (Html.thead []
+                [ Html.tr []
+                    [ Html.td []
+                        [ Html.text "Game" ]
+                    , Html.td []
+                        [ Html.text "Moves" ]
+                    , Html.td []
+                        [ Html.text "State" ]
+                    , Html.td []
+                        [ Html.text "Created" ]
+                    , Html.td []
+                        [ Html.text "Last Activity" ]
+                    , Html.td []
+                        [ Html.text "" ]
                     ]
-                , Html.a [ HtmlA.class "new-game", HtmlA.href "/newgame" ]
-                    [ Html.text "New Game" ]
-                , Html.table [ HtmlA.id "game-table" ]
-                    (Html.thead []
-                        [ Html.tr []
-                            [ Html.td []
-                                [ Html.text "Game" ]
-                            , Html.td []
-                                [ Html.text "Moves" ]
-                            , Html.td []
-                                [ Html.text "State" ]
-                            , Html.td []
-                                [ Html.text "Created" ]
-                            , Html.td []
-                                [ Html.text "Last Activity" ]
-                            , Html.td []
-                                [ Html.text "" ]
-                            ]
-                        ]
-                        :: List.map (createGameTableRow model.currentTime) summaries
-                    )
                 ]
+                :: List.map (createGameTableRow model.currentTime) model.games
+            )
+        ]
 
 
 createGameTableRow : Posix -> GameSummary -> Html msg
@@ -174,5 +164,3 @@ formatRelativeTime current past =
 
     else
         String.fromInt diffDays ++ " days ago"
-
-

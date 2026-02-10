@@ -1,18 +1,18 @@
 module Main exposing (main)
 
-import Api exposing (GameEvent(..), Msg(..), ServerGame)
+import Api exposing (GameEvent(..), GameId, Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
 import EnterName
 import Game.Card exposing (dummyCard)
 import Game.Figure exposing (Color(..))
-import Game.Game as Game exposing (Game, GameState(..), Msg(..))
+import Game.Game as Game exposing (Game, GameState(..), Msg(..), transformGameMove)
 import Html exposing (Html)
 import Html.Attributes as HtmlA
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
-import Lobby exposing (GameId, Status(..))
+import Lobby
 import Ports
 import Task
 import Time
@@ -205,14 +205,7 @@ decodePlayers value =
         |> Result.withDefault []
 
 
-transformGameMove : Game.GameMove -> Game.GameMove
-transformGameMove g =
-    case g.color of
-        Black ->
-            Game.rotateGameMove g
 
-        White ->
-            g
 
 
 buildGame : String -> ServerGame -> Game
@@ -485,33 +478,33 @@ handleGameSummaries result model =
                         )
 
                     else
-                        ( { model | page = LobbyPage { status = Home summaries, currentTime = Time.millisToPosix 0 } }
+                        ( { model | page = LobbyPage { games = summaries, currentTime = Time.millisToPosix 0 } }
                         , Cmd.batch [ Nav.pushUrl model.key "/", Ports.openLobbyStream (), Task.perform Tick Time.now ]
                         )
 
                 Nothing ->
                     if gameidStr == "newgame" then
-                        ( { model | page = LobbyPage { status = Home summaries, currentTime = Time.millisToPosix 0 } }
+                        ( { model | page = LobbyPage { games = summaries, currentTime = Time.millisToPosix 0 } }
                         , Cmd.batch [ Nav.replaceUrl model.key "/", Ports.openLobbyStream (), Task.perform Tick Time.now, Cmd.map GotServerMsg Api.getGameIdFromServer ]
                         )
 
                     else if String.isEmpty gameidStr then
-                        ( { model | page = LobbyPage { status = Home summaries, currentTime = Time.millisToPosix 0 } }
+                        ( { model | page = LobbyPage { games = summaries, currentTime = Time.millisToPosix 0 } }
                         , Cmd.batch [ Ports.openLobbyStream (), Task.perform Tick Time.now ]
                         )
 
                     else
-                        ( { model | page = LobbyPage { status = Home summaries, currentTime = Time.millisToPosix 0 } }
+                        ( { model | page = LobbyPage { games = summaries, currentTime = Time.millisToPosix 0 } }
                         , Cmd.batch [ Nav.pushUrl model.key "/", Ports.openLobbyStream (), Task.perform Tick Time.now ]
                         )
 
         ( Err _, Redirect _ ) ->
-            ( { model | page = LobbyPage { status = Home [], currentTime = Time.millisToPosix 0 } }
+            ( { model | page = LobbyPage { games = [], currentTime = Time.millisToPosix 0 } }
             , Cmd.batch [ Ports.openLobbyStream (), Task.perform Tick Time.now ]
             )
 
         ( Ok summaries, LobbyPage lobby ) ->
-            ( { model | page = LobbyPage { lobby | status = Home summaries } }, Cmd.none )
+            ( { model | page = LobbyPage { lobby | games = summaries } }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )

@@ -49,6 +49,7 @@ type alias GameMove =
     }
 
 
+
 -- VIEW
 
 
@@ -217,6 +218,16 @@ handleClick ( x, y ) game =
 
             _ ->
                 game
+
+
+transformGameMove : GameMove -> GameMove
+transformGameMove g =
+    case g.color of
+        Black ->
+            rotateGameMove g
+
+        White ->
+            g
 
 
 rotateGameMove : GameMove -> GameMove
