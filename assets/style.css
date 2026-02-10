@@ -23,7 +23,6 @@
   --target-stroke: #6a9a50;
   --overlay-bg: rgba(30, 26, 21, 0.7);
   --btn-bg: #faf6f0;
-  --btn-text: #3a3028;
   --btn-border: #a09080;
   --input-bg: #faf6f0;
   --input-border: #d0c8ba;
@@ -52,7 +51,6 @@
     --target-stroke: #6a9a50;
     --overlay-bg: rgba(10, 8, 5, 0.8);
     --btn-bg: #2a2520;
-    --btn-text: #e8e0d4;
     --btn-border: #5a4f44;
     --input-bg: #24201b;
     --input-border: #3a3328;
@@ -63,28 +61,81 @@
 /* ── Base ── */
 
 body {
-  font-family: sans-serif;
+  font-family: system-ui, Helvetica, sans-serif;
   margin: 0;
   background: radial-gradient(ellipse at center, var(--bg-surface) 0%, var(--bg) 70%);
   background-attachment: fixed;
   color: var(--text);
-
-  &::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    opacity: 0.12;
-    pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    background-size: 200px 200px;
-    z-index: 9999;
-  }
 }
 
 h1 {
-  text-shadow: 0px 1px 1px var(--shadow);
-  font-family: Helvetica, sans-serif;
+  text-shadow: 2px 2px 2px var(--shadow);
+}
+
+p a {
   color: var(--text);
+}
+
+/* ── Page Wrapper ── */
+
+.page-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── Lobby ── */
+
+.lobby {
+  display: flex;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow-y: auto;
+
+  .gamelist {
+    padding: 8px;
+  }
+
+  .new-game {
+    display: block;
+    width: fit-content;
+    margin: 16px auto;
+    text-align: center;
+  }
+
+
+
+  #game-table {
+    border-spacing: 0;
+    width: 100%;
+
+    td {
+      border-bottom: 1px solid var(--border-light);
+      padding: .5rem;
+      height: 3em;
+      vertical-align: middle;
+      transition: background-color 0.2s;
+    }
+
+    .game-row {
+      &:nth-child(odd)>td {
+        background-color: var(--row-even);
+      }
+
+      &:hover>td {
+        background-color: var(--bg-hover);
+      }
+    }
+
+    .no-games-row td {
+      text-align: center;
+      padding: 20px;
+    }
+  }
 }
 
 /* ── Landing Screen ── */
@@ -111,17 +162,15 @@ h1 {
       border: 1px solid var(--input-border);
 
       #name {
-        border: none;
-        padding: 5px;
         background-color: var(--input-bg);
-        color: var(--text);
       }
 
       input {
         border: none;
+        padding: .5rem;
         border-left: 1px solid var(--input-border);
         background-color: var(--btn-bg);
-        color: var(--btn-text);
+        color: var(--text);
         cursor: pointer;
         transition: background-color 0.2s;
 
@@ -135,25 +184,6 @@ h1 {
       }
     }
   }
-
-  small {
-    display: block;
-  }
-
-  .rejoin {
-    margin-top: 20px;
-    max-width: 70%;
-    display: none;
-
-    span {
-      display: block;
-      margin-bottom: 10px;
-    }
-  }
-
-  #rejoin-button {
-    display: inline-block;
-  }
 }
 
 /* ── Buttons ── */
@@ -161,11 +191,11 @@ h1 {
 .landing-screen #rejoin-button,
 .lobby .new-game,
 .lobby .join-game {
-  padding: 10px 15px;
-  border: 1px solid var(--btn-border);
-  border-radius: 5px;
+  padding: .5rem 2rem;
+  border: .5px solid var(--btn-border);
+  border-radius: .5rem;
   text-decoration: none;
-  color: var(--btn-text);
+  color: var(--text);
   cursor: pointer;
   background: linear-gradient(120deg, var(--btn-bg) 40%, var(--bg-hover) 50%, var(--btn-bg) 60%);
   background-size: 200% 100%;
@@ -181,18 +211,15 @@ h1 {
 }
 
 @keyframes shimmer {
-  0%, 100% { background-position: 100% 0; }
-  50% { background-position: 0 0; }
-}
 
-/* ── Page Wrapper ── */
+  0%,
+  100% {
+    background-position: 100% 0;
+  }
 
-.page-wrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  50% {
+    background-position: 0 0;
+  }
 }
 
 /* ── Game Container ── */
@@ -216,7 +243,7 @@ h1 {
 
 .game-log {
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: .5rem;
   padding: 0;
   overflow: hidden;
   margin: 8px;
@@ -233,13 +260,18 @@ h1 {
     overflow-y: auto;
     scrollbar-color: var(--border) var(--bg-surface);
 
-    > li.log-message {
+    >li.log-message {
       border-bottom: 1px solid var(--border-light);
       padding: 2px 5px;
       line-height: 1.4em;
 
-      &:nth-child(even) { background: var(--row-even); }
-      &:nth-child(odd) { background: var(--row-odd); }
+      &:nth-child(even) {
+        background: var(--row-even);
+      }
+
+      &:nth-child(odd) {
+        background: var(--row-odd);
+      }
     }
   }
 
@@ -261,7 +293,9 @@ h1 {
   color: var(--text-muted);
   margin-top: auto;
 
-  .separator { margin: 0 0.5em; }
+  .separator {
+    margin: 0 0.5em;
+  }
 
   .tech-icon {
     color: var(--text-muted);
@@ -276,10 +310,14 @@ h1 {
     &.game-title {
       transition: color 0.2s;
 
-      &:hover { color: var(--text); }
+      &:hover {
+        color: var(--text);
+      }
     }
 
-    &:hover .tech-icon { color: var(--text); }
+    &:hover .tech-icon {
+      color: var(--text);
+    }
   }
 }
 
@@ -290,54 +328,11 @@ h1 {
   fill: var(--card-caption);
 }
 
-/* ── Lobby ── */
-
-.lobby {
-  display: flex;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  overflow-y: auto;
-
-  .gamelist { padding: 8px; }
-
-  .new-game {
-    display: block;
-    width: fit-content;
-    margin: 16px auto;
-    text-align: center;
-  }
-
-  .join-game { padding: 6px 10px; }
-
-  #game-table {
-    border-spacing: 0;
-    width: 100%;
-
-    td {
-      border-bottom: 1px solid var(--border-light);
-      padding: 4px 10px;
-      height: 3em;
-      vertical-align: middle;
-      transition: background-color 0.2s;
-    }
-
-    .game-row {
-      &:nth-child(odd) > td { background-color: var(--row-even); }
-      &:hover > td { background-color: var(--bg-hover); }
-    }
-
-    .no-games-row td {
-      text-align: center;
-      padding: 20px;
-    }
-  }
-}
-
 /* ── SVG Pieces ── */
 
-.pieces { pointer-events: none; }
+.pieces {
+  pointer-events: none;
+}
 
 /* ── SVG Board Cells ── */
 
@@ -352,7 +347,9 @@ h1 {
     fill-opacity: 1;
   }
 
-  &.cell--target { stroke: var(--target-stroke); }
+  &.cell--target {
+    stroke: var(--target-stroke);
+  }
 }
 
 /* ── SVG Card Elements ── */
@@ -373,15 +370,20 @@ h1 {
   stroke: var(--card-stroke);
 }
 
-.card-overlay { fill: var(--overlay-bg); }
+.card-overlay {
+  fill: var(--overlay-bg);
+}
 
 /* ── Status Line ── */
 
-.status-line { fill: var(--text); }
+.status-line {
+  fill: var(--text);
+}
 
 /* ── Dark Mode: Black Figures ── */
 
 @media (prefers-color-scheme: dark) {
+
   #blackKing path,
   #blackPawn path {
     stroke: #8a7e6e !important;
@@ -394,7 +396,9 @@ h1 {
   .game-container {
     flex-direction: row-reverse;
 
-    #game-board { flex: 1; }
+    #game-board {
+      flex: 1;
+    }
   }
 
   .game-log {
@@ -414,6 +418,7 @@ h1 {
 
 @media (max-width: 600px) {
   .lobby #game-table {
+
     td:nth-child(4),
     td:nth-child(5) {
       display: none;

@@ -1,0 +1,17 @@
+services:
+  onitama:
+    image: onitama:latest
+    container_name: onitama
+    networks:
+      - web
+    volumes:
+      - onitama-data:/data
+    command: ["/app/server", "--database", "/data/gamedb.json"]
+    restart: unless-stopped
+
+volumes:
+  onitama-data:
+
+networks:
+  web:
+    external: true

@@ -130,9 +130,9 @@ make docker-start  # Build + run on http://localhost:8080
 - [ ] Docker: volumes for DB/config, versioning
 - [ ] Spectator mode
 - [ ] Move playback
+- [ ] AI opponent
 - [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth
-- [ ] AI opponent
 
 ---
 
