@@ -76,6 +76,12 @@ p a {
   color: var(--text);
 }
 
+/* ── Scrollbars ── */
+
+* {
+  scrollbar-color: var(--border) var(--bg-surface);
+}
+
 /* ── Page Wrapper ── */
 
 .page-wrapper {
@@ -258,7 +264,6 @@ p a {
     margin: 0;
     overflow: hidden;
     overflow-y: auto;
-    scrollbar-color: var(--border) var(--bg-surface);
 
     >li.log-message {
       border-bottom: 1px solid var(--border-light);
@@ -377,6 +382,27 @@ p a {
 
 .card-overlay {
   fill: var(--overlay-bg);
+}
+
+/* ── Concede Button ── */
+
+.concede-btn {
+  cursor: pointer;
+
+  rect {
+    fill: var(--bg-surface);
+    stroke: var(--border);
+    stroke-width: 0.5;
+  }
+
+  text {
+    fill: var(--text-muted);
+    font-size: 3.5px;
+  }
+
+  &:hover rect {
+    fill: var(--bg-hover);
+  }
 }
 
 /* ── Status Line ── */

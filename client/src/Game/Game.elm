@@ -9,6 +9,7 @@ import Html.Attributes as HtmlA
 import List.Extra
 import Svg
 import Svg.Attributes as SvgA
+import Svg.Events as SvgE
 
 
 
@@ -16,7 +17,8 @@ import Svg.Attributes as SvgA
 
 
 type GameState
-    = Thinking
+    = WaitingForOpponent
+    | Thinking
     | FigureSelected ( Int, Int )
     | ChosingCard ( ( Int, Int ), ( Int, Int ) )
     | MoveDone GameMove
@@ -111,9 +113,43 @@ view game =
                 )
             ]
             (drawCardPrompt game.myCards UserChoseOneCard)
+        , Svg.g
+            [ SvgA.class "concede-btn"
+            , SvgA.display
+                (case game.state of
+                    WaitingForOpponent ->
+                        "none"
+
+                    GameOver _ ->
+                        "none"
+
+                    _ ->
+                        "block"
+                )
+            , SvgE.onClick UserClickedConcede
+            ]
+            [ Svg.rect
+                [ SvgA.x "111"
+                , SvgA.y "12"
+                , SvgA.width "34"
+                , SvgA.height "8"
+                , SvgA.rx "1.5"
+                ]
+                []
+            , Svg.text_
+                [ SvgA.x "128"
+                , SvgA.y "17.5"
+                , SvgA.fontSize "3.5"
+                , SvgA.textAnchor "middle"
+                ]
+                [ Svg.text "Concede" ]
+            ]
         , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "4", SvgA.textAnchor "end" ]
             [ Svg.text <|
                 case game.state of
+                    WaitingForOpponent ->
+                        "waiting for opponent..."
+
                     GameOver winner ->
                         case winner of
                             White ->
@@ -153,6 +189,7 @@ type Msg
     = UserChoseOneCard Card
     | UserClickedOnCell ( Int, Int )
     | NewGameMove GameMove
+    | UserClickedConcede
 
 
 update : Msg -> Game -> Game
@@ -168,6 +205,9 @@ update msg game =
 
         UserClickedOnCell ( x, y ) ->
             case game.state of
+                WaitingForOpponent ->
+                    game
+
                 GameOver _ ->
                     game
 
@@ -181,6 +221,9 @@ update msg game =
         NewGameMove gm ->
             { game | state = MoveDone gm }
                 |> execGameMove
+
+        UserClickedConcede ->
+            game
 
 
 handleClick : ( Int, Int ) -> Game -> Game

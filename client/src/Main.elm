@@ -355,21 +355,26 @@ handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
 handleGameMsg gamemsg model =
     case model.page of
         PlayingPage gameid name token game history_ ->
-            let
-                game_after =
-                    Game.update gamemsg game
+            case gamemsg of
+                Game.UserClickedConcede ->
+                    ( model, Cmd.map GotServerMsg <| Api.concede gameid token )
 
-                cmd =
-                    case game_after.state of
-                        MoveDone gameMove ->
-                            transformGameMove gameMove
-                                |> Api.postNewGameMove gameid token
-                                |> Cmd.map GotServerMsg
+                _ ->
+                    let
+                        game_after =
+                            Game.update gamemsg game
 
-                        _ ->
-                            Cmd.none
-            in
-            ( { model | page = PlayingPage gameid name token game_after history_ }, cmd )
+                        cmd =
+                            case game_after.state of
+                                MoveDone gameMove ->
+                                    transformGameMove gameMove
+                                        |> Api.postNewGameMove gameid token
+                                        |> Cmd.map GotServerMsg
+
+                                _ ->
+                                    Cmd.none
+                    in
+                    ( { model | page = PlayingPage gameid name token game_after history_ }, cmd )
 
         _ ->
             ( model, Cmd.none )
@@ -630,8 +635,15 @@ joinGameSuccess model gameid joinResponse =
 
             else
                 List.map Game.MoveEntry servergame.gameHistory ++ [ joinMsg ]
+
+        gameWithState =
+            if bothPresent then
+                finalgame
+
+            else
+                { finalgame | state = WaitingForOpponent }
     in
-    ( { model | page = PlayingPage gameid name token finalgame initialLog }
+    ( { model | page = PlayingPage gameid name token gameWithState initialLog }
     , Cmd.batch [ saveCmd, sseCmd ]
     )
 
@@ -743,8 +755,11 @@ handleGameEvent value model =
 
                                         startMsg =
                                             Game.SystemEntry "Both players are present, the game begins."
+
+                                        updatedGame =
+                                            { game | state = Thinking }
                                     in
-                                    ( { model | page = PlayingPage gameid name token game (startMsg :: joinedMsg :: log) }
+                                    ( { model | page = PlayingPage gameid name token updatedGame (startMsg :: joinedMsg :: log) }
                                     , Cmd.none
                                     )
 
