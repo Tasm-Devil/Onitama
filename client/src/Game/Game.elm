@@ -49,6 +49,11 @@ type alias GameMove =
     }
 
 
+type LogEntry
+    = MoveEntry GameMove
+    | SystemEntry String
+
+
 
 -- VIEW
 
@@ -118,12 +123,23 @@ view game =
                                 "Black wins!"
 
                     _ ->
+                        let
+                            isYourTurn =
+                                game.nextColor == game.myColor
+
+                            suffix =
+                                if isYourTurn then
+                                    " (you) to move"
+
+                                else
+                                    " to move"
+                        in
                         case game.nextColor of
                             White ->
-                                "white to move"
+                                "white" ++ suffix
 
                             Black ->
-                                "black to move"
+                                "black" ++ suffix
             ]
         ]
     ]
@@ -392,14 +408,25 @@ setupNewGame cards playerColor nextColor =
            )
 
 
-viewHistory : List GameMove -> Html msg
-viewHistory history =
+viewLog : List LogEntry -> Html msg
+viewLog log =
     Html.div [ HtmlA.class "game-log" ]
         [ Html.ul [ HtmlA.id "log-lines" ]
-            (List.map viewGameMove history)
+            (List.map viewLogEntry log)
 
         -- , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
         ]
+
+
+viewLogEntry : LogEntry -> Html msg
+viewLogEntry entry =
+    case entry of
+        MoveEntry gameMove ->
+            viewGameMove gameMove
+
+        SystemEntry message ->
+            Html.li [ HtmlA.class "log-message log-system" ]
+                [ Html.text message ]
 
 
 viewGameMove : GameMove -> Html msg

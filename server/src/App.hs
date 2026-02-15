@@ -10,7 +10,7 @@ import Api
     ConcedeError (..),
     GameId (..),
     GameSummary,
-    GameWithNames,
+    GameWithNames (..),
     JoinError (..),
     JoinGameResponse (..),
     JoinRequest (..),
@@ -46,11 +46,13 @@ import Database
     logDBState,
     updateGame,
   )
+import Control.Monad (when)
+import Data.Maybe (isNothing)
 import Game (Color (..), Game (..), GameMove)
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
-import Onitama (give5Cards)
+import Onitama (give5Cards, validateMove)
 import qualified Onitama
 import Options (cleanupOptionsToConfig)
 import qualified Options
@@ -173,12 +175,27 @@ joinGame gameId maybeToken (JoinRequest name) = do
       playerName = T.pack name
   liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
 
+  -- Get game state before join to detect new joins vs rejoins
+  maybeGameBefore <- liftIO $ getGameById db gameId
+
   result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
   case result of
     Left err -> do
       liftIO $ putStrLn $ "Join failed: " ++ show err
       return $ Left err
     Right joinResponse -> do
+      -- Broadcast PlayerJoinedEvent only for new joins (not rejoins)
+      let respGame = responseGame joinResponse
+          joinedName = responsePlayerName joinResponse
+          joinedColor = if joinedName == gameWhiteName respGame then White else Black
+      case maybeGameBefore of
+        Just gameBefore -> do
+          let slotWasEmpty = case joinedColor of
+                White -> isNothing (player_white gameBefore)
+                Black -> isNothing (player_black gameBefore)
+          when slotWasEmpty $
+            liftIO $ broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
+        Nothing -> return ()
       liftIO $ broadcastLobby store LobbyChanged
       return $ Right joinResponse
 
@@ -215,20 +232,16 @@ newMove gameId maybeToken move = do
               liftIO $ putStrLn "Move rejected: player not in game"
               return $ Left MENotYourTurn
             else do
-              -- Check if game is already over
-              case winner game of
-                Just _ -> return $ Left MEGameOver
-                Nothing -> do
-                  -- Validate the move using Onitama rules (includes turn order check)
-                  let historyMoves = move : map fst (history game)
-                  case Onitama.validateMove (cards game) historyMoves of
-                    Left _ -> do
-                      liftIO $ putStrLn "Move rejected: invalid move"
-                      return $ Left MEInvalidMove
-                    Right maybeWinner -> do
-                      -- Move is valid, apply it
-                      now <- liftIO getCurrentTime
-                      let updateGameFn (Game p1 p2 cs hist _ created _) =
+              -- Validate the move using Onitama rules (includes turn order, game-over check)
+              let historyMoves = move : map fst (history game)
+              case validateMove (cards game) historyMoves of
+                Left _ -> do
+                  liftIO $ putStrLn "Move rejected: invalid move"
+                  return $ Left MEInvalidMove
+                Right maybeWinner -> do
+                  -- Move is valid, apply it
+                  now <- liftIO getCurrentTime
+                  let updateGameFn (Game p1 p2 cs hist _ created _) =
                             Game
                               { player_white = p1,
                                 player_black = p2,
@@ -238,15 +251,15 @@ newMove gameId maybeToken move = do
                                 createdAt = created,
                                 lastActivity = now
                               }
-                      success <- liftIO $ updateGame db gameId updateGameFn
-                      if success
-                        then do
-                          liftIO $ do
-                            putStrLn "Move accepted"
-                            broadcastGame store gameId (MoveEvent move now maybeWinner)
-                            broadcastLobby store LobbyChanged
-                          return $ Right move
-                        else return $ Left MEGameNotFound
+                  success <- liftIO $ updateGame db gameId updateGameFn
+                  if success
+                    then do
+                      liftIO $ do
+                        putStrLn "Move accepted"
+                        broadcastGame store gameId (MoveEvent move now maybeWinner)
+                        broadcastLobby store LobbyChanged
+                      return $ Right move
+                    else return $ Left MEGameNotFound
 
 concede :: GameId -> Maybe SessionToken -> AppM (Either ConcedeError Color)
 concede gameId maybeToken = do

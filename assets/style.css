@@ -272,6 +272,11 @@ p a {
       &:nth-child(odd) {
         background: var(--row-odd);
       }
+
+      &.log-system {
+        font-style: italic;
+        color: var(--text-muted);
+      }
     }
   }
 

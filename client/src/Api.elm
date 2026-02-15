@@ -192,6 +192,7 @@ type ConcedeError
 type GameEvent
     = MoveEvent String String (Maybe String) -- move, timestamp, winner
     | ConcedeEvent String -- winner color
+    | PlayerJoinedEvent String String -- name, color
 
 
 joinErrorToString : JoinError -> String
@@ -514,6 +515,11 @@ decodeGameEventHelper eventType =
         "concede" ->
             Decode.map ConcedeEvent
                 (Decode.field "winner" Decode.string)
+
+        "playerJoined" ->
+            Decode.map2 PlayerJoinedEvent
+                (Decode.field "name" Decode.string)
+                (Decode.field "color" Decode.string)
 
         _ ->
             Decode.fail ("Unknown game event type: " ++ eventType)

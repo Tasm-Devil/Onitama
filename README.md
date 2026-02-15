@@ -119,17 +119,10 @@ make docker-start  # Build + run on http://localhost:8080
 - [X] Server-side move validation
 - [x] Dark mode (prefers-color-scheme) and CSS custom properties
 - [x] Responsive sidebar game log on wide displays
-- [ ] view game history should begin with:
-      You joined game as white.
-      Bob has joined the game as black.
-      Both players are present, the game begins.
-      and on Bobs side:
-      Alice has joined game as white.
-      You joined the game as black.
-      Both players are present, the game begins.
-- [ ] Docker: volumes for DB/config, versioning
+- [x] Game log system messages (join notifications, game start) via `playerJoined` SSE event
+- [ ] Concede button, "You won/lost" result screen, and "New Match" rematch option
 - [ ] Spectator mode
-- [ ] Move playback
+- [ ] Move playback: mouse over element in game-log shows arrow from cell to cell
 - [ ] AI opponent
 - [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth

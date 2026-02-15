@@ -48,7 +48,7 @@ type Page
     = Redirect Url
     | LobbyPage Lobby.Model
     | EnterNamePage GameId EnterName.Model
-    | PlayingPage GameId PlayerName PlayerToken Game (List Game.GameMove)
+    | PlayingPage GameId PlayerName PlayerToken Game (List Game.LogEntry)
 
 
 
@@ -129,13 +129,13 @@ view model =
                             |> List.map (Html.map GotEnterNameMsg)
                         )
 
-                PlayingPage _ _ _ game history ->
+                PlayingPage _ _ _ game log ->
                     Html.div [ HtmlA.class "game-container" ]
                         ((game
                             |> Game.view
                             |> List.map (Html.map GotGameMsg)
                          )
-                            ++ [ Game.viewHistory history ]
+                            ++ [ Game.viewLog log ]
                         )
             , viewFooter
             ]
@@ -590,8 +590,48 @@ joinGameSuccess model gameid joinResponse =
                 [ Ports.closeLobbyStream ()
                 , Ports.openGameStream gameid
                 ]
+
+        myColor =
+            if name == servergame.gameBlackName then
+                "black"
+
+            else
+                "white"
+
+        opponentColor =
+            if myColor == "white" then
+                "black"
+
+            else
+                "white"
+
+        opponentName =
+            if myColor == "white" then
+                servergame.gameBlackName
+
+            else
+                servergame.gameWhiteName
+
+        bothPresent =
+            not (String.isEmpty opponentName)
+
+        joinMsg =
+            Game.SystemEntry ("You joined game as " ++ myColor ++ ".")
+
+        opponentMsg =
+            Game.SystemEntry (opponentName ++ " has joined the game as " ++ opponentColor ++ ".")
+
+        startMsg =
+            Game.SystemEntry "Both players are present, the game begins."
+
+        initialLog =
+            if bothPresent then
+                List.map Game.MoveEntry servergame.gameHistory ++ [ startMsg, opponentMsg, joinMsg ]
+
+            else
+                List.map Game.MoveEntry servergame.gameHistory ++ [ joinMsg ]
     in
-    ( { model | page = PlayingPage gameid name token finalgame servergame.gameHistory }
+    ( { model | page = PlayingPage gameid name token finalgame initialLog }
     , Cmd.batch [ saveCmd, sseCmd ]
     )
 
@@ -637,7 +677,7 @@ handleGameEvent value model =
     case Decode.decodeValue Api.decodeGameEvent value of
         Ok event ->
             case model.page of
-                PlayingPage gameid name token game history ->
+                PlayingPage gameid name token game log ->
                     case game.state of
                         GameOver _ ->
                             ( model, Cmd.none )
@@ -670,7 +710,7 @@ handleGameEvent value model =
                                                 soundCmd =
                                                     Ports.playSound "move"
                                             in
-                                            ( { model | page = PlayingPage gameid name token updatedGame (gameMove :: history) }
+                                            ( { model | page = PlayingPage gameid name token updatedGame (Game.MoveEntry gameMove :: log) }
                                             , soundCmd
                                             )
 
@@ -689,7 +729,22 @@ handleGameEvent value model =
                                         updatedGame =
                                             { game | state = GameOver winnerColor }
                                     in
-                                    ( { model | page = PlayingPage gameid name token updatedGame history }
+                                    ( { model | page = PlayingPage gameid name token updatedGame log }
+                                    , Cmd.none
+                                    )
+
+                                Api.PlayerJoinedEvent joinedName joinedColor ->
+                                    let
+                                        colorStr =
+                                            String.toLower joinedColor
+
+                                        joinedMsg =
+                                            Game.SystemEntry (joinedName ++ " has joined the game as " ++ colorStr ++ ".")
+
+                                        startMsg =
+                                            Game.SystemEntry "Both players are present, the game begins."
+                                    in
+                                    ( { model | page = PlayingPage gameid name token game (startMsg :: joinedMsg :: log) }
                                     , Cmd.none
                                     )
 

@@ -47,6 +47,7 @@ instance ToJSON LobbyEvent where
 data GameEvent
   = MoveEvent GameMove UTCTime (Maybe Color)
   | ConcedeEvent Color -- winner color
+  | PlayerJoinedEvent Text Color -- player name, assigned color
   deriving (Show, Generic)
 
 instance ToJSON GameEvent where
@@ -61,6 +62,12 @@ instance ToJSON GameEvent where
     object
       [ "event" .= ("concede" :: Text),
         "winner" .= winner
+      ]
+  toJSON (PlayerJoinedEvent name color) =
+    object
+      [ "event" .= ("playerJoined" :: Text),
+        "name" .= name,
+        "color" .= color
       ]
 
 -- | Central store for all SSE subscribers

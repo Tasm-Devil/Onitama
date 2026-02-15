@@ -87,7 +87,6 @@ data MoveError
   = MEInvalidToken
   | MENotYourTurn
   | MEGameNotFound
-  | MEGameOver
   | MEInvalidMove
   deriving (Eq, Show, Generic)
 

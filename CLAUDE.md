@@ -31,7 +31,7 @@ client/src/           # Elm frontend
   EnterName.elm       # Name entry / game join flow
   Ports.elm           # JS interop (localStorage, SSE, sound)
   Game/
-    Game.elm          # Board rendering, move execution, move history view
+    Game.elm          # Board rendering, move execution, game log view
     Card.elm          # Card definitions and movement patterns
     Figure.elm        # Piece (King/Pawn) definitions
     Cell.elm          # Board cell rendering
@@ -76,7 +76,7 @@ Base URL: `http://localhost:8080/1/onitama`
 | Path | Events |
 |------|--------|
 | `/games/stream` | `lobbyChanged` (client refetches summaries) |
-| `/games/{id}/stream` | `move`, `concede` |
+| `/games/{id}/stream` | `move`, `concede`, `playerJoined` |
 
 All authenticated endpoints use `X-Session-Token` header.
 
@@ -93,7 +93,7 @@ The server validates all moves against Onitama rules before accepting them:
 ### Real-time Updates (SSE)
 
 - **Lobby stream**: Invalidate+refetch pattern — server sends `lobbyChanged` on connect, on changes, and on game cleanup; client refetches game summaries via GET
-- **Game stream**: Granular events — `move` (with optional `winner`) and `concede` broadcast directly to players
+- **Game stream**: Granular events — `move` (with optional `winner`), `concede`, and `playerJoined` broadcast directly to players
 - STM-based subscriber management with automatic cleanup on disconnect
 - EventSource auto-reconnects on connection loss
 
@@ -122,9 +122,10 @@ The server validates all moves against Onitama rules before accepting them:
 - Handlers broadcast events after successful operations
 - WAI `responseStream` for SSE responses
 
-**Move History:**
-- Append-only list: `[(GameMove, UTCTime)]` (head = most recent)
-- Client applies moves locally when received via SSE
+**Game Log:**
+- `LogEntry` type: `MoveEntry GameMove | SystemEntry String`
+- System messages (join, game start) built on join and via `playerJoined` SSE
+- Append-only list (head = most recent), rendered with `column-reverse` CSS
 
 ## Server Configuration
 
