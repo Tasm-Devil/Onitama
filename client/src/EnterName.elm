@@ -1,4 +1,4 @@
-module EnterName exposing (Model(..), Msg(..), update, view)
+module EnterName exposing (Model(..), Msg(..), getName, update, view)
 
 import Html exposing (Html)
 import Html.Attributes as HtmlA
@@ -9,6 +9,19 @@ type Model
     = Entering String
     | Joining String
     | JoinError String String
+
+
+getName : Model -> Maybe String
+getName model =
+    case model of
+        Entering name ->
+            Just name
+
+        JoinError name _ ->
+            Just name
+
+        Joining _ ->
+            Nothing
 
 
 type Msg

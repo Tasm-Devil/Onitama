@@ -31,15 +31,15 @@ type alias PlayerToken =
     String
 
 
-type alias PlayerIdentity =
-    { playerName : PlayerName
+type alias PlayerSession =
+    { name : PlayerName
     , token : PlayerToken
     }
 
 
 type alias Model =
     { key : Key
-    , storedPlayers : List PlayerIdentity
+    , storedPlayers : List PlayerSession
     , page : Page
     }
 
@@ -48,8 +48,7 @@ type Page
     = Redirect Url
     | LobbyPage Lobby.Model
     | EnterNamePage GameId EnterName.Model
-    | PlayingPage GameId PlayerName PlayerToken Game (List Game.LogEntry)
-    | SpectatingPage GameId Game (List Game.LogEntry)
+    | GamePage GameId (Maybe PlayerSession) Game (List Game.LogEntry)
 
 
 
@@ -71,15 +70,7 @@ subscriptions model =
 
         sseSub =
             case model.page of
-                PlayingPage _ _ _ game _ ->
-                    case game.state of
-                        GameOver _ ->
-                            Sub.none
-
-                        _ ->
-                            Ports.gameEventReceived GameEventReceived
-
-                SpectatingPage _ game _ ->
+                GamePage _ _ game _ ->
                     case game.state of
                         GameOver _ ->
                             Sub.none
@@ -134,20 +125,11 @@ view model =
 
                 EnterNamePage _ enterNameModel ->
                     Html.div [ HtmlA.class "landing-screen" ]
-                        (EnterName.view enterNameModel (List.map .playerName model.storedPlayers)
+                        (EnterName.view enterNameModel (List.map .name model.storedPlayers)
                             |> List.map (Html.map GotEnterNameMsg)
                         )
 
-                PlayingPage _ _ _ game log ->
-                    Html.div [ HtmlA.class "game-container" ]
-                        ((game
-                            |> Game.view
-                            |> List.map (Html.map GotGameMsg)
-                         )
-                            ++ [ Game.viewLog log ]
-                        )
-
-                SpectatingPage _ game log ->
+                GamePage _ _ game log ->
                     Html.div [ HtmlA.class "game-container" ]
                         ((game
                             |> Game.view
@@ -200,30 +182,60 @@ viewFooter =
 -- HELPERS
 
 
-encodePlayer : PlayerIdentity -> Encode.Value
+encodePlayer : PlayerSession -> Encode.Value
 encodePlayer player =
     Encode.object
-        [ ( "playerName", Encode.string player.playerName )
+        [ ( "playerName", Encode.string player.name )
         , ( "token", Encode.string player.token )
         ]
 
 
-decodePlayers : Encode.Value -> List PlayerIdentity
+decodePlayers : Encode.Value -> List PlayerSession
 decodePlayers value =
     let
         playerDecoder =
-            Decode.map2 PlayerIdentity
+            Decode.map2 PlayerSession
                 (Decode.field "playerName" Decode.string)
                 (Decode.field "token" Decode.string)
-
-        playersDecoder =
-            Decode.list playerDecoder
     in
-    Decode.decodeValue playersDecoder value
+    Decode.decodeValue (Decode.list playerDecoder) value
         |> Result.withDefault []
 
 
 
+
+
+parseWinnerColor : String -> Color
+parseWinnerColor str =
+    if str == "White" then
+        White
+
+    else
+        Black
+
+
+shouldJoinGame : List PlayerSession -> List Lobby.GameSummary -> GameId -> Bool
+shouldJoinGame storedPlayers summaries gameid =
+    let
+        summary =
+            List.filter (\s -> s.summaryId == gameid) summaries |> List.head
+
+        storedNames =
+            List.map .name storedPlayers
+
+        isReturningPlayer =
+            case summary of
+                Just s ->
+                    List.member s.summaryPlayer1 storedNames
+                        || List.member s.summaryPlayer2 storedNames
+
+                Nothing ->
+                    False
+
+        status =
+            Maybe.map .summaryStatus summary
+    in
+    isReturningPlayer || status == Just Lobby.WaitingForPlayers
 
 
 buildGame : String -> ServerGame -> Game
@@ -338,26 +350,7 @@ handleUrlChange url model =
             else
                 case String.toInt gameidStr of
                     Just gameid ->
-                        let
-                            summary =
-                                List.filter (\s -> s.summaryId == gameid) lobbyModel.games |> List.head
-
-                            storedNames =
-                                List.map .playerName model.storedPlayers
-
-                            isReturningPlayer =
-                                case summary of
-                                    Just s ->
-                                        List.member s.summaryPlayer1 storedNames
-                                            || List.member s.summaryPlayer2 storedNames
-
-                                    Nothing ->
-                                        False
-
-                            status =
-                                Maybe.map .summaryStatus summary
-                        in
-                        if isReturningPlayer || status == Just Lobby.WaitingForPlayers then
+                        if shouldJoinGame model.storedPlayers lobbyModel.games gameid then
                             ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
                             , Ports.closeLobbyStream ()
                             )
@@ -377,15 +370,7 @@ handleUrlChange url model =
             else
                 ( { model | page = Redirect url }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
-        PlayingPage _ _ _ _ _ ->
-            ( { model | page = Redirect url }
-            , Cmd.batch
-                [ Ports.closeGameStream ()
-                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
-                ]
-            )
-
-        SpectatingPage _ _ _ ->
+        GamePage _ _ _ _ ->
             ( { model | page = Redirect url }
             , Cmd.batch
                 [ Ports.closeGameStream ()
@@ -423,10 +408,10 @@ handleClickedLink urlRequest model =
 handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
 handleGameMsg gamemsg model =
     case model.page of
-        PlayingPage gameid name token game history_ ->
+        GamePage gameid (Just session) game log ->
             case gamemsg of
                 Game.UserClickedConcede ->
-                    ( model, Cmd.map GotServerMsg <| Api.concede gameid token )
+                    ( model, Cmd.map GotServerMsg <| Api.concede gameid session.token )
 
                 _ ->
                     let
@@ -437,13 +422,13 @@ handleGameMsg gamemsg model =
                             case game_after.state of
                                 MoveDone gameMove ->
                                     transformGameMove gameMove
-                                        |> Api.postNewGameMove gameid token
+                                        |> Api.postNewGameMove gameid session.token
                                         |> Cmd.map GotServerMsg
 
                                 _ ->
                                     Cmd.none
                     in
-                    ( { model | page = PlayingPage gameid name token game_after history_ }, cmd )
+                    ( { model | page = GamePage gameid (Just session) game_after log }, cmd )
 
         _ ->
             ( model, Cmd.none )
@@ -470,8 +455,8 @@ handleEnterNameMsg enterNameMsg model =
 
 handleRequestGame : Model -> GameId -> EnterName.Model -> ( Model, Cmd Msg )
 handleRequestGame model gameid enterNameModel =
-    case enterNameModel of
-        EnterName.Entering name ->
+    case EnterName.getName enterNameModel of
+        Just name ->
             if String.isEmpty (String.trim name) then
                 ( model, Cmd.none )
 
@@ -479,7 +464,7 @@ handleRequestGame model gameid enterNameModel =
                 let
                     maybeToken =
                         model.storedPlayers
-                            |> List.filter (\p -> p.playerName == name)
+                            |> List.filter (\p -> p.name == name)
                             |> List.head
                             |> Maybe.map .token
                 in
@@ -487,23 +472,7 @@ handleRequestGame model gameid enterNameModel =
                 , Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken
                 )
 
-        EnterName.JoinError name _ ->
-            if String.isEmpty (String.trim name) then
-                ( model, Cmd.none )
-
-            else
-                let
-                    maybeToken =
-                        model.storedPlayers
-                            |> List.filter (\p -> p.playerName == name)
-                            |> List.head
-                            |> Maybe.map .token
-                in
-                ( { model | page = EnterNamePage gameid (EnterName.Joining name) }
-                , Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken
-                )
-
-        EnterName.Joining _ ->
+        Nothing ->
             ( model, Cmd.none )
 
 
@@ -550,26 +519,7 @@ handleGameSummaries result model =
             case maybeGameId of
                 Just gameid ->
                     if List.member gameid gameIds then
-                        let
-                            summary =
-                                List.filter (\s -> s.summaryId == gameid) summaries |> List.head
-
-                            storedNames =
-                                List.map .playerName model.storedPlayers
-
-                            isReturningPlayer =
-                                case summary of
-                                    Just s ->
-                                        List.member s.summaryPlayer1 storedNames
-                                            || List.member s.summaryPlayer2 storedNames
-
-                                    Nothing ->
-                                        False
-
-                            status =
-                                Maybe.map .summaryStatus summary
-                        in
-                        if isReturningPlayer || status == Just Lobby.WaitingForPlayers then
+                        if shouldJoinGame model.storedPlayers summaries gameid then
                             ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
                             , Cmd.none
                             )
@@ -675,14 +625,14 @@ joinGameSuccess model gameid joinResponse =
         finalgame =
             buildGame name servergame
 
-        newPlayer =
-            { playerName = name
+        session =
+            { name = name
             , token = token
             }
 
         saveCmd =
             if not (String.isEmpty name) then
-                Ports.savePlayer (encodePlayer newPlayer)
+                Ports.savePlayer (encodePlayer session)
 
             else
                 Cmd.none
@@ -740,7 +690,7 @@ joinGameSuccess model gameid joinResponse =
             else
                 { finalgame | state = WaitingForOpponent }
     in
-    ( { model | page = PlayingPage gameid name token gameWithState initialLog }
+    ( { model | page = GamePage gameid (Just session) gameWithState initialLog }
     , Cmd.batch [ saveCmd, sseCmd ]
     )
 
@@ -752,11 +702,11 @@ handleMoveConfirmation result model =
             -- Move accepted: will be applied via GameStream SSE
             ( model, Cmd.none )
 
-        ( _, PlayingPage gameid name token game history_ ) ->
+        ( _, GamePage gameid (Just session) game log ) ->
             -- Move rejected or network error: revert to Thinking if still pending
             case game.state of
                 MoveDone _ ->
-                    ( { model | page = PlayingPage gameid name token { game | state = Thinking } history_ }
+                    ( { model | page = GamePage gameid (Just session) { game | state = Thinking } log }
                     , Cmd.none
                     )
 
@@ -815,7 +765,7 @@ handleSpectateGame result model =
                         initialLog =
                             List.map Game.MoveEntry servergame.gameHistory ++ startMsg ++ blackMsg ++ whiteMsg
                     in
-                    ( { model | page = SpectatingPage gameid game initialLog }
+                    ( { model | page = GamePage gameid Nothing game initialLog }
                     , Ports.openGameStream gameid
                     )
 
@@ -845,7 +795,7 @@ handleGameEvent value model =
     case Decode.decodeValue Api.decodeGameEvent value of
         Ok event ->
             case model.page of
-                PlayingPage gameid name token game log ->
+                GamePage gameid session game log ->
                     case game.state of
                         GameOver _ ->
                             ( model, Cmd.none )
@@ -862,42 +812,20 @@ handleGameEvent value model =
                                                 updatedGame =
                                                     case maybeWinner of
                                                         Just winnerStr ->
-                                                            let
-                                                                winnerColor =
-                                                                    if winnerStr == "White" then
-                                                                        White
-
-                                                                    else
-                                                                        Black
-                                                            in
-                                                            { movedGame | state = GameOver winnerColor }
+                                                            { movedGame | state = GameOver (parseWinnerColor winnerStr) }
 
                                                         Nothing ->
                                                             movedGame
-
-                                                soundCmd =
-                                                    Ports.playSound "move"
                                             in
-                                            ( { model | page = PlayingPage gameid name token updatedGame (Game.MoveEntry gameMove :: log) }
-                                            , soundCmd
+                                            ( { model | page = GamePage gameid session updatedGame (Game.MoveEntry gameMove :: log) }
+                                            , Ports.playSound "move"
                                             )
 
                                         Nothing ->
                                             ( model, Cmd.none )
 
                                 Api.ConcedeEvent winnerStr ->
-                                    let
-                                        winnerColor =
-                                            if winnerStr == "White" then
-                                                White
-
-                                            else
-                                                Black
-
-                                        updatedGame =
-                                            { game | state = GameOver winnerColor }
-                                    in
-                                    ( { model | page = PlayingPage gameid name token updatedGame log }
+                                    ( { model | page = GamePage gameid session { game | state = GameOver (parseWinnerColor winnerStr) } log }
                                     , Cmd.none
                                     )
 
@@ -915,75 +843,7 @@ handleGameEvent value model =
                                         updatedGame =
                                             { game | state = Thinking }
                                     in
-                                    ( { model | page = PlayingPage gameid name token updatedGame (startMsg :: joinedMsg :: log) }
-                                    , Cmd.none
-                                    )
-
-                SpectatingPage gameid game log ->
-                    case game.state of
-                        GameOver _ ->
-                            ( model, Cmd.none )
-
-                        _ ->
-                            case event of
-                                Api.MoveEvent moveStr _ maybeWinner ->
-                                    case Api.stringToGameMove moveStr of
-                                        Just gameMove ->
-                                            let
-                                                movedGame =
-                                                    game |> Game.update (NewGameMove <| transformGameMove gameMove)
-
-                                                updatedGame =
-                                                    case maybeWinner of
-                                                        Just winnerStr ->
-                                                            let
-                                                                winnerColor =
-                                                                    if winnerStr == "White" then
-                                                                        White
-
-                                                                    else
-                                                                        Black
-                                                            in
-                                                            { movedGame | state = GameOver winnerColor }
-
-                                                        Nothing ->
-                                                            movedGame
-                                            in
-                                            ( { model | page = SpectatingPage gameid updatedGame (Game.MoveEntry gameMove :: log) }
-                                            , Ports.playSound "move"
-                                            )
-
-                                        Nothing ->
-                                            ( model, Cmd.none )
-
-                                Api.ConcedeEvent winnerStr ->
-                                    let
-                                        winnerColor =
-                                            if winnerStr == "White" then
-                                                White
-
-                                            else
-                                                Black
-
-                                        updatedGame =
-                                            { game | state = GameOver winnerColor }
-                                    in
-                                    ( { model | page = SpectatingPage gameid updatedGame log }
-                                    , Cmd.none
-                                    )
-
-                                Api.PlayerJoinedEvent joinedName joinedColor ->
-                                    let
-                                        colorStr =
-                                            String.toLower joinedColor
-
-                                        joinedMsg =
-                                            Game.SystemEntry (joinedName ++ " has joined the game as " ++ colorStr ++ ".")
-
-                                        startMsg =
-                                            Game.SystemEntry "Both players are present, the game begins."
-                                    in
-                                    ( { model | page = SpectatingPage gameid game (startMsg :: joinedMsg :: log) }
+                                    ( { model | page = GamePage gameid session updatedGame (startMsg :: joinedMsg :: log) }
                                     , Cmd.none
                                     )
 
