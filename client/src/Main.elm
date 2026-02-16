@@ -49,6 +49,7 @@ type Page
     | LobbyPage Lobby.Model
     | EnterNamePage GameId EnterName.Model
     | PlayingPage GameId PlayerName PlayerToken Game (List Game.LogEntry)
+    | SpectatingPage GameId Game (List Game.LogEntry)
 
 
 
@@ -71,6 +72,14 @@ subscriptions model =
         sseSub =
             case model.page of
                 PlayingPage _ _ _ game _ ->
+                    case game.state of
+                        GameOver _ ->
+                            Sub.none
+
+                        _ ->
+                            Ports.gameEventReceived GameEventReceived
+
+                SpectatingPage _ game _ ->
                     case game.state of
                         GameOver _ ->
                             Sub.none
@@ -130,6 +139,15 @@ view model =
                         )
 
                 PlayingPage _ _ _ game log ->
+                    Html.div [ HtmlA.class "game-container" ]
+                        ((game
+                            |> Game.view
+                            |> List.map (Html.map GotGameMsg)
+                         )
+                            ++ [ Game.viewLog log ]
+                        )
+
+                SpectatingPage _ game log ->
                     Html.div [ HtmlA.class "game-container" ]
                         ((game
                             |> Game.view
@@ -228,6 +246,24 @@ buildGame name servergame =
 
 
 
+buildSpectatorGame : ServerGame -> Game
+buildSpectatorGame servergame =
+    let
+        game =
+            buildGame servergame.gameWhiteName servergame
+
+        gameWithWinner =
+            case servergame.gameWinner of
+                Just winnerColor ->
+                    { game | state = GameOver winnerColor }
+
+                Nothing ->
+                    game
+    in
+    { gameWithWinner | spectating = True }
+
+
+
 -- UPDATE
 
 
@@ -292,7 +328,7 @@ handleUrlChange url model =
             String.dropLeft 1 url.path
     in
     case model.page of
-        LobbyPage _ ->
+        LobbyPage lobbyModel ->
             if gameidStr == "newgame" then
                 ( model, Cmd.batch [ Nav.replaceUrl model.key "/", Cmd.map GotServerMsg Api.getGameIdFromServer ] )
 
@@ -302,9 +338,34 @@ handleUrlChange url model =
             else
                 case String.toInt gameidStr of
                     Just gameid ->
-                        ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
-                        , Ports.closeLobbyStream ()
-                        )
+                        let
+                            summary =
+                                List.filter (\s -> s.summaryId == gameid) lobbyModel.games |> List.head
+
+                            storedNames =
+                                List.map .playerName model.storedPlayers
+
+                            isReturningPlayer =
+                                case summary of
+                                    Just s ->
+                                        List.member s.summaryPlayer1 storedNames
+                                            || List.member s.summaryPlayer2 storedNames
+
+                                    Nothing ->
+                                        False
+
+                            status =
+                                Maybe.map .summaryStatus summary
+                        in
+                        if isReturningPlayer || status == Just Lobby.WaitingForPlayers then
+                            ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
+                            , Ports.closeLobbyStream ()
+                            )
+
+                        else
+                            ( { model | page = Redirect url }
+                            , Cmd.batch [ Ports.closeLobbyStream (), Cmd.map GotServerMsg (Api.getGameFromServer gameid) ]
+                            )
 
                     Nothing ->
                         ( model, Cmd.none )
@@ -317,6 +378,14 @@ handleUrlChange url model =
                 ( { model | page = Redirect url }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
         PlayingPage _ _ _ _ _ ->
+            ( { model | page = Redirect url }
+            , Cmd.batch
+                [ Ports.closeGameStream ()
+                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                ]
+            )
+
+        SpectatingPage _ _ _ ->
             ( { model | page = Redirect url }
             , Cmd.batch
                 [ Ports.closeGameStream ()
@@ -460,6 +529,9 @@ handleServerMsg servermsg model =
         ReceivedConcedeResponse _ ->
             ( model, Cmd.none )
 
+        ReceivedGameFromServer result ->
+            handleSpectateGame result model
+
 
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
 handleGameSummaries result model =
@@ -478,9 +550,34 @@ handleGameSummaries result model =
             case maybeGameId of
                 Just gameid ->
                     if List.member gameid gameIds then
-                        ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
-                        , Cmd.none
-                        )
+                        let
+                            summary =
+                                List.filter (\s -> s.summaryId == gameid) summaries |> List.head
+
+                            storedNames =
+                                List.map .playerName model.storedPlayers
+
+                            isReturningPlayer =
+                                case summary of
+                                    Just s ->
+                                        List.member s.summaryPlayer1 storedNames
+                                            || List.member s.summaryPlayer2 storedNames
+
+                                    Nothing ->
+                                        False
+
+                            status =
+                                Maybe.map .summaryStatus summary
+                        in
+                        if isReturningPlayer || status == Just Lobby.WaitingForPlayers then
+                            ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
+                            , Cmd.none
+                            )
+
+                        else
+                            ( model
+                            , Cmd.map GotServerMsg (Api.getGameFromServer gameid)
+                            )
 
                     else
                         ( { model | page = LobbyPage { games = summaries, currentTime = Time.millisToPosix 0 } }
@@ -671,6 +768,65 @@ handleMoveConfirmation result model =
 
 
 
+handleSpectateGame : Result Http.Error ServerGame -> Model -> ( Model, Cmd Msg )
+handleSpectateGame result model =
+    case ( result, model.page ) of
+        ( Ok servergame, Redirect url ) ->
+            let
+                gameidStr =
+                    String.dropLeft 1 url.path
+
+                maybeGameId =
+                    String.toInt gameidStr
+            in
+            case maybeGameId of
+                Just gameid ->
+                    let
+                        game =
+                            buildSpectatorGame servergame
+
+                        whiteName =
+                            servergame.gameWhiteName
+
+                        blackName =
+                            servergame.gameBlackName
+
+                        whiteMsg =
+                            if not (String.isEmpty whiteName) then
+                                [ Game.SystemEntry (whiteName ++ " has joined the game as white.") ]
+
+                            else
+                                []
+
+                        blackMsg =
+                            if not (String.isEmpty blackName) then
+                                [ Game.SystemEntry (blackName ++ " has joined the game as black.") ]
+
+                            else
+                                []
+
+                        startMsg =
+                            if not (String.isEmpty whiteName) && not (String.isEmpty blackName) then
+                                [ Game.SystemEntry "Both players are present, the game begins." ]
+
+                            else
+                                []
+
+                        initialLog =
+                            List.map Game.MoveEntry servergame.gameHistory ++ startMsg ++ blackMsg ++ whiteMsg
+                    in
+                    ( { model | page = SpectatingPage gameid game initialLog }
+                    , Ports.openGameStream gameid
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        _ ->
+            ( model, Cmd.none )
+
+
+
 -- SSE EVENT HANDLERS
 
 
@@ -760,6 +916,74 @@ handleGameEvent value model =
                                             { game | state = Thinking }
                                     in
                                     ( { model | page = PlayingPage gameid name token updatedGame (startMsg :: joinedMsg :: log) }
+                                    , Cmd.none
+                                    )
+
+                SpectatingPage gameid game log ->
+                    case game.state of
+                        GameOver _ ->
+                            ( model, Cmd.none )
+
+                        _ ->
+                            case event of
+                                Api.MoveEvent moveStr _ maybeWinner ->
+                                    case Api.stringToGameMove moveStr of
+                                        Just gameMove ->
+                                            let
+                                                movedGame =
+                                                    game |> Game.update (NewGameMove <| transformGameMove gameMove)
+
+                                                updatedGame =
+                                                    case maybeWinner of
+                                                        Just winnerStr ->
+                                                            let
+                                                                winnerColor =
+                                                                    if winnerStr == "White" then
+                                                                        White
+
+                                                                    else
+                                                                        Black
+                                                            in
+                                                            { movedGame | state = GameOver winnerColor }
+
+                                                        Nothing ->
+                                                            movedGame
+                                            in
+                                            ( { model | page = SpectatingPage gameid updatedGame (Game.MoveEntry gameMove :: log) }
+                                            , Ports.playSound "move"
+                                            )
+
+                                        Nothing ->
+                                            ( model, Cmd.none )
+
+                                Api.ConcedeEvent winnerStr ->
+                                    let
+                                        winnerColor =
+                                            if winnerStr == "White" then
+                                                White
+
+                                            else
+                                                Black
+
+                                        updatedGame =
+                                            { game | state = GameOver winnerColor }
+                                    in
+                                    ( { model | page = SpectatingPage gameid updatedGame log }
+                                    , Cmd.none
+                                    )
+
+                                Api.PlayerJoinedEvent joinedName joinedColor ->
+                                    let
+                                        colorStr =
+                                            String.toLower joinedColor
+
+                                        joinedMsg =
+                                            Game.SystemEntry (joinedName ++ " has joined the game as " ++ colorStr ++ ".")
+
+                                        startMsg =
+                                            Game.SystemEntry "Both players are present, the game begins."
+                                    in
+                                    ( { model | page = SpectatingPage gameid game (startMsg :: joinedMsg :: log) }
                                     , Cmd.none
                                     )
 

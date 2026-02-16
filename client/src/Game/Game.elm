@@ -34,6 +34,7 @@ type alias Game =
     , opCards : ( Card, Card )
     , commonCard : Card
     , state : GameState
+    , spectating : Bool
     }
 
 
@@ -116,15 +117,19 @@ view game =
         , Svg.g
             [ SvgA.class "concede-btn"
             , SvgA.display
-                (case game.state of
-                    WaitingForOpponent ->
-                        "none"
+                (if game.spectating then
+                    "none"
 
-                    GameOver _ ->
-                        "none"
+                 else
+                    case game.state of
+                        WaitingForOpponent ->
+                            "none"
 
-                    _ ->
-                        "block"
+                        GameOver _ ->
+                            "none"
+
+                        _ ->
+                            "block"
                 )
             , SvgE.onClick UserClickedConcede
             ]
@@ -145,20 +150,36 @@ view game =
                 [ Svg.text "Concede" ]
             ]
         , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "4", SvgA.textAnchor "end" ]
-            [ Svg.text <|
-                case game.state of
-                    WaitingForOpponent ->
-                        "waiting for opponent..."
+            (case game.state of
+                WaitingForOpponent ->
+                    [ Svg.text "waiting for opponent..." ]
 
-                    GameOver winner ->
+                GameOver winner ->
+                    [ Svg.text <|
                         case winner of
                             White ->
                                 "White wins!"
 
                             Black ->
                                 "Black wins!"
+                    ]
 
-                    _ ->
+                _ ->
+                    if game.spectating then
+                        let
+                            colorStr =
+                                case game.nextColor of
+                                    White ->
+                                        "white"
+
+                                    Black ->
+                                        "black"
+                        in
+                        [ Svg.tspan [] [ Svg.text (colorStr ++ " to move") ]
+                        , Svg.tspan [ SvgA.x "145", SvgA.dy "5" ] [ Svg.text "Spectator" ]
+                        ]
+
+                    else
                         let
                             isYourTurn =
                                 game.nextColor == game.myColor
@@ -170,13 +191,15 @@ view game =
                                 else
                                     " to move"
                         in
-                        case game.nextColor of
-                            White ->
-                                "white" ++ suffix
+                        [ Svg.text <|
+                            case game.nextColor of
+                                White ->
+                                    "white" ++ suffix
 
-                            Black ->
-                                "black" ++ suffix
-            ]
+                                Black ->
+                                    "black" ++ suffix
+                        ]
+            )
         ]
     ]
 
@@ -212,7 +235,7 @@ update msg game =
                     game
 
                 _ ->
-                    if game.myColor == game.nextColor then
+                    if not game.spectating && game.myColor == game.nextColor then
                         handleClick ( x, y ) game
 
                     else
@@ -443,6 +466,7 @@ setupNewGame cards playerColor nextColor =
         ( Maybe.withDefault dummyCard (List.head <| List.drop 2 <| cards), Maybe.withDefault dummyCard (List.head <| List.drop 3 <| cards) )
         (Maybe.withDefault dummyCard (List.head <| List.drop 4 <| cards))
         Thinking
+        False
         |> (if playerColor == Black then
                 flipCards
 

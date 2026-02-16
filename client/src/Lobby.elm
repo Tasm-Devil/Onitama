@@ -126,7 +126,18 @@ createGameTableRow currentTime summary =
             [ Html.text lastActivityAgo ]
         , Html.td []
             [ Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
-                [ Html.text "Join" ]
+                [ Html.text
+                    (case summary.summaryStatus of
+                        WaitingForPlayers ->
+                            "Join"
+
+                        InProgress ->
+                            "Watch"
+
+                        Completed ->
+                            "Review"
+                    )
+                ]
             ]
         ]
 

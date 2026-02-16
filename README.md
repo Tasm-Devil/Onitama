@@ -74,7 +74,7 @@ Base: `http://localhost:8080/1/onitama`
 | Endpoint | Events |
 |----------|--------|
 | `/games/stream` | `lobbyChanged` (client refetches summaries) |
-| `/games/{id}/stream` | `move`, `concede` |
+| `/games/{id}/stream` | `move`, `concede`, `playerJoined` |
 
 ```bash
 # Test SSE
@@ -112,19 +112,15 @@ make docker-start  # Build + run on http://localhost:8080
 - [x] Per-player token system
 - [x] Automatic game cleanup
 - [x] CLI & YAML config
-- [x] Game list in lobby: newest first
-- [x] Fix "just now" timestamp not updating
-- [X] Mobile responsive table width
-- [x] Simplify lobby SSE to invalidate+refetch pattern
 - [X] Server-side move validation
 - [x] Dark mode (prefers-color-scheme) and CSS custom properties
 - [x] Responsive sidebar game log on wide displays
 - [x] Game log system messages (join notifications, game start) via `playerJoined` SSE event
 - [x] Concede button
-- [ ] "You won/lost" result screen and "New Match" rematch option
-- [ ] Spectator mode
+- [X] Spectator mode
 - [ ] Move playback: mouse over element in game-log shows arrow from cell to cell
 - [ ] AI opponent
+- [ ] Multi-language support (i18n via browser language)
 - [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth
 

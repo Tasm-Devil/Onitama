@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, gameMoveToString, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -223,6 +223,7 @@ type Msg
     | ReceivedPostCreatedFromServer (Result Http.Error (Result MoveError Game.GameMove))
     | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary))
     | ReceivedConcedeResponse (Result Http.Error (Result ConcedeError Color))
+    | ReceivedGameFromServer (Result Http.Error ServerGame)
 
 
 
@@ -242,6 +243,14 @@ getGameSummariesFromServer =
         , expect = Http.expectJson ReceivedGameSummariesFromServer (Decode.list decodeGameSummary)
         , timeout = Nothing
         , tracker = Nothing
+        }
+
+
+getGameFromServer : GameId -> Cmd Msg
+getGameFromServer gameid =
+    Http.get
+        { url = "/1/onitama/games/" ++ String.fromInt gameid
+        , expect = Http.expectJson ReceivedGameFromServer decodeGame
         }
 
 
