@@ -41,11 +41,11 @@ view myNames model =
     Html.div [ HtmlA.class "gamelist" ]
         [ Html.h1 []
             [ Html.text "ONITAMA" ]
-        , Html.p []
-            [ Html.text "Onitama is a two player abstract board game. You can play it online here! Below is a list of in-progress games. To start a new game click the \"new game\" button and distribute the url to another player to join." ]
-        , Html.p []
+        , Html.p [ HtmlA.class "lobby-description" ]
+            [ Html.text "A two-player abstract board game. Play with friends or challenge the AI." ]
+        , Html.p [ HtmlA.class "lobby-description" ]
             [ Html.text "Be sure to read "
-            , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf" ]
+            , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf", HtmlA.target "_blank" ]
                 [ Html.text "the rules" ]
             , Html.text " if you haven't played before."
             ]
@@ -55,25 +55,30 @@ view myNames model =
             , Html.a [ HtmlA.class "new-game", HtmlA.href "/newgame-ai" ]
                 [ Html.text "Play vs AI" ]
             ]
-        , Html.table [ HtmlA.id "game-table" ]
-            (Html.thead []
-                [ Html.tr []
-                    [ Html.td []
-                        [ Html.text "Game" ]
-                    , Html.td []
-                        [ Html.text "Moves" ]
-                    , Html.td []
-                        [ Html.text "State" ]
-                    , Html.td []
-                        [ Html.text "Created" ]
-                    , Html.td []
-                        [ Html.text "Last Activity" ]
-                    , Html.td []
-                        [ Html.text "" ]
+        , if List.isEmpty model.games then
+            Html.div [ HtmlA.class "empty-state" ]
+                [ Html.text "No games yet \u{2014} start one!" ]
+
+          else
+            Html.table [ HtmlA.id "game-table" ]
+                (Html.thead []
+                    [ Html.tr []
+                        [ Html.td []
+                            [ Html.text "Game" ]
+                        , Html.td []
+                            [ Html.text "Moves" ]
+                        , Html.td []
+                            [ Html.text "State" ]
+                        , Html.td []
+                            [ Html.text "Created" ]
+                        , Html.td []
+                            [ Html.text "Last Activity" ]
+                        , Html.td []
+                            [ Html.text "" ]
+                        ]
                     ]
-                ]
-                :: List.map (createGameTableRow myNames model.currentTime) model.games
-            )
+                    :: List.map (createGameTableRow myNames model.currentTime) model.games
+                )
         ]
 
 
@@ -97,16 +102,16 @@ createGameTableRow myNames currentTime summary =
         gameDisplay =
             player1Display ++ " vs. " ++ player2Display
 
-        statusDisplay =
+        ( statusText, statusClass ) =
             case summary.summaryStatus of
                 WaitingForPlayers ->
-                    "Waiting for players"
+                    ( "Waiting", "status-waiting" )
 
                 InProgress ->
-                    "In progress"
+                    ( "In progress", "status-active" )
 
                 Completed ->
-                    "Completed"
+                    ( "Completed", "status-completed" )
 
         movesDisplay =
             String.fromInt summary.summaryMoveCount
@@ -123,7 +128,9 @@ createGameTableRow myNames currentTime summary =
         , Html.td []
             [ Html.text movesDisplay ]
         , Html.td []
-            [ Html.text statusDisplay ]
+            [ Html.span [ HtmlA.class ("status-badge " ++ statusClass) ]
+                [ Html.text statusText ]
+            ]
         , Html.td []
             [ Html.text createdAgo ]
         , Html.td []

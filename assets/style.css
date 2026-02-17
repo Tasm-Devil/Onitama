@@ -28,6 +28,12 @@
   --input-bg: #faf6f0;
   --input-border: #d0c8ba;
   --shadow: #7a6e60;
+  --status-waiting-bg: rgba(200, 160, 60, 0.15);
+  --status-waiting-text: #a07820;
+  --status-active-bg: rgba(80, 160, 60, 0.15);
+  --status-active-text: #4a8a30;
+  --status-completed-bg: rgba(140, 130, 120, 0.15);
+  --status-completed-text: #7a6e60;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -57,6 +63,12 @@
     --input-bg: #24201b;
     --input-border: #3a3328;
     --shadow: #0a0805;
+    --status-waiting-bg: rgba(200, 160, 60, 0.2);
+    --status-waiting-text: #c8a040;
+    --status-active-bg: rgba(80, 160, 60, 0.2);
+    --status-active-text: #6aaa50;
+    --status-completed-bg: rgba(140, 130, 120, 0.2);
+    --status-completed-text: #9a8e80;
   }
 }
 
@@ -106,21 +118,39 @@ p a {
 
   .gamelist {
     padding: 8px;
+
+    h1 {
+      text-align: center;
+      letter-spacing: 0.3em;
+      margin: 2rem 0 1rem;
+    }
+
+    .lobby-description {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.95em;
+      margin: 0.25rem 0;
+    }
   }
 
   .new-game,
   .join-game {
-    padding: .5rem 2rem;
+    padding: .6rem 2.2rem;
     border: .5px solid var(--btn-border);
     border-radius: .5rem;
     text-decoration: none;
     color: var(--text);
     cursor: pointer;
+    font-size: 1.05em;
     background: linear-gradient(120deg, var(--btn-bg) 40%, var(--bg-hover) 50%, var(--btn-bg) 60%);
     background-size: 200% 100%;
+    background-position: 100% 0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    transition: background-position 0.4s ease, box-shadow 0.2s ease;
 
     &:hover {
-      background-color: var(--bg-hover);
+      background-position: 0 0;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
     }
 
     &:active {
@@ -132,12 +162,43 @@ p a {
     display: flex;
     justify-content: center;
     gap: 1rem;
-    margin: 16px auto;
+    margin: 2rem auto 2rem;
   }
 
   .new-game {
     width: 100px;
     text-align: center;
+  }
+
+  .empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 3rem 1rem;
+    font-size: 1.1em;
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 0.2em 0.7em;
+    border-radius: 999px;
+    font-size: 0.85em;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .status-waiting {
+    background: var(--status-waiting-bg);
+    color: var(--status-waiting-text);
+  }
+
+  .status-active {
+    background: var(--status-active-bg);
+    color: var(--status-active-text);
+  }
+
+  .status-completed {
+    background: var(--status-completed-bg);
+    color: var(--status-completed-text);
   }
 
   #game-table {
