@@ -138,7 +138,7 @@ instance FromJSON GameStatus
 
 -- Create a game summary from game data with player names
 gameToSummary :: GameId -> Text -> Text -> Game -> GameSummary
-gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner created lastAct) =
+gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner created lastAct _) =
   GameSummary
     { summaryId = gameId,
       summaryPlayer1 = if isNothing maybeWhiteId then "" else T.unpack whiteName,
@@ -164,8 +164,30 @@ instance ToJSON JoinRequest
 
 instance FromJSON JoinRequest
 
+-- Request body for creating a new game
+data NewGameRequest = NewGameRequest
+  { newGamePlayerName :: String,
+    newGameVsAI :: Bool
+  }
+  deriving (Show, Generic)
+
+instance ToJSON NewGameRequest
+
+instance FromJSON NewGameRequest
+
+-- Response for creating a new game
+data NewGameResponse = NewGameResponse
+  { newGameId :: GameId,
+    newGameJoinResponse :: JoinGameResponse
+  }
+  deriving (Show, Generic)
+
+instance ToJSON NewGameResponse
+
+instance FromJSON NewGameResponse
+
 -- RESTful API structure: /1/onitama/games/...
-type NewGame = "1" :> "onitama" :> "games" :> Post '[JSON] GameId
+type NewGame = "1" :> "onitama" :> "games" :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] NewGameRequest :> Post '[JSON] (Either JoinError NewGameResponse)
 
 type GetGameSummaries = "1" :> "onitama" :> "games" :> Get '[JSON] [GameSummary]
 
@@ -184,9 +206,11 @@ type GameStream = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "str
 
 type NewGamePage = "newgame" :> Get '[HTML] RawHtml
 
+type NewGameAIPage = "newgame-ai" :> Get '[HTML] RawHtml
+
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
-type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> LobbyStream :<|> GameStream :<|> NewGamePage :<|> Index
+type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> LobbyStream :<|> GameStream :<|> NewGamePage :<|> NewGameAIPage :<|> Index
 
 api :: Proxy API
 api = Proxy

@@ -171,7 +171,7 @@ cleanupOldGames (DB dataVar _ _ _ hasChangedVar config) onCleanup = do
 
 -- Determine game status from Game data
 determineGameStatus :: Game -> GameStatus
-determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _) =
+determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _ _) =
   case maybeWinner of
     Just _ -> Completed
     Nothing ->
@@ -393,7 +393,7 @@ joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText ma
       maybeGame <- getGameById db gameId
       case maybeGame of
         Nothing -> return $ Left JEGameNotFound
-        Just game@(Game maybeWhiteId maybeBlackId cards history winner _ _) -> do
+        Just game@(Game maybeWhiteId maybeBlackId cards history winner _ _ aiDiff) -> do
           -- Determine which player is joining
           playerResult <- case maybeProvidedToken of
             Just token -> do
@@ -446,8 +446,8 @@ joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText ma
                   -- Try to join an empty slot
                   now <- getCurrentTime
                   let updatedGame
-                        | isNothing maybeWhiteId = Just $ Game {player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now}
-                        | isNothing maybeBlackId = Just $ Game {player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now}
+                        | isNothing maybeWhiteId = Just $ Game {player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now, aiDifficulty = aiDiff}
+                        | isNothing maybeBlackId = Just $ Game {player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now, aiDifficulty = aiDiff}
                         | otherwise = Nothing -- Game is full
                   case updatedGame of
                     Nothing -> do
@@ -495,8 +495,8 @@ concedeGame db@(DB dataVar _ _ _ hasChangedVar _) gameId token = do
             currentState <- readTVar dataVar
             case Map.lookup gameId (dbGames currentState) of
               Nothing -> return False
-              Just (Game p1 p2 cards history _ created lastAct) -> do
-                let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor, createdAt = created, lastActivity = lastAct}
+              Just (Game p1 p2 cards history _ created lastAct aiDiff) -> do
+                let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor, createdAt = created, lastActivity = lastAct, aiDifficulty = aiDiff}
                 writeTVar dataVar $
                   currentState {dbGames = Map.insert gameId updatedGame (dbGames currentState)}
                 writeTVar hasChangedVar True

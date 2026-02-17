@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), ServerGame, concede, decodeGameEvent, gameMoveToString, getGameFromServer, getGameIdFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, PlayerToken, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -217,13 +217,19 @@ joinErrorToString error =
             "Network error: " ++ msg
 
 
+type alias NewGameResponse =
+    { newGameId : GameId
+    , newGameJoinResponse : JoinGameResponse
+    }
+
+
 type Msg
-    = ReceivedGameIdFromServer (Result Http.Error GameId)
-    | ReceivedJoinGameResponse (Result Http.Error (Result JoinError JoinGameResponse))
+    = ReceivedJoinGameResponse (Result Http.Error (Result JoinError JoinGameResponse))
     | ReceivedPostCreatedFromServer (Result Http.Error (Result MoveError Game.GameMove))
     | ReceivedGameSummariesFromServer (Result Http.Error (List GameSummary))
     | ReceivedConcedeResponse (Result Http.Error (Result ConcedeError Color))
     | ReceivedGameFromServer (Result Http.Error ServerGame)
+    | ReceivedNewGameResponse (Result Http.Error (Result JoinError NewGameResponse))
 
 
 
@@ -254,12 +260,37 @@ getGameFromServer gameid =
         }
 
 
-getGameIdFromServer : Cmd Msg
-getGameIdFromServer =
-    Http.post
-        { url = "/1/onitama/games"
-        , body = Http.emptyBody
-        , expect = Http.expectJson ReceivedGameIdFromServer Decode.int
+createGame : String -> Bool -> Maybe PlayerToken -> Cmd Msg
+createGame name vsAI maybeToken =
+    let
+        tokenHeader =
+            case maybeToken of
+                Just token ->
+                    [ Http.header "X-Session-Token" token ]
+
+                Nothing ->
+                    []
+
+        eitherDecoder =
+            Decode.oneOf
+                [ Decode.field "Right" decodeNewGameResponse |> Decode.map Ok
+                , Decode.field "Left" decodeJoinError |> Decode.map Err
+                ]
+
+        requestBody =
+            Encode.object
+                [ ( "newGamePlayerName", Encode.string name )
+                , ( "newGameVsAI", Encode.bool vsAI )
+                ]
+    in
+    Http.request
+        { method = "POST"
+        , headers = tokenHeader
+        , url = "/1/onitama/games"
+        , body = Http.jsonBody requestBody
+        , expect = Http.expectJson ReceivedNewGameResponse eitherDecoder
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
@@ -336,6 +367,8 @@ concede gameid token =
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
 
 
 
@@ -495,6 +528,13 @@ decodeJoinGameResponse =
         |> required "responseGame" decodeGame
         |> required "responseToken" Decode.string
         |> required "responsePlayerName" Decode.string
+
+
+decodeNewGameResponse : Decoder NewGameResponse
+decodeNewGameResponse =
+    Decode.succeed NewGameResponse
+        |> required "newGameId" Decode.int
+        |> required "newGameJoinResponse" decodeJoinGameResponse
 
 
 encodeGameMove : Game.GameMove -> Encode.Value

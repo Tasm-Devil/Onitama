@@ -15,6 +15,8 @@ import Api
     JoinGameResponse (..),
     JoinRequest (..),
     MoveError (..),
+    NewGameRequest (..),
+    NewGameResponse (..),
     RawHtml (RawHtml),
     SessionToken (..),
     api,
@@ -24,11 +26,16 @@ import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (atomically, readTQueue)
 import Control.Exception (finally)
+import Control.Monad (guard, unless, void, when)
 import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Class (lift)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Control.Monad.Trans.Reader (ReaderT (runReaderT), ask, asks)
 import Data.Aeson (encode)
 import Data.ByteString.Builder (byteString, lazyByteString)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
+import Data.Maybe (isNothing)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Database
@@ -36,9 +43,11 @@ import Database
     DB,
     Player (..),
     concedeGame,
+    createPlayer,
     getAllGameSummaries,
     getGameById,
     getGameWithNames,
+    getPlayerByName,
     getPlayerByToken,
     initDB,
     insertGameWithNewId,
@@ -46,13 +55,12 @@ import Database
     logDBState,
     updateGame,
   )
-import Control.Monad (when)
-import Data.Maybe (isNothing)
-import Game (Color (..), Game (..), GameMove)
+import Game (Color (..), Game (..), GameMove, addMoveToGame)
+import qualified Minimax
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
-import Onitama (give5Cards, validateMove)
+import Onitama (formatMove, give5Cards, replayGame, validateMove)
 import qualified Onitama
 import Options (cleanupOptionsToConfig)
 import qualified Options
@@ -104,6 +112,14 @@ appWithConfig opts =
 -- | Custom monad for handlers: gives access to AppEnv via ReaderT
 type AppM = ReaderT AppEnv Handler
 
+-- | Convert Maybe to ExceptT, throwing the given error on Nothing.
+noteE :: (Monad m) => e -> Maybe a -> ExceptT e m a
+noteE err = maybe (throwE err) return
+
+-- | Convert Either to ExceptT.
+hoistEither :: (Monad m) => Either e a -> ExceptT e m a
+hoistEither = either throwE return
+
 -- | Build the complete server: typed API routes + static file serving
 makeServer :: Maybe FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
@@ -136,10 +152,21 @@ handlers env =
     :<|> lobbyStreamHandler env
     :<|> gameStreamHandler env
     :<|> getNewGamePageHtml
+    :<|> getNewGameAIPageHtml
     :<|> getIndexHtml
 
-newGame :: AppM GameId
-newGame = do
+newGame :: Maybe SessionToken -> NewGameRequest -> AppM (Either JoinError NewGameResponse)
+newGame maybeToken (NewGameRequest name vsAI) = do
+  let trimmedName = T.strip (T.pack name)
+  if T.null trimmedName
+    then return $ Left JEInvalidName
+    else
+      if vsAI
+        then newAIGame maybeToken trimmedName
+        else newMultiplayerGame maybeToken trimmedName
+
+newMultiplayerGame :: Maybe SessionToken -> T.Text -> AppM (Either JoinError NewGameResponse)
+newMultiplayerGame maybeToken playerName = do
   env <- ask
   let db = appDB env
       store = appSubscribers env
@@ -153,14 +180,83 @@ newGame = do
             history = [],
             winner = Nothing,
             createdAt = now,
-            lastActivity = now
+            lastActivity = now,
+            aiDifficulty = Nothing
           }
   gameId <- liftIO $ insertGameWithNewId db game
+  liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
+  result <- liftIO $ joinGameWithToken db gameId playerName maybeToken
+  case result of
+    Left err -> return $ Left err
+    Right joinResponse -> do
+      liftIO $ do
+        logDBState "After creating game" db
+        broadcastLobby store LobbyChanged
+        broadcastGame store gameId (PlayerJoinedEvent playerName White)
+      return $ Right (NewGameResponse { newGameId = gameId, newGameJoinResponse = joinResponse })
+
+newAIGame :: Maybe SessionToken -> T.Text -> AppM (Either JoinError NewGameResponse)
+newAIGame maybeToken playerName = runExceptT $ do
+  env <- lift ask
+  let db = appDB env
+      store = appSubscribers env
+      aiName = T.pack "Computer"
+      depth = 5
+
+  -- Get or create AI player
+  maybeAI <- liftIO $ getPlayerByName db aiName
+  aiPlayer <- case maybeAI of
+    Just p -> return p
+    Nothing -> liftIO $ createPlayer db aiName
+
+  -- Create game with AI as Black
+  newCards <- liftIO give5Cards
+  now <- liftIO getCurrentTime
+  let game =
+        Game
+          { player_white = Nothing,
+            player_black = Just (playerId aiPlayer),
+            cards = newCards,
+            history = [],
+            winner = Nothing,
+            createdAt = now,
+            lastActivity = now,
+            aiDifficulty = Just depth
+          }
+  gameId <- liftIO $ insertGameWithNewId db game
+  liftIO $ putStrLn $ "Creating AI game with ID: " ++ show gameId
+
+  -- If Black (AI) starts, apply AI first move
+  currentGame <- noteE JEGameNotFound =<< liftIO (getGameById db gameId)
+  let gs = Onitama.initGameState (cards currentGame)
+  gameAfterAI <- case Onitama.gsNextColor gs of
+    Black -> applyAIOpening db gameId depth gs currentGame
+    White -> return currentGame
+
+  -- Join human as White
+  joinResponse <- hoistEither =<< liftIO (joinGameWithToken db gameId playerName maybeToken)
   liftIO $ do
-    putStrLn $ "Creating new game with ID: " ++ show gameId
-    logDBState "After creating game" db
     broadcastLobby store LobbyChanged
-  return gameId
+    broadcastGame store gameId (PlayerJoinedEvent playerName White)
+  unless (null $ history gameAfterAI) $ do
+    let (aiMove, aiTime) = head (history gameAfterAI)
+    liftIO $ broadcastGame store gameId (MoveEvent aiMove aiTime (winner gameAfterAI))
+  return $ NewGameResponse { newGameId = gameId, newGameJoinResponse = joinResponse }
+
+-- | Apply AI opening move if possible, otherwise return game unchanged.
+applyAIOpening :: DB -> GameId -> Int -> Onitama.GameState -> Game -> ExceptT JoinError AppM Game
+applyAIOpening db gameId depth gs currentGame =
+  case Minimax.bestMove depth gs of
+    Nothing -> return currentGame
+    Just pm -> do
+      let moveStr = formatMove pm
+      case validateMove (cards currentGame) [moveStr] of
+        Left _ -> return currentGame
+        Right maybeWinner -> do
+          aiNow <- liftIO getCurrentTime
+          _ <- liftIO $ updateGame db gameId (addMoveToGame moveStr aiNow maybeWinner)
+          liftIO $ putStrLn $ "AI made opening move: " ++ moveStr
+          noteE JEGameNotFound =<< liftIO (getGameById db gameId)
 
 getGameSummaries :: AppM [GameSummary]
 getGameSummaries = do
@@ -194,7 +290,8 @@ joinGame gameId maybeToken (JoinRequest name) = do
                 White -> isNothing (player_white gameBefore)
                 Black -> isNothing (player_black gameBefore)
           when slotWasEmpty $
-            liftIO $ broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
+            liftIO $
+              broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
         Nothing -> return ()
       liftIO $ broadcastLobby store LobbyChanged
       return $ Right joinResponse
@@ -208,58 +305,44 @@ getGame gameId = do
     Just game -> return game
 
 newMove :: GameId -> Maybe SessionToken -> GameMove -> AppM (Either MoveError GameMove)
-newMove gameId maybeToken move = do
-  case maybeToken of
-    Nothing -> return $ Left MEInvalidToken
-    Just token -> do
-      env <- ask
-      let db = appDB env
-          store = appSubscribers env
-      -- Get game first
-      maybeGame <- liftIO $ getGameById db gameId
-      case maybeGame of
-        Nothing -> return $ Left MEGameNotFound
-        Just game -> do
-          -- Validate token belongs to a player in this game
-          maybePlayer <- liftIO $ getPlayerByToken db token
-          let isInGame = case maybePlayer of
-                Just p ->
-                  let pid = playerId p
-                   in player_white game == Just pid || player_black game == Just pid
-                Nothing -> False
-          if not isInGame
-            then do
-              liftIO $ putStrLn "Move rejected: player not in game"
-              return $ Left MENotYourTurn
-            else do
-              -- Validate the move using Onitama rules (includes turn order, game-over check)
-              let historyMoves = move : map fst (history game)
-              case validateMove (cards game) historyMoves of
-                Left _ -> do
-                  liftIO $ putStrLn "Move rejected: invalid move"
-                  return $ Left MEInvalidMove
-                Right maybeWinner -> do
-                  -- Move is valid, apply it
-                  now <- liftIO getCurrentTime
-                  let updateGameFn (Game p1 p2 cs hist _ created _) =
-                            Game
-                              { player_white = p1,
-                                player_black = p2,
-                                cards = cs,
-                                history = (move, now) : hist,
-                                winner = maybeWinner,
-                                createdAt = created,
-                                lastActivity = now
-                              }
-                  success <- liftIO $ updateGame db gameId updateGameFn
-                  if success
-                    then do
-                      liftIO $ do
-                        putStrLn "Move accepted"
-                        broadcastGame store gameId (MoveEvent move now maybeWinner)
-                        broadcastLobby store LobbyChanged
-                      return $ Right move
-                    else return $ Left MEGameNotFound
+newMove gameId maybeToken move = runExceptT $ do
+  token <- noteE MEInvalidToken maybeToken
+  env <- lift ask
+  let db = appDB env
+      store = appSubscribers env
+
+  -- Get game and validate player
+  game <- noteE MEGameNotFound =<< liftIO (getGameById db gameId)
+  maybePlayer <- liftIO $ getPlayerByToken db token
+  let isInGame = case maybePlayer of
+        Just p ->
+          let pid = playerId p
+           in player_white game == Just pid || player_black game == Just pid
+        Nothing -> False
+  unless isInGame $ do
+    liftIO $ putStrLn "Move rejected: player not in game"
+    throwE MENotYourTurn
+
+  -- Validate move
+  let historyMoves = move : map fst (history game)
+  maybeWinner <- case validateMove (cards game) historyMoves of
+    Left _ -> do
+      liftIO $ putStrLn "Move rejected: invalid move"
+      throwE MEInvalidMove
+    Right mw -> return mw
+
+  -- Apply move
+  now <- liftIO getCurrentTime
+  success <- liftIO $ updateGame db gameId (addMoveToGame move now maybeWinner)
+  unless success $ throwE MEGameNotFound
+  liftIO $ do
+    putStrLn "Move accepted"
+    broadcastGame store gameId (MoveEvent move now maybeWinner)
+    broadcastLobby store LobbyChanged
+
+  -- Trigger AI response if applicable
+  when (isNothing maybeWinner) $ lift $ triggerAIMove gameId
+  return move
 
 concede :: GameId -> Maybe SessionToken -> AppM (Either ConcedeError Color)
 concede gameId maybeToken = do
@@ -277,6 +360,31 @@ concede gameId maybeToken = do
             broadcastGame store gameId (ConcedeEvent winnerColor)
             broadcastLobby store LobbyChanged
           return $ Right winnerColor
+
+triggerAIMove :: GameId -> AppM ()
+triggerAIMove gameId = void $ runMaybeT $ do
+  env <- lift ask
+  let db = appDB env
+      store = appSubscribers env
+
+  game <- MaybeT $ liftIO $ getGameById db gameId
+  depth <- MaybeT $ return $ aiDifficulty game
+  gs <- MaybeT $ return $ replayGame (cards game) (map fst $ history game)
+  guard $ isNothing (Onitama.gsWinner gs)
+  guard $ Onitama.gsNextColor gs == Black
+  pm <- MaybeT $ return $ Minimax.bestMove depth gs
+
+  let moveStr = formatMove pm
+      historyMoves = moveStr : map fst (history game)
+  maybeWinner <- MaybeT $ return $ either (const Nothing) Just $ validateMove (cards game) historyMoves
+
+  now <- liftIO getCurrentTime
+  success <- liftIO $ updateGame db gameId (addMoveToGame moveStr now maybeWinner)
+  guard success
+  liftIO $ do
+    putStrLn $ "AI move: " ++ moveStr
+    broadcastGame store gameId (MoveEvent moveStr now maybeWinner)
+    broadcastLobby store LobbyChanged
 
 -- | SSE handler for lobby stream
 lobbyStreamHandler :: AppEnv -> Tagged AppM Application
@@ -337,6 +445,9 @@ getNewGamePageHtml = do
   if exists
     then RawHtml <$> liftIO (Lazy.readFile path)
     else throwError err404
+
+getNewGameAIPageHtml :: AppM RawHtml
+getNewGameAIPageHtml = getNewGamePageHtml
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml _ = do

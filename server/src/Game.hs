@@ -1,9 +1,11 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Game where
 
-import Data.Aeson (FromJSON, ToJSON)
+import Data.Aeson (FromJSON (..), ToJSON, (.:), (.:?))
+import qualified Data.Aeson as Aeson
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
 
@@ -35,6 +37,27 @@ data Game = Game
     history :: [(GameMove, UTCTime)],
     winner :: Maybe Color,
     createdAt :: UTCTime,
-    lastActivity :: UTCTime
+    lastActivity :: UTCTime,
+    aiDifficulty :: Maybe Int
   }
-  deriving (Eq, Show, Generic, ToJSON, FromJSON)
+  deriving (Eq, Show, Generic, ToJSON)
+
+instance FromJSON Game where
+  parseJSON = Aeson.withObject "Game" $ \v ->
+    Game
+      <$> v .: "player_white"
+      <*> v .: "player_black"
+      <*> v .: "cards"
+      <*> v .: "history"
+      <*> v .: "winner"
+      <*> v .: "createdAt"
+      <*> v .: "lastActivity"
+      <*> v .:? "aiDifficulty"
+
+addMoveToGame :: GameMove -> UTCTime -> Maybe Color -> Game -> Game
+addMoveToGame move now maybeWinner g =
+  g
+    { history = (move, now) : history g,
+      winner = maybeWinner,
+      lastActivity = now
+    }

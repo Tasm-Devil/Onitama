@@ -44,10 +44,16 @@ type alias Model =
     }
 
 
+type GameCreation
+    = JoinExisting GameId
+    | CreateNew
+    | CreateNewVsAI
+
+
 type Page
     = Redirect Url
     | LobbyPage Lobby.Model
-    | EnterNamePage GameId EnterName.Model
+    | EnterNamePage GameCreation EnterName.Model
     | GamePage GameId (Maybe PlayerSession) Game (List Game.LogEntry)
 
 
@@ -202,9 +208,6 @@ decodePlayers value =
         |> Result.withDefault []
 
 
-
-
-
 parseWinnerColor : String -> Color
 parseWinnerColor str =
     if str == "White" then
@@ -235,7 +238,7 @@ shouldJoinGame storedPlayers summaries gameid =
         status =
             Maybe.map .summaryStatus summary
     in
-    isReturningPlayer || status == Just Lobby.WaitingForPlayers
+    status /= Just Lobby.Completed && (isReturningPlayer || status == Just Lobby.WaitingForPlayers)
 
 
 buildGame : String -> ServerGame -> Game
@@ -255,7 +258,6 @@ buildGame name servergame =
                 commonCard.startPlayer
     in
     List.foldr (\gameMove -> Game.update (NewGameMove <| transformGameMove gameMove)) newgame servergame.gameHistory
-
 
 
 buildSpectatorGame : ServerGame -> Game
@@ -342,7 +344,14 @@ handleUrlChange url model =
     case model.page of
         LobbyPage lobbyModel ->
             if gameidStr == "newgame" then
-                ( model, Cmd.batch [ Nav.replaceUrl model.key "/", Cmd.map GotServerMsg Api.getGameIdFromServer ] )
+                ( { model | page = EnterNamePage CreateNew (EnterName.Entering "") }
+                , Ports.closeLobbyStream ()
+                )
+
+            else if gameidStr == "newgame-ai" then
+                ( { model | page = EnterNamePage CreateNewVsAI (EnterName.Entering "") }
+                , Ports.closeLobbyStream ()
+                )
 
             else if String.isEmpty gameidStr then
                 ( model, Cmd.none )
@@ -351,7 +360,7 @@ handleUrlChange url model =
                 case String.toInt gameidStr of
                     Just gameid ->
                         if shouldJoinGame model.storedPlayers lobbyModel.games gameid then
-                            ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
+                            ( { model | page = EnterNamePage (JoinExisting gameid) (EnterName.Entering "") }
                             , Ports.closeLobbyStream ()
                             )
 
@@ -363,20 +372,29 @@ handleUrlChange url model =
                     Nothing ->
                         ( model, Cmd.none )
 
-        EnterNamePage currentGameId _ ->
+        EnterNamePage creation _ ->
+            case creation of
+                JoinExisting currentGameId ->
+                    if String.toInt gameidStr == Just currentGameId then
+                        ( model, Cmd.none )
+
+                    else
+                        ( { model | page = Redirect url }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+
+                _ ->
+                    ( { model | page = Redirect url }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
+
+        GamePage currentGameId _ _ _ ->
             if String.toInt gameidStr == Just currentGameId then
                 ( model, Cmd.none )
 
             else
-                ( { model | page = Redirect url }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
-
-        GamePage _ _ _ _ ->
-            ( { model | page = Redirect url }
-            , Cmd.batch
-                [ Ports.closeGameStream ()
-                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
-                ]
-            )
+                ( { model | page = Redirect url }
+                , Cmd.batch
+                    [ Ports.closeGameStream ()
+                    , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                    ]
+                )
 
         _ ->
             ( model, Cmd.none )
@@ -448,11 +466,11 @@ handleGameMsg gamemsg model =
 handleEnterNameMsg : EnterName.Msg -> Model -> ( Model, Cmd Msg )
 handleEnterNameMsg enterNameMsg model =
     case ( enterNameMsg, model.page ) of
-        ( EnterName.RequestJoin, EnterNamePage gameid enterNameModel ) ->
-            handleRequestGame model gameid enterNameModel
+        ( EnterName.RequestJoin, EnterNamePage creation enterNameModel ) ->
+            handleRequestGame model creation enterNameModel
 
-        ( _, EnterNamePage gameid enterNameModel ) ->
-            ( { model | page = EnterNamePage gameid (EnterName.update enterNameMsg enterNameModel) }
+        ( _, EnterNamePage creation enterNameModel ) ->
+            ( { model | page = EnterNamePage creation (EnterName.update enterNameMsg enterNameModel) }
             , Cmd.none
             )
 
@@ -460,8 +478,8 @@ handleEnterNameMsg enterNameMsg model =
             ( model, Cmd.none )
 
 
-handleRequestGame : Model -> GameId -> EnterName.Model -> ( Model, Cmd Msg )
-handleRequestGame model gameid enterNameModel =
+handleRequestGame : Model -> GameCreation -> EnterName.Model -> ( Model, Cmd Msg )
+handleRequestGame model creation enterNameModel =
     case EnterName.getName enterNameModel of
         Just name ->
             if String.isEmpty (String.trim name) then
@@ -474,9 +492,20 @@ handleRequestGame model gameid enterNameModel =
                             |> List.filter (\p -> p.name == name)
                             |> List.head
                             |> Maybe.map .token
+
+                    cmd =
+                        case creation of
+                            JoinExisting gameid ->
+                                Api.joinGame gameid name maybeToken
+
+                            CreateNew ->
+                                Api.createGame name False maybeToken
+
+                            CreateNewVsAI ->
+                                Api.createGame name True maybeToken
                 in
-                ( { model | page = EnterNamePage gameid (EnterName.Joining name) }
-                , Cmd.map GotServerMsg <| Api.joinGame gameid name maybeToken
+                ( { model | page = EnterNamePage creation (EnterName.Joining name) }
+                , Cmd.map GotServerMsg cmd
                 )
 
         Nothing ->
@@ -493,9 +522,6 @@ handleServerMsg servermsg model =
         ReceivedGameSummariesFromServer result ->
             handleGameSummaries result model
 
-        ReceivedGameIdFromServer result ->
-            handleNewGameId result model
-
         ReceivedJoinGameResponse result ->
             handleJoinResponse result model
 
@@ -507,6 +533,9 @@ handleServerMsg servermsg model =
 
         ReceivedGameFromServer result ->
             handleSpectateGame result model
+
+        ReceivedNewGameResponse result ->
+            handleNewGameResponse result model
 
 
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
@@ -527,7 +556,7 @@ handleGameSummaries result model =
                 Just gameid ->
                     if List.member gameid gameIds then
                         if shouldJoinGame model.storedPlayers summaries gameid then
-                            ( { model | page = EnterNamePage gameid (EnterName.Entering "") }
+                            ( { model | page = EnterNamePage (JoinExisting gameid) (EnterName.Entering "") }
                             , Cmd.none
                             )
 
@@ -543,8 +572,13 @@ handleGameSummaries result model =
 
                 Nothing ->
                     if gameidStr == "newgame" then
-                        ( { model | page = LobbyPage { games = summaries, currentTime = Time.millisToPosix 0 } }
-                        , Cmd.batch [ Nav.replaceUrl model.key "/", Ports.openLobbyStream (), Task.perform Tick Time.now, Cmd.map GotServerMsg Api.getGameIdFromServer ]
+                        ( { model | page = EnterNamePage CreateNew (EnterName.Entering "") }
+                        , Cmd.none
+                        )
+
+                    else if gameidStr == "newgame-ai" then
+                        ( { model | page = EnterNamePage CreateNewVsAI (EnterName.Entering "") }
+                        , Cmd.none
                         )
 
                     else if String.isEmpty gameidStr then
@@ -569,28 +603,18 @@ handleGameSummaries result model =
             ( model, Cmd.none )
 
 
-handleNewGameId : Result Http.Error GameId -> Model -> ( Model, Cmd Msg )
-handleNewGameId result model =
-    case ( result, model.page ) of
-        ( Ok gameId, LobbyPage _ ) ->
-            ( model, Nav.pushUrl model.key <| "/" ++ String.fromInt gameId )
-
-        _ ->
-            ( model, Cmd.none )
-
-
 handleJoinResponse : Result Http.Error (Result Api.JoinError Api.JoinGameResponse) -> Model -> ( Model, Cmd Msg )
 handleJoinResponse result model =
     case ( result, model.page ) of
-        ( Ok (Ok joinResponse), EnterNamePage gameid _ ) ->
+        ( Ok (Ok joinResponse), EnterNamePage (JoinExisting gameid) _ ) ->
             joinGameSuccess model gameid joinResponse
 
-        ( Ok (Err joinError), EnterNamePage gameid (EnterName.Joining name) ) ->
-            ( { model | page = EnterNamePage gameid (EnterName.JoinError name (Api.joinErrorToString joinError)) }
+        ( Ok (Err joinError), EnterNamePage creation (EnterName.Joining name) ) ->
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name (Api.joinErrorToString joinError)) }
             , Cmd.none
             )
 
-        ( Err httpError, EnterNamePage gameid (EnterName.Joining name) ) ->
+        ( Err httpError, EnterNamePage creation (EnterName.Joining name) ) ->
             let
                 errorMsg =
                     case httpError of
@@ -609,7 +633,7 @@ handleJoinResponse result model =
                         Http.BadBody msg_ ->
                             "Invalid response: " ++ msg_
             in
-            ( { model | page = EnterNamePage gameid (EnterName.JoinError name errorMsg) }
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name errorMsg) }
             , Cmd.none
             )
 
@@ -698,8 +722,46 @@ joinGameSuccess model gameid joinResponse =
                 { finalgame | state = WaitingForOpponent }
     in
     ( { model | page = GamePage gameid (Just session) gameWithState initialLog }
-    , Cmd.batch [ saveCmd, sseCmd ]
+    , Cmd.batch [ saveCmd, sseCmd, Nav.replaceUrl model.key ("/" ++ String.fromInt gameid) ]
     )
+
+
+handleNewGameResponse : Result Http.Error (Result Api.JoinError Api.NewGameResponse) -> Model -> ( Model, Cmd Msg )
+handleNewGameResponse result model =
+    case ( result, model.page ) of
+        ( Ok (Ok response), EnterNamePage _ _ ) ->
+            joinGameSuccess model response.newGameId response.newGameJoinResponse
+
+        ( Ok (Err joinError), EnterNamePage creation (EnterName.Joining name) ) ->
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name (Api.joinErrorToString joinError)) }
+            , Cmd.none
+            )
+
+        ( Err httpError, EnterNamePage creation (EnterName.Joining name) ) ->
+            let
+                errorMsg =
+                    case httpError of
+                        Http.BadUrl _ ->
+                            "Invalid URL"
+
+                        Http.Timeout ->
+                            "Request timed out"
+
+                        Http.NetworkError ->
+                            "Network error. Check your connection."
+
+                        Http.BadStatus code ->
+                            "Server error: " ++ String.fromInt code
+
+                        Http.BadBody msg_ ->
+                            "Invalid response: " ++ msg_
+            in
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name errorMsg) }
+            , Cmd.none
+            )
+
+        _ ->
+            ( model, Cmd.none )
 
 
 handleMoveConfirmation : Result Http.Error (Result Api.MoveError Game.GameMove) -> Model -> ( Model, Cmd Msg )
@@ -722,7 +784,6 @@ handleMoveConfirmation result model =
 
         _ ->
             ( model, Cmd.none )
-
 
 
 handleSpectateGame : Result Http.Error ServerGame -> Model -> ( Model, Cmd Msg )

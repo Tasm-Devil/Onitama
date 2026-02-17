@@ -118,7 +118,6 @@ p a {
     cursor: pointer;
     background: linear-gradient(120deg, var(--btn-bg) 40%, var(--bg-hover) 50%, var(--btn-bg) 60%);
     background-size: 200% 100%;
-    animation: shimmer 4s ease-in-out infinite;
 
     &:hover {
       background-color: var(--bg-hover);
@@ -129,10 +128,15 @@ p a {
     }
   }
 
-  .new-game {
-    display: block;
-    width: fit-content;
+  .lobby-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
     margin: 16px auto;
+  }
+
+  .new-game {
+    width: 100px;
     text-align: center;
   }
 
@@ -163,17 +167,6 @@ p a {
       min-width: 4rem;
       text-align: center;
       display: inline-block;
-    }
-  }
-
-  @keyframes shimmer {
-    0%,
-    100% {
-      background-position: 100% 0;
-    }
-
-    50% {
-      background-position: 0 0;
     }
   }
 }

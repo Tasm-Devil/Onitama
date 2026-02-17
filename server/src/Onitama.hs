@@ -4,6 +4,18 @@ module Onitama
   ( validateMove,
     MoveValidationError (..),
     give5Cards,
+    GameState (..),
+    Piece (..),
+    PieceKind (..),
+    ParsedMove (..),
+    applyMove,
+    initGameState,
+    cardMoves,
+    inBounds,
+    legalMoves,
+    formatMove,
+    oppositeColor,
+    replayGame,
   )
 where
 
@@ -190,7 +202,7 @@ applyMove pm gs = do
         White -> (newPlayerCards, gsBlackCards gs)
         Black -> (gsWhiteCards gs, newPlayerCards)
 
-      opponentColor = case color of White -> Black; Black -> White
+      opponentColor = oppositeColor color
       opponentKingCaptured = not $ any (\p -> pieceColor p == opponentColor && pieceKind p == King) newBoard
       templePos = case color of
         White -> (2, 4)
@@ -229,3 +241,38 @@ give5Cards :: IO [Card]
 give5Cards = do
   rng <- newStdGen
   return . take 5 . shuffle' validCards (length validCards) $ rng
+
+oppositeColor :: Color -> Color
+oppositeColor White = Black
+oppositeColor Black = White
+
+posToChess :: (Int, Int) -> String
+posToChess (x, y) = [toEnum (fromEnum 'a' + x), toEnum (fromEnum '1' + y)]
+
+formatMove :: ParsedMove -> GameMove
+formatMove pm =
+  let colorStr = case pmColor pm of White -> "w"; Black -> "b"
+   in colorStr ++ ":" ++ posToChess (pmFrom pm) ++ posToChess (pmTo pm) ++ ":" ++ pmCard pm
+
+replayGame :: [Card] -> [GameMove] -> Maybe GameState
+replayGame cs moves = mapM parseMove moves >>= foldrM applyMove (initGameState cs)
+
+legalMoves :: GameState -> [ParsedMove]
+legalMoves gs =
+  [ ParsedMove color from to cardName
+    | let color = gsNextColor gs,
+      let board = gsBoard gs,
+      let friendlyPositions = [piecePos p | p <- board, pieceColor p == color],
+      let (c1, c2) = case color of White -> gsWhiteCards gs; Black -> gsBlackCards gs,
+      cardName <- [c1, c2],
+      Just vectors <- [Map.lookup cardName cardMoves],
+      piece <- board,
+      pieceColor piece == color,
+      let from = piecePos piece,
+      vec <- vectors,
+      let to = case color of
+            White -> bimap (fst from +) (snd from +) vec
+            Black -> bimap (fst from -) (snd from -) vec,
+      inBounds to,
+      to `notElem` friendlyPositions
+  ]

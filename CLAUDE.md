@@ -17,9 +17,10 @@ make all            # Full setup + build (debug mode)
 make build          # Build both client (debug) and server
 make release        # Build optimized production version
 make server-start   # Build and run server on port 8080
-make test           # Run all tests
 make clean          # Remove build artifacts
 ```
+
+**Note:** `make test` exists but the test suite is commented out (no active tests).
 
 ## Project Structure
 
@@ -64,7 +65,7 @@ Base URL: `http://localhost:8080/1/onitama`
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/games` | List all games |
-| POST | `/games` | Create new game |
+| POST | `/games` | Create new game (unified: multiplayer + AI) |
 | GET | `/games/{id}` | Get game state |
 | POST | `/games/{id}/players` | Join game |
 | POST | `/games/{id}/moves` | Submit move |
@@ -99,7 +100,8 @@ The server validates all moves against Onitama rules before accepting them:
 
 ### Frontend (Elm)
 
-- TEA architecture with record Model + Page type: `Redirect | LobbyPage | EnterNamePage | PlayingPage`
+- TEA architecture with record Model + Page type: `Redirect | LobbyPage | EnterNamePage GameCreation | GamePage`
+- `GameCreation = JoinExisting GameId | CreateNew | CreateNewVsAI` — unified game creation/join flow
 - EnterName module handles name entry/join flow with its own Msg/update/view
 - SSE subscriptions replace polling for real-time updates
 - Moves applied exclusively via game SSE stream (HTTP response only for error handling)

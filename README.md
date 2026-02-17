@@ -116,7 +116,7 @@ make docker-start  # Build + run on http://localhost:8080
 - [x] Dark mode (prefers-color-scheme) and CSS custom properties
 - [X] Spectator mode
 - [X] Move playback
-- [ ] AI opponent (MCTS)
+- [X] AI opponent (minmax 5-ply)
 - [ ] Multi-language support (i18n via browser language)
 - [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth

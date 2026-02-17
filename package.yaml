@@ -58,6 +58,7 @@ library:
   - App
   - Database
   - Game
+  - Minimax
   - Onitama
   - Options
   - Subscribers
