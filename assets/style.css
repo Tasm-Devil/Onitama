@@ -19,8 +19,9 @@
   --card-dot: #a09080;
   --card-center: #3a3028;
   --card-caption: #3a3028;
-  --selected-fill: #faf6f0;
-  --target-stroke: #6a9a50;
+  --selected-fill: #e0c8a0;
+  --target-stroke: #5cb840;
+  --target-glow: rgba(92, 184, 64, 0.4);
   --overlay-bg: rgba(30, 26, 21, 0.7);
   --btn-bg: #faf6f0;
   --btn-border: #a09080;
@@ -47,8 +48,9 @@
     --card-dot: #7a6e5a;
     --card-center: #ccbfaa;
     --card-caption: #e8e0d4;
-    --selected-fill: #2a2520;
+    --selected-fill: #4a3d2e;
     --target-stroke: #6a9a50;
+    --target-glow: rgba(106, 154, 80, 0.6);
     --overlay-bg: rgba(10, 8, 5, 0.8);
     --btn-bg: #2a2520;
     --btn-border: #5a4f44;
@@ -359,6 +361,8 @@ p a {
 
   &.cell--target {
     stroke: var(--target-stroke);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 2px var(--target-glow));
   }
 }
 
@@ -433,7 +437,7 @@ p a {
   }
 
   .game-log {
-    width: 350px;
+    width: 360px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;

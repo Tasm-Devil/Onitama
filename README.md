@@ -118,8 +118,11 @@ make docker-start  # Build + run on http://localhost:8080
 - [x] Game log system messages (join notifications, game start) via `playerJoined` SSE event
 - [x] Concede button
 - [X] Spectator mode
-- [ ] Move playback: mouse over element in game-log shows arrow from cell to cell
-- [ ] AI opponent
+- [X] Move playback: mouse over element in game-log shows last moves
+- [ ] Less h-padding on Button "Join|Watch|Review" and same width.
+- [ ] inform Client also in Playing-mode when a game is deleted
+- [ ] default to no db-file. Only save to file when optDatabase (--database) is set. Change onitama-server.yaml
+- [ ] AI opponent (MCTS)
 - [ ] Multi-language support (i18n via browser language)
 - [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth

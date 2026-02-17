@@ -135,7 +135,7 @@ view model =
                             |> Game.view
                             |> List.map (Html.map GotGameMsg)
                          )
-                            ++ [ Game.viewLog log ]
+                            ++ [ Game.viewLog log |> Html.map GotGameMsg ]
                         )
             , viewFooter
             ]

@@ -6,6 +6,7 @@ import Game.Figure exposing (..)
 import Global exposing (gridsize)
 import Html exposing (Html)
 import Html.Attributes as HtmlA
+import Html.Events
 import List.Extra
 import Svg
 import Svg.Attributes as SvgA
@@ -35,6 +36,7 @@ type alias Game =
     , commonCard : Card
     , state : GameState
     , spectating : Bool
+    , hoveredMove : Maybe GameMove
     }
 
 
@@ -87,6 +89,25 @@ view game =
                                     )
 
                             _ ->
+                                []
+                       )
+                    ++ (case game.hoveredMove of
+                            Just hm ->
+                                let
+                                    from =
+                                        adjustPerspective game.myColor hm.from
+
+                                    to =
+                                        adjustPerspective game.myColor
+                                            ( Tuple.first hm.from + Tuple.first hm.move
+                                            , Tuple.second hm.from + Tuple.second hm.move
+                                            )
+                                in
+                                [ Game.Cell.draw MoveToCell UserClickedOnCell from
+                                , Game.Cell.draw SelectedCell UserClickedOnCell to
+                                ]
+
+                            Nothing ->
                                 []
                        )
             , Svg.g [ SvgA.class "pieces" ]
@@ -213,6 +234,7 @@ type Msg
     | UserClickedOnCell ( Int, Int )
     | NewGameMove GameMove
     | UserClickedConcede
+    | HoverMove (Maybe GameMove)
 
 
 update : Msg -> Game -> Game
@@ -247,6 +269,9 @@ update msg game =
 
         UserClickedConcede ->
             game
+
+        HoverMove maybeMove ->
+            { game | hoveredMove = maybeMove }
 
 
 handleClick : ( Int, Int ) -> Game -> Game
@@ -300,6 +325,16 @@ handleClick ( x, y ) game =
 
             _ ->
                 game
+
+
+adjustPerspective : Color -> ( Int, Int ) -> ( Int, Int )
+adjustPerspective myColor ( x, y ) =
+    case myColor of
+        Black ->
+            ( 4 - x, 4 - y )
+
+        White ->
+            ( x, y )
 
 
 transformGameMove : GameMove -> GameMove
@@ -467,6 +502,7 @@ setupNewGame cards playerColor nextColor =
         (Maybe.withDefault dummyCard (List.head <| List.drop 4 <| cards))
         Thinking
         False
+        Nothing
         |> (if playerColor == Black then
                 flipCards
 
@@ -475,17 +511,15 @@ setupNewGame cards playerColor nextColor =
            )
 
 
-viewLog : List LogEntry -> Html msg
+viewLog : List LogEntry -> Html Msg
 viewLog log =
     Html.div [ HtmlA.class "game-log" ]
         [ Html.ul [ HtmlA.id "log-lines" ]
             (List.map viewLogEntry log)
-
-        -- , Html.input [ HtmlA.id "chat-box", HtmlA.type_ "text" ] []
         ]
 
 
-viewLogEntry : LogEntry -> Html msg
+viewLogEntry : LogEntry -> Html Msg
 viewLogEntry entry =
     case entry of
         MoveEntry gameMove ->
@@ -496,7 +530,7 @@ viewLogEntry entry =
                 [ Html.text message ]
 
 
-viewGameMove : GameMove -> Html msg
+viewGameMove : GameMove -> Html Msg
 viewGameMove gameMove =
     let
         ( from_x, from_y ) =
@@ -517,5 +551,9 @@ viewGameMove gameMove =
         to =
             String.fromChar to_x_char ++ String.fromInt to_y
     in
-    Html.li [ HtmlA.class "log-message" ]
+    Html.li
+        [ HtmlA.class "log-message"
+        , Html.Events.onMouseEnter (HoverMove (Just gameMove))
+        , Html.Events.onMouseLeave (HoverMove Nothing)
+        ]
         [ Html.text (Game.Figure.colorToString gameMove.color ++ " moved from " ++ from ++ " to " ++ to ++ ", playing " ++ gameMove.card.name ++ ".") ]
