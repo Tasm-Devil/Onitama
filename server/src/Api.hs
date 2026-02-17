@@ -16,7 +16,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
-import Game (Card, Color, Game (..), GameMove)
+import Game (Card, Color, Game (..), MoveNotation)
 import Network.HTTP.Media ((//), (/:))
 import Servant
   ( Accept (contentType),
@@ -54,7 +54,7 @@ data GameWithNames = GameWithNames
   { gameWhiteName :: Text,
     gameBlackName :: Text,
     gameCards :: [Card],
-    gameHistory :: [GameMove],
+    gameHistory :: [MoveNotation],
     gameWinner :: Maybe Color,
     gameCreatedAt :: UTCTime,
     gameLastActivity :: UTCTime
@@ -195,7 +195,7 @@ type JoinGame = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "playe
 
 type GetGame = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> Get '[JSON] GameWithNames
 
-type NewMove = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "moves" :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] GameMove :> Post '[JSON] (Either MoveError GameMove)
+type NewMove = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "moves" :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] MoveNotation :> Post '[JSON] (Either MoveError MoveNotation)
 
 type Concede = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "concede" :> Header "X-Session-Token" SessionToken :> Post '[JSON] (Either ConcedeError Color)
 

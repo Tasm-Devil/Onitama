@@ -1,13 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Onitama
-  ( validateMove,
-    MoveValidationError (..),
-    give5Cards,
+  ( give5Cards,
     GameState (..),
     Piece (..),
     PieceKind (..),
-    ParsedMove (..),
+    Move (..),
     applyMove,
     initGameState,
     cardMoves,
@@ -26,7 +24,7 @@ import Data.Foldable (foldrM)
 import Data.List (find)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
-import Game (Card, Color (..), Game (..), GameMove, PlayerSlot (..))
+import Game (Card, Color (..), Game (..), MoveNotation, PlayerSlot (..))
 import System.Random (newStdGen)
 import System.Random.Shuffle (shuffle')
 
@@ -39,11 +37,11 @@ data Piece = Piece
   }
   deriving (Eq, Show)
 
-data ParsedMove = ParsedMove
-  { pmColor :: Color,
-    pmFrom :: (Int, Int),
-    pmTo :: (Int, Int),
-    pmCard :: String
+data Move = Move
+  { moveColor :: Color,
+    moveFrom :: (Int, Int),
+    moveTo :: (Int, Int),
+    moveCard :: String
   }
   deriving (Eq, Show)
 
@@ -55,9 +53,6 @@ data GameState = GameState
     gsNextColor :: Color,
     gsWinner :: Maybe Color
   }
-  deriving (Eq, Show)
-
-data MoveValidationError = InvalidMoveFormat | InvalidMove
   deriving (Eq, Show)
 
 -- | Single source of truth for all card definitions.
@@ -82,15 +77,17 @@ cardDefs =
     ("tiger", [(0, 2), (0, -1)], Black)
   ]
 
+-- | Card name → movement vectors lookup map.
 cardMoves :: Map.Map String [(Int, Int)]
 cardMoves = Map.fromList [(name, moves) | (name, moves, _) <- cardDefs]
 
+-- | Which color starts when this card is the common card.
 cardStartPlayer :: String -> Color
 cardStartPlayer name =
   maybe White (\(_, _, c) -> c) $ find (\(n, _, _) -> n == map toLower name) cardDefs
 
--- | Parse a move string like "w:c1c3:tiger" into a ParsedMove
-parseMove :: GameMove -> Maybe ParsedMove
+-- | Parse a move string like "w:c1c3:tiger" into a Move
+parseMove :: MoveNotation -> Maybe Move
 parseMove str =
   case splitOn ':' str of
     [colorStr, positions, cardStr] -> do
@@ -102,7 +99,7 @@ parseMove str =
       let (fromStr, toStr) = splitAt 2 positions
       from <- chessToPos fromStr
       to <- chessToPos toStr
-      Just $ ParsedMove {pmColor = color, pmFrom = from, pmTo = to, pmCard = map toLower cardStr}
+      Just $ Move {moveColor = color, moveFrom = from, moveTo = to, moveCard = map toLower cardStr}
     _ -> Nothing
 
 splitOn :: Char -> String -> [String]
@@ -112,6 +109,7 @@ splitOn c s = case rest of
   where
     (chunk, rest) = break (== c) s
 
+-- | Parse chess notation like "c3" into board coordinates.
 chessToPos :: String -> Maybe (Int, Int)
 chessToPos [col, row]
   | isAlpha col && isDigit row =
@@ -120,6 +118,7 @@ chessToPos [col, row]
        in guard (x >= 0 && x <= 4 && y >= 0 && y <= 4) >> Just (x, y)
 chessToPos _ = Nothing
 
+-- | Starting board: 5 white pieces on row 0, 5 black pieces on row 4, kings in the center.
 initialBoard :: [Piece]
 initialBoard =
   [ Piece {pieceColor = White, pieceKind = Pawn, piecePos = (0, 0)},
@@ -154,20 +153,21 @@ safeIndex xs i def
   | i < length xs = xs !! i
   | otherwise = def
 
+-- | Check if coordinates are within the 5×5 board.
 inBounds :: (Int, Int) -> Bool
 inBounds (x, y) = x >= 0 && x <= 4 && y >= 0 && y <= 4
 
--- | Apply a parsed move to the game state
-applyMove :: ParsedMove -> GameState -> Maybe GameState
+-- | Apply a move to the game state. Returns Nothing if the move is illegal.
+applyMove :: Move -> GameState -> Maybe GameState
 applyMove pm gs = do
   guard (isNothing $ gsWinner gs)
-  guard (pmColor pm == gsNextColor gs)
+  guard (moveColor pm == gsNextColor gs)
 
   let board = gsBoard gs
-      from = pmFrom pm
-      to = pmTo pm
-      cardName = pmCard pm
-      color = pmColor pm
+      from = moveFrom pm
+      to = moveTo pm
+      cardName = moveCard pm
+      color = moveColor pm
 
   piece <- find (\p -> piecePos p == from) board
   guard (pieceColor piece == color)
@@ -220,46 +220,42 @@ applyMove pm gs = do
         gsWinner = maybeWinner
       }
 
--- | Validate moves by replaying the full history (prepend list, most recent first).
--- The new move should already be prepended by the caller.
-validateMove :: [Card] -> [GameMove] -> Either MoveValidationError (Maybe Color)
-validateMove cards historyMoves =
-  case mapM parseMove historyMoves of
-    Nothing -> Left InvalidMoveFormat
-    Just parsedMoves ->
-      case foldrM applyMove (initGameState cards) parsedMoves of
-        Nothing -> Left InvalidMove
-        Just finalState -> Right (gsWinner finalState)
-
+-- | All card names (capitalized) derived from cardDefs.
 validCards :: [Card]
 validCards = [capitalize name | (name, _, _) <- cardDefs]
   where
     capitalize [] = []
     capitalize (c : cs) = toUpper c : cs
 
+-- | Deal 5 random cards from the full set.
 give5Cards :: IO [Card]
 give5Cards = do
   rng <- newStdGen
   return . take 5 . shuffle' validCards (length validCards) $ rng
 
+-- | Flip White ↔ Black.
 oppositeColor :: Color -> Color
 oppositeColor White = Black
 oppositeColor Black = White
 
+-- | Convert board coordinates to chess notation (e.g. (0,0) → "a1").
 posToChess :: (Int, Int) -> String
 posToChess (x, y) = [toEnum (fromEnum 'a' + x), toEnum (fromEnum '1' + y)]
 
-formatMove :: ParsedMove -> GameMove
+-- | Serialize a Move to notation like "w:c1c3:tiger".
+formatMove :: Move -> MoveNotation
 formatMove pm =
-  let colorStr = case pmColor pm of White -> "w"; Black -> "b"
-   in colorStr ++ ":" ++ posToChess (pmFrom pm) ++ posToChess (pmTo pm) ++ ":" ++ pmCard pm
+  let colorStr = case moveColor pm of White -> "w"; Black -> "b"
+   in colorStr ++ ":" ++ posToChess (moveFrom pm) ++ posToChess (moveTo pm) ++ ":" ++ moveCard pm
 
-replayGame :: [Card] -> [GameMove] -> Maybe GameState
+-- | Replay a full game from initial cards and move history. Returns Nothing if any move is invalid.
+replayGame :: [Card] -> [MoveNotation] -> Maybe GameState
 replayGame cs moves = mapM parseMove moves >>= foldrM applyMove (initGameState cs)
 
-legalMoves :: GameState -> [ParsedMove]
+-- | Generate all legal moves for the current player.
+legalMoves :: GameState -> [Move]
 legalMoves gs =
-  [ ParsedMove color from to cardName
+  [ Move {moveColor = color, moveFrom = from, moveTo = to, moveCard = cardName}
     | let color = gsNextColor gs,
       let board = gsBoard gs,
       let friendlyPositions = [piecePos p | p <- board, pieceColor p == color],

@@ -27,14 +27,14 @@ type PlayerId = Int
 
 type Card = String
 
--- GameMove format: "<color>:<from><to>:<card>" e.g. "w:c1c3:tiger"
-type GameMove = String
+-- MoveNotation format: "<color>:<from><to>:<card>" e.g. "w:c1c3:tiger"
+type MoveNotation = String
 
 data Game = Game
   { player_white :: Maybe PlayerId,
     player_black :: Maybe PlayerId,
     cards :: [Card],
-    history :: [(GameMove, UTCTime)],
+    history :: [(MoveNotation, UTCTime)],
     winner :: Maybe Color,
     createdAt :: UTCTime,
     lastActivity :: UTCTime,
@@ -54,7 +54,7 @@ instance FromJSON Game where
       <*> v .: "lastActivity"
       <*> v .:? "aiDifficulty"
 
-addMoveToGame :: GameMove -> UTCTime -> Maybe Color -> Game -> Game
+addMoveToGame :: MoveNotation -> UTCTime -> Maybe Color -> Game -> Game
 addMoveToGame move now maybeWinner g =
   g
     { history = (move, now) : history g,

@@ -55,12 +55,12 @@ import Database
     logDBState,
     updateGame,
   )
-import Game (Color (..), Game (..), GameMove, addMoveToGame)
+import Game (Color (..), Game (..), MoveNotation, addMoveToGame)
 import qualified Minimax
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
-import Onitama (formatMove, give5Cards, replayGame, validateMove)
+import Onitama (formatMove, give5Cards, replayGame)
 import qualified Onitama
 import Options (cleanupOptionsToConfig)
 import qualified Options
@@ -250,11 +250,11 @@ applyAIOpening db gameId depth gs currentGame =
     Nothing -> return currentGame
     Just pm -> do
       let moveStr = formatMove pm
-      case validateMove (cards currentGame) [moveStr] of
-        Left _ -> return currentGame
-        Right maybeWinner -> do
+      case replayGame (cards currentGame) [moveStr] of
+        Nothing -> return currentGame
+        Just finalState -> do
           aiNow <- liftIO getCurrentTime
-          _ <- liftIO $ updateGame db gameId (addMoveToGame moveStr aiNow maybeWinner)
+          _ <- liftIO $ updateGame db gameId (addMoveToGame moveStr aiNow (Onitama.gsWinner finalState))
           liftIO $ putStrLn $ "AI made opening move: " ++ moveStr
           noteE JEGameNotFound =<< liftIO (getGameById db gameId)
 
@@ -304,7 +304,7 @@ getGame gameId = do
     Nothing -> throwError err404
     Just game -> return game
 
-newMove :: GameId -> Maybe SessionToken -> GameMove -> AppM (Either MoveError GameMove)
+newMove :: GameId -> Maybe SessionToken -> MoveNotation -> AppM (Either MoveError MoveNotation)
 newMove gameId maybeToken move = runExceptT $ do
   token <- noteE MEInvalidToken maybeToken
   env <- lift ask
@@ -325,11 +325,12 @@ newMove gameId maybeToken move = runExceptT $ do
 
   -- Validate move
   let historyMoves = move : map fst (history game)
-  maybeWinner <- case validateMove (cards game) historyMoves of
-    Left _ -> do
+  finalState <- case replayGame (cards game) historyMoves of
+    Nothing -> do
       liftIO $ putStrLn "Move rejected: invalid move"
       throwE MEInvalidMove
-    Right mw -> return mw
+    Just gs -> return gs
+  let maybeWinner = Onitama.gsWinner finalState
 
   -- Apply move
   now <- liftIO getCurrentTime
@@ -376,14 +377,14 @@ triggerAIMove gameId = void $ runMaybeT $ do
 
   let moveStr = formatMove pm
       historyMoves = moveStr : map fst (history game)
-  maybeWinner <- MaybeT $ return $ either (const Nothing) Just $ validateMove (cards game) historyMoves
+  finalState <- MaybeT $ return $ replayGame (cards game) historyMoves
 
   now <- liftIO getCurrentTime
-  success <- liftIO $ updateGame db gameId (addMoveToGame moveStr now maybeWinner)
+  success <- liftIO $ updateGame db gameId (addMoveToGame moveStr now (Onitama.gsWinner finalState))
   guard success
   liftIO $ do
     putStrLn $ "AI move: " ++ moveStr
-    broadcastGame store gameId (MoveEvent moveStr now maybeWinner)
+    broadcastGame store gameId (MoveEvent moveStr now (Onitama.gsWinner finalState))
     broadcastLobby store LobbyChanged
 
 -- | SSE handler for lobby stream

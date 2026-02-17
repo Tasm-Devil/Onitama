@@ -33,7 +33,7 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
-import Game (Color, GameMove)
+import Game (Color, MoveNotation)
 
 -- | Notification broadcast to lobby subscribers (client refetches on receive)
 data LobbyEvent = LobbyChanged
@@ -45,7 +45,7 @@ instance ToJSON LobbyEvent where
 
 -- | Events broadcast to game subscribers
 data GameEvent
-  = MoveEvent GameMove UTCTime (Maybe Color)
+  = MoveEvent MoveNotation UTCTime (Maybe Color)
   | ConcedeEvent Color -- winner color
   | PlayerJoinedEvent Text Color -- player name, assigned color
   deriving (Show, Generic)
@@ -81,7 +81,7 @@ newSubscriberStore :: IO SubscriberStore
 newSubscriberStore = do
   lobbySubs <- newTVarIO []
   gameSubs <- newTVarIO Map.empty
-  return $ SubscriberStore { lobbySubscribers = lobbySubs, gameSubscribers = gameSubs }
+  return $ SubscriberStore {lobbySubscribers = lobbySubs, gameSubscribers = gameSubs}
 
 -- | Subscribe to lobby events, returns a queue to read from
 subscribeLobby :: SubscriberStore -> IO (TQueue LobbyEvent)

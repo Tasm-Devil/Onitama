@@ -5,7 +5,7 @@ import Data.Ord (comparing)
 import Game (Color (..))
 import Onitama
   ( GameState (..),
-    ParsedMove (..),
+    Move (..),
     Piece (..),
     PieceKind (..),
     applyMove,
@@ -13,7 +13,7 @@ import Onitama
     oppositeColor,
   )
 
-bestMove :: Int -> GameState -> Maybe ParsedMove
+bestMove :: Int -> GameState -> Maybe Move
 bestMove depth gs
   | null moves = Nothing
   | otherwise = Just $ maximumBy (comparing score) moves
