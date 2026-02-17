@@ -39,7 +39,7 @@ main = do
   -- Print startup message
   putStrLn ""
   putStrLn $ "Starting Onitama server on " ++ host ++ ":" ++ show port
-  putStrLn $ "Database file: " ++ optDatabase opts
+  putStrLn $ "Database: " ++ maybe "in-memory (no persistence)" id (optDatabase opts)
   putStrLn $ "Save interval: " ++ show (optSaveInterval opts) ++ " minutes"
 
   if cleanupEnabled cleanup

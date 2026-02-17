@@ -108,14 +108,33 @@ p a {
     padding: 8px;
   }
 
+  .new-game,
+  .join-game {
+    padding: .5rem 2rem;
+    border: .5px solid var(--btn-border);
+    border-radius: .5rem;
+    text-decoration: none;
+    color: var(--text);
+    cursor: pointer;
+    background: linear-gradient(120deg, var(--btn-bg) 40%, var(--bg-hover) 50%, var(--btn-bg) 60%);
+    background-size: 200% 100%;
+    animation: shimmer 4s ease-in-out infinite;
+
+    &:hover {
+      background-color: var(--bg-hover);
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+
   .new-game {
     display: block;
     width: fit-content;
     margin: 16px auto;
     text-align: center;
   }
-
-
 
   #game-table {
     border-spacing: 0;
@@ -139,9 +158,22 @@ p a {
       }
     }
 
-    .no-games-row td {
+    .join-game {
+      padding: .5rem 1rem;
+      min-width: 4rem;
       text-align: center;
-      padding: 20px;
+      display: inline-block;
+    }
+  }
+
+  @keyframes shimmer {
+    0%,
+    100% {
+      background-position: 100% 0;
+    }
+
+    50% {
+      background-position: 0 0;
     }
   }
 }
@@ -191,42 +223,6 @@ p a {
         }
       }
     }
-  }
-}
-
-/* ── Buttons ── */
-
-.landing-screen #rejoin-button,
-.lobby .new-game,
-.lobby .join-game {
-  padding: .5rem 2rem;
-  border: .5px solid var(--btn-border);
-  border-radius: .5rem;
-  text-decoration: none;
-  color: var(--text);
-  cursor: pointer;
-  background: linear-gradient(120deg, var(--btn-bg) 40%, var(--bg-hover) 50%, var(--btn-bg) 60%);
-  background-size: 200% 100%;
-  animation: shimmer 4s ease-in-out infinite;
-
-  &:hover {
-    background-color: var(--bg-hover);
-  }
-
-  &:active {
-    transform: scale(0.97);
-  }
-}
-
-@keyframes shimmer {
-
-  0%,
-  100% {
-    background-position: 100% 0;
-  }
-
-  50% {
-    background-position: 0 0;
   }
 }
 
@@ -287,13 +283,6 @@ p a {
     }
   }
 
-  #chat-box {
-    border: none;
-    border-top: 1px solid var(--border);
-    width: 100%;
-    background-color: var(--input-bg);
-    color: var(--text);
-  }
 }
 
 /* ── Footer ── */
@@ -336,7 +325,6 @@ p a {
 /* ── Card ── */
 
 .card-caption {
-  font-size: 28px;
   fill: var(--card-caption);
 }
 

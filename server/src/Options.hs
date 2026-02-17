@@ -35,7 +35,7 @@ data ServerOptions = ServerOptions
   { optVerbose :: Bool, -- Enable verbose HTTP logging
     optPort :: Int, -- Server port
     optHost :: String, -- Bind address
-    optDatabase :: FilePath, -- Database file path
+    optDatabase :: Maybe FilePath, -- Database file path (Nothing = in-memory only)
     optResetDB :: Bool, -- Start with fresh empty database
     optSaveInterval :: Int, -- Database save interval in minutes
     optCleanup :: CleanupOptions, -- Cleanup configuration
@@ -64,7 +64,7 @@ defaultOptions =
     { optVerbose = False,
       optPort = 8080,
       optHost = "0.0.0.0",
-      optDatabase = "gamedb.json",
+      optDatabase = Nothing,
       optResetDB = False,
       optSaveInterval = 1, -- 1 minute
       optCleanup = defaultCleanup,
@@ -140,13 +140,13 @@ serverOptionsParser =
           <> showDefault
           <> help "Bind address (0.0.0.0 for all, 127.0.0.1 for localhost only)"
       )
-    <*> strOption
-      ( long "database"
-          <> short 'd'
-          <> metavar "FILE"
-          <> value (optDatabase defaultOptions)
-          <> showDefault
-          <> help "Database file path"
+    <*> optional
+      ( strOption
+          ( long "database"
+              <> short 'd'
+              <> metavar "FILE"
+              <> help "Database file path (default: in-memory only)"
+          )
       )
     <*> switch
       ( long "reset-db"
@@ -198,7 +198,9 @@ mergeOptions config cli =
     { optVerbose = optVerbose cli || optVerbose config,
       optPort = if optPort cli == optPort defaultOptions then optPort config else optPort cli,
       optHost = if optHost cli == optHost defaultOptions then optHost config else optHost cli,
-      optDatabase = if optDatabase cli == optDatabase defaultOptions then optDatabase config else optDatabase cli,
+      optDatabase = case optDatabase cli of
+        Just _ -> optDatabase cli
+        Nothing -> optDatabase config,
       optResetDB = optResetDB cli || optResetDB config,
       optSaveInterval = if optSaveInterval cli == optSaveInterval defaultOptions then optSaveInterval config else optSaveInterval cli,
       optCleanup = mergeCleanup (optCleanup config) (optCleanup cli),

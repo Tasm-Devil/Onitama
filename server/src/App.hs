@@ -105,7 +105,7 @@ appWithConfig opts =
 type AppM = ReaderT AppEnv Handler
 
 -- | Build the complete server: typed API routes + static file serving
-makeServer :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
+makeServer :: Maybe FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
   subscriberStore <- newSubscriberStore
   let onCleanup = broadcastLobby subscriberStore LobbyChanged

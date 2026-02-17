@@ -61,7 +61,7 @@ instance ToJSON DBData
 -- Database wrapper with runtime state
 data DB = DB
   { dbData :: TVar DBData,
-    dbFilePath :: FilePath,
+    dbFilePath :: Maybe FilePath,
     dbNextGameId :: TVar Int,
     dbNextPlayerId :: TVar Int,
     dbHasChanged :: TVar Bool,
@@ -76,8 +76,11 @@ calculateNextId items =
     else maximum (Map.keys items) + 1
 
 -- Load database from file or create a new one if file doesn't exist
-loadDB :: FilePath -> Bool -> CleanupConfig -> IO (TVar DBData)
-loadDB dbFilePath resetDB _cleanupCfg = do
+loadDB :: Maybe FilePath -> Bool -> CleanupConfig -> IO (TVar DBData)
+loadDB Nothing _ _ = do
+  putStrLn "Running with in-memory database (no persistence)"
+  newTVarIO (DBData {dbGames = empty, dbPlayers = empty})
+loadDB (Just dbFilePath) resetDB _cleanupCfg = do
   fileExists <- doesFileExist dbFilePath
 
   -- If reset flag is set, skip loading and start fresh
@@ -110,28 +113,32 @@ loadDB dbFilePath resetDB _cleanupCfg = do
         return emptyDB
   newTVarIO initialDB
 
--- Save database to file with pretty printing
+-- Save database to file with pretty printing (no-op when no file configured)
 saveDB :: DB -> IO ()
-saveDB (DB dataVar filePath _ _ hasChangedVar _) = do
-  (dbData, shouldSave) <- atomically $ do
-    state <- readTVar dataVar
-    changed <- readTVar hasChangedVar
-    when changed $
-      writeTVar hasChangedVar False
-    return (state, changed)
+saveDB db = case dbFilePath db of
+  Nothing -> return ()
+  Just filePath -> do
+    let dataVar = dbData db
+        hasChangedVar = dbHasChanged db
+    (currentData, shouldSave) <- atomically $ do
+      state <- readTVar dataVar
+      changed <- readTVar hasChangedVar
+      when changed $
+        writeTVar hasChangedVar False
+      return (state, changed)
 
-  let gameCount = Map.size (dbGames dbData)
+    let gameCount = Map.size (dbGames currentData)
 
-  when shouldSave $ do
-    -- Use pretty printing for human-readable JSON
-    let encoderConfig =
-          Pretty.defConfig
-            { Pretty.confIndent = Pretty.Spaces 2,
-              Pretty.confCompare = compare
-            }
-    let encodedDB = Pretty.encodePretty' encoderConfig dbData
-    Lazy.writeFile filePath encodedDB
-    putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
+    when shouldSave $ do
+      -- Use pretty printing for human-readable JSON
+      let encoderConfig =
+            Pretty.defConfig
+              { Pretty.confIndent = Pretty.Spaces 2,
+                Pretty.confCompare = compare
+              }
+      let encodedDB = Pretty.encodePretty' encoderConfig currentData
+      Lazy.writeFile filePath encodedDB
+      putStrLn $ "Database with " ++ show gameCount ++ " games ( " ++ show (Lazy.length encodedDB) ++ " bytes) saved to file successfully."
 
 -- Cleanup old games based on their status and lastActivity
 cleanupOldGames :: DB -> IO () -> IO ()
@@ -174,15 +181,16 @@ determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _) =
         (_, Nothing) -> WaitingForPlayers
         _ -> InProgress
 
--- Start periodic saving of database
+-- Start periodic saving of database (skipped when no file configured)
 startPeriodicSave :: DB -> Int -> IO ()
-startPeriodicSave db saveIntervalMinutes = do
-  putStrLn $ "Starting periodic database save thread (interval: " ++ show saveIntervalMinutes ++ " minutes)"
-  -- Fork a thread that will save the database at the specified interval
-  _ <- forkIO $ forever $ do
-    saveDB db
-    threadDelay (saveIntervalMinutes * 60 * 1000000) -- Convert seconds to microseconds
-  return ()
+startPeriodicSave db saveIntervalMinutes = case dbFilePath db of
+  Nothing -> putStrLn "No database file configured, skipping periodic save"
+  Just _ -> do
+    putStrLn $ "Starting periodic database save thread (interval: " ++ show saveIntervalMinutes ++ " minutes)"
+    _ <- forkIO $ forever $ do
+      saveDB db
+      threadDelay (saveIntervalMinutes * 60 * 1000000) -- Convert seconds to microseconds
+    return ()
 
 -- Start periodic cleanup of old games
 startPeriodicCleanup :: DB -> Int -> Bool -> IO () -> IO ()
@@ -208,7 +216,7 @@ logDBState prefix (DB dataVar _ _ _ hasChangedVar _) = do
   putStrLn $ prefix ++ ": " ++ show gameCount ++ " games, status: " ++ changeStatus
 
 -- Initialize database with TVar and configuration
-initDB :: FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO () -> IO DB
+initDB :: Maybe FilePath -> Bool -> CleanupConfig -> Int -> Int -> Bool -> IO () -> IO DB
 initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes cleanupEnabled onCleanup = do
   dataVar <- loadDB filePath resetDB cleanupConfig
 

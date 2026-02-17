@@ -36,8 +36,8 @@ type alias GameSummary =
 -- VIEW
 
 
-view : Model -> Html msg
-view model =
+view : List String -> Model -> Html msg
+view myNames model =
     Html.div [ HtmlA.class "gamelist" ]
         [ Html.h1 []
             [ Html.text "ONITAMA" ]
@@ -68,13 +68,13 @@ view model =
                         [ Html.text "" ]
                     ]
                 ]
-                :: List.map (createGameTableRow model.currentTime) model.games
+                :: List.map (createGameTableRow myNames model.currentTime) model.games
             )
         ]
 
 
-createGameTableRow : Posix -> GameSummary -> Html msg
-createGameTableRow currentTime summary =
+createGameTableRow : List String -> Posix -> GameSummary -> Html msg
+createGameTableRow myNames currentTime summary =
     let
         player1Display =
             if String.isEmpty summary.summaryPlayer1 then
@@ -127,12 +127,24 @@ createGameTableRow currentTime summary =
         , Html.td []
             [ Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
                 [ Html.text
-                    (case summary.summaryStatus of
+                    (let
+                        isMyGame =
+                            List.any
+                                (\n ->
+                                    n == summary.summaryPlayer1 || n == summary.summaryPlayer2
+                                )
+                                myNames
+                     in
+                     case summary.summaryStatus of
                         WaitingForPlayers ->
                             "Join"
 
                         InProgress ->
-                            "Watch"
+                            if isMyGame then
+                                "Play"
+
+                            else
+                                "Watch"
 
                         Completed ->
                             "Review"

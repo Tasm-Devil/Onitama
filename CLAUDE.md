@@ -7,7 +7,7 @@ Multiplayer web implementation of the abstract board game Onitama.
 - **Frontend**: Elm 0.19.1 (TEA pattern)
 - **Backend**: Haskell with Servant framework
 - **Real-time**: Server-Sent Events (SSE)
-- **Persistence**: JSON file (`gamedb.json`)
+- **Persistence**: In-memory by default; optional JSON file via `--database`
 - **Concurrency**: STM (Software Transactional Memory)
 
 ## Build Commands
@@ -132,7 +132,7 @@ The server validates all moves against Onitama rules before accepting them:
 ```bash
 server --port 3000              # Custom port
 server --verbose                # HTTP logging
-server --database /data/db.json # Custom DB path
+server --database /data/db.json # Enable persistence to JSON file
 server --config server.yaml     # Load YAML config
 server --no-cleanup             # Disable game cleanup
 ```

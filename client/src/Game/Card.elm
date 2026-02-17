@@ -153,6 +153,6 @@ drawCard { name, moves } =
                     ]
                     []
                ]
-    , Svg.text_ [ SvgA.class "card-caption", SvgA.textAnchor "middle", SvgA.x "175", SvgA.y "65" ]
+    , Svg.text_ [ SvgA.class "card-caption", SvgA.textAnchor "middle", SvgA.dominantBaseline "central", SvgA.fontSize "28", SvgA.x "175", SvgA.y "62.5" ]
         [ Svg.text name ]
     ]

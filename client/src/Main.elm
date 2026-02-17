@@ -120,7 +120,7 @@ view model =
 
                 LobbyPage m ->
                     Html.div [ HtmlA.class "lobby" ]
-                        [ Lobby.view m
+                        [ Lobby.view (List.map .name model.storedPlayers) m
                         ]
 
                 EnterNamePage _ enterNameModel ->
@@ -429,6 +429,13 @@ handleGameMsg gamemsg model =
                                     Cmd.none
                     in
                     ( { model | page = GamePage gameid (Just session) game_after log }, cmd )
+
+        GamePage gameid Nothing game log ->
+            let
+                game_after =
+                    Game.update gamemsg game
+            in
+            ( { model | page = GamePage gameid Nothing game_after log }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )

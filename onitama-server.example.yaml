@@ -5,7 +5,7 @@
 optVerbose: false          # Enable verbose HTTP request logging
 optPort: 8080              # Server port
 optHost: "0.0.0.0"         # Bind address (0.0.0.0 for all, 127.0.0.1 for localhost only)
-optDatabase: "gamedb.json" # Database file path
+# optDatabase: "gamedb.json" # Database file path (default: in-memory only)
 optResetDB: false          # Start with fresh empty database
 optSaveInterval: 1         # Database save interval in minutes
 optShowVersion: false      # Show version and exit

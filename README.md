@@ -47,7 +47,7 @@ make server-start # Run on http://localhost:8080
 | Frontend | Elm 0.19.1 (TEA) |
 | Backend | Haskell + Servant |
 | Real-time | Server-Sent Events |
-| Persistence | JSON file (STM) |
+| Persistence | In-memory (STM); optional JSON file via `--database` |
 
 The server validates all moves against Onitama rules and handles win detection. The client renders the board and applies moves received via SSE.
 
@@ -114,14 +114,8 @@ make docker-start  # Build + run on http://localhost:8080
 - [x] CLI & YAML config
 - [X] Server-side move validation
 - [x] Dark mode (prefers-color-scheme) and CSS custom properties
-- [x] Responsive sidebar game log on wide displays
-- [x] Game log system messages (join notifications, game start) via `playerJoined` SSE event
-- [x] Concede button
 - [X] Spectator mode
-- [X] Move playback: mouse over element in game-log shows last moves
-- [ ] Less h-padding on Button "Join|Watch|Review" and same width.
-- [ ] inform Client also in Playing-mode when a game is deleted
-- [ ] default to no db-file. Only save to file when optDatabase (--database) is set. Change onitama-server.yaml
+- [X] Move playback
 - [ ] AI opponent (MCTS)
 - [ ] Multi-language support (i18n via browser language)
 - [ ] Sensei's Path expansion cards
