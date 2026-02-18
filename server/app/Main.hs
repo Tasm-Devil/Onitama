@@ -4,15 +4,16 @@ module Main where
 
 import App (appWithConfig)
 import Control.Monad (when)
-import Options (CleanupOptions (..), ServerOptions (..), parseOptions)
-import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort)
+import Data.Maybe (fromMaybe)
 import Data.String (fromString)
+import Network.Wai.Handler.Warp (defaultSettings, runSettings, setHost, setPort)
 import Network.Wai.Middleware.Cors
   ( CorsResourcePolicy (corsMethods, corsRequestHeaders),
     cors,
     simpleCorsResourcePolicy,
   )
 import Network.Wai.Middleware.RequestLogger (logStdoutDev)
+import Options (CleanupOptions (..), ServerOptions (..), parseOptions)
 import System.Exit (exitSuccess)
 
 policy :: CorsResourcePolicy
@@ -39,7 +40,7 @@ main = do
   -- Print startup message
   putStrLn ""
   putStrLn $ "Starting Onitama server on " ++ host ++ ":" ++ show port
-  putStrLn $ "Database: " ++ maybe "in-memory (no persistence)" id (optDatabase opts)
+  putStrLn $ "Database: " ++ fromMaybe "in-memory (no persistence)" (optDatabase opts)
   putStrLn $ "Save interval: " ++ show (optSaveInterval opts) ++ " minutes"
 
   if cleanupEnabled cleanup
@@ -60,9 +61,10 @@ main = do
 
   -- Apply middleware based on verbose flag
   let middleware = cors (const $ Just policy)
-      verboseMiddleware = if optVerbose opts
-                          then logStdoutDev . middleware
-                          else middleware
+      verboseMiddleware =
+        if optVerbose opts
+          then logStdoutDev . middleware
+          else middleware
 
   -- Configure Warp settings with host binding
   let settings = setPort port $ setHost (fromString host) defaultSettings

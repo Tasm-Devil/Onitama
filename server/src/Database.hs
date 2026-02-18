@@ -5,7 +5,10 @@ module Database where
 import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), JoinError (..), JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
-import Control.Monad (forever, unless, when)
+import Control.Monad (forever, guard, unless, void, when)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import Data.Aeson (FromJSON, ToJSON, decode, encode)
 import qualified Data.Aeson.Encode.Pretty as Pretty
 import Data.ByteString.Lazy as Lazy (ByteString, readFile, writeFile)
@@ -13,7 +16,7 @@ import qualified Data.ByteString.Lazy as Lazy (length)
 import Data.List (find)
 import Data.Map (Map, empty)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (isJust, isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime)
@@ -67,13 +70,6 @@ data DB = DB
     dbHasChanged :: TVar Bool,
     dbCleanupConfig :: CleanupConfig
   }
-
--- Calculate next ID from existing items
-calculateNextId :: (Ord k, Enum k, Num k) => Map k v -> k
-calculateNextId items =
-  if Map.null items
-    then 1
-    else maximum (Map.keys items) + 1
 
 -- Load database from file or create a new one if file doesn't exist
 loadDB :: Maybe FilePath -> Bool -> CleanupConfig -> IO (TVar DBData)
@@ -168,18 +164,11 @@ cleanupOldGames (DB dataVar _ _ _ hasChangedVar config) onCleanup = do
         s {dbGames = Map.difference (dbGames s) gamesToDelete}
       writeTVar hasChangedVar True
     onCleanup
-
--- Determine game status from Game data
-determineGameStatus :: Game -> GameStatus
-determineGameStatus (Game maybeWhiteId maybeBlackId _ _ maybeWinner _ _ _) =
-  case maybeWinner of
-    Just _ -> Completed
-    Nothing ->
-      case (maybeWhiteId, maybeBlackId) of
-        (Nothing, Nothing) -> WaitingForPlayers
-        (Nothing, _) -> WaitingForPlayers
-        (_, Nothing) -> WaitingForPlayers
-        _ -> InProgress
+  where
+    determineGameStatus game
+      | isJust (winner game) = Completed
+      | isNothing (player_white game) || isNothing (player_black game) = WaitingForPlayers
+      | otherwise = InProgress
 
 -- Start periodic saving of database (skipped when no file configured)
 startPeriodicSave :: DB -> Int -> IO ()
@@ -187,24 +176,21 @@ startPeriodicSave db saveIntervalMinutes = case dbFilePath db of
   Nothing -> putStrLn "No database file configured, skipping periodic save"
   Just _ -> do
     putStrLn $ "Starting periodic database save thread (interval: " ++ show saveIntervalMinutes ++ " minutes)"
-    _ <- forkIO $ forever $ do
+    void $ forkIO $ forever $ do
       saveDB db
       threadDelay (saveIntervalMinutes * 60 * 1000000) -- Convert seconds to microseconds
-    return ()
 
 -- Start periodic cleanup of old games
 startPeriodicCleanup :: DB -> Int -> Bool -> IO () -> IO ()
-startPeriodicCleanup db cleanupIntervalMinutes enabled onCleanup = do
+startPeriodicCleanup db cleanupIntervalMinutes enabled onCleanup =
   if enabled
     then do
       putStrLn $ "Starting periodic game cleanup thread (interval: " ++ show cleanupIntervalMinutes ++ " minutes)"
-      _ <- forkIO $ forever $ do
+      void $ forkIO $ forever $ do
         cleanupOldGames db onCleanup
         threadDelay (cleanupIntervalMinutes * 60 * 1000000) -- Convert minutes to microseconds
-      return ()
-    else do
+    else
       putStrLn "Game cleanup disabled (--no-cleanup flag set)"
-      return ()
 
 -- Log current database state
 logDBState :: String -> DB -> IO ()
@@ -233,18 +219,23 @@ initDB filePath resetDB cleanupConfig saveIntervalMinutes cleanupIntervalMinutes
   nextPlayerIdVar <- newTVarIO nextPlayerId
   hasChangedVar <- newTVarIO False
 
-  let db = DB
-        { dbData = dataVar,
-          dbFilePath = filePath,
-          dbNextGameId = nextGameIdVar,
-          dbNextPlayerId = nextPlayerIdVar,
-          dbHasChanged = hasChangedVar,
-          dbCleanupConfig = cleanupConfig
-        }
+  let db =
+        DB
+          { dbData = dataVar,
+            dbFilePath = filePath,
+            dbNextGameId = nextGameIdVar,
+            dbNextPlayerId = nextPlayerIdVar,
+            dbHasChanged = hasChangedVar,
+            dbCleanupConfig = cleanupConfig
+          }
 
   startPeriodicSave db saveIntervalMinutes
   startPeriodicCleanup db cleanupIntervalMinutes cleanupEnabled onCleanup
   return db
+  where
+    calculateNextId items
+      | Map.null items = 1
+      | otherwise = maximum (Map.keys items) + 1
 
 -- Helper functions for accessing and modifying the database
 getGameById :: DB -> GameId -> IO (Maybe Game)
@@ -276,30 +267,22 @@ updateGame (DB dataVar _ _ _ hasChangedVar _) gameId updateFn =
         writeTVar hasChangedVar True
         return True
 
+-- | Look up a player's name by ID, returning empty text if not found.
+resolvePlayerName :: DB -> Maybe PlayerId -> IO Text
+resolvePlayerName _ Nothing = return T.empty
+resolvePlayerName db (Just pid) = maybe T.empty playerName <$> getPlayerById db pid
+
 -- Convert a Game to GameWithNames by looking up player names
 gameToGameWithNames :: DB -> Game -> IO GameWithNames
 gameToGameWithNames db game = do
-  whiteName <- case player_white game of
-    Just pid -> do
-      maybePlayer <- getPlayerById db pid
-      return $ maybe T.empty playerName maybePlayer
-    Nothing -> return T.empty
-
-  blackName <- case player_black game of
-    Just pid -> do
-      maybePlayer <- getPlayerById db pid
-      return $ maybe T.empty playerName maybePlayer
-    Nothing -> return T.empty
-
-  -- Extract just the moves from history (without timestamps)
-  let moves = map fst (history game)
-
+  whiteName <- resolvePlayerName db (player_white game)
+  blackName <- resolvePlayerName db (player_black game)
   return $
     GameWithNames
       { gameWhiteName = whiteName,
         gameBlackName = blackName,
         gameCards = cards game,
-        gameHistory = moves,
+        gameHistory = map fst (history game),
         gameWinner = winner game,
         gameCreatedAt = createdAt game,
         gameLastActivity = lastActivity game
@@ -309,9 +292,7 @@ gameToGameWithNames db game = do
 getGameWithNames :: DB -> GameId -> IO (Maybe GameWithNames)
 getGameWithNames db gameId = do
   maybeGame <- getGameById db gameId
-  case maybeGame of
-    Nothing -> return Nothing
-    Just game -> Just <$> gameToGameWithNames db game
+  traverse (gameToGameWithNames db) maybeGame
 
 -- Get all game summaries
 getAllGameSummaries :: DB -> IO [GameSummary]
@@ -322,24 +303,9 @@ getAllGameSummaries db@(DB dataVar _ _ _ _ _) = do
   where
     gameIdAndGameToSummary :: DB -> GameId -> Game -> IO GameSummary
     gameIdAndGameToSummary database gid game = do
-      whiteName <- case player_white game of
-        Just pid -> do
-          maybePlayer <- getPlayerById database pid
-          return $ maybe T.empty playerName maybePlayer
-        Nothing -> return T.empty
-
-      blackName <- case player_black game of
-        Just pid -> do
-          maybePlayer <- getPlayerById database pid
-          return $ maybe T.empty playerName maybePlayer
-        Nothing -> return T.empty
-
+      whiteName <- resolvePlayerName database (player_white game)
+      blackName <- resolvePlayerName database (player_black game)
       return $ gameToSummary gid whiteName blackName game
-
--- Generate a new session token
-generateToken :: IO SessionToken
-generateToken = do
-  SessionToken . toText <$> nextRandom
 
 -- Player Management Functions
 
@@ -361,12 +327,6 @@ getPlayerById (DB dataVar _ _ _ _ _) pid = do
   state <- readTVarIO dataVar
   return $ Map.lookup pid (dbPlayers state)
 
--- Get all player names (for dropdown in client)
-getAllPlayerNames :: DB -> IO [Text]
-getAllPlayerNames (DB dataVar _ _ _ _ _) = do
-  state <- readTVarIO dataVar
-  return $ map playerName $ Map.elems (dbPlayers state)
-
 -- Create a new player with unique ID and token
 createPlayer :: DB -> Text -> IO Player
 createPlayer (DB dataVar _ _ nextPlayerIdVar hasChangedVar _) name = do
@@ -379,136 +339,107 @@ createPlayer (DB dataVar _ _ nextPlayerIdVar hasChangedVar _) name = do
     writeTVar nextPlayerIdVar (pid + 1)
     writeTVar hasChangedVar True
     return newPlayer
+  where
+    generateToken = SessionToken . toText <$> nextRandom
+
+-- | Convert Maybe to ExceptT, throwing the given error on Nothing.
+noteE :: (Monad m) => e -> Maybe a -> ExceptT e m a
+noteE err = maybe (throwE err) return
 
 -- Join a game with player token
 -- If token provided: MUST be valid (rejects invalid tokens)
 -- If no token: name MUST be available (rejects duplicate names)
 joinGameWithToken :: DB -> GameId -> Text -> Maybe SessionToken -> IO (Either JoinError JoinGameResponse)
-joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText maybeProvidedToken = do
+joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText maybeProvidedToken = runExceptT $ do
   -- Validate name is not empty/whitespace
   let trimmedName = T.strip playerNameText
-  if T.null trimmedName
-    then return $ Left JEInvalidName
+  when (T.null trimmedName) $ throwE JEInvalidName
+
+  -- Look up game
+  game <- noteE JEGameNotFound =<< liftIO (getGameById db gameId)
+
+  -- Resolve player identity from token or name
+  player <- resolvePlayer db trimmedName maybeProvidedToken
+  let pid = playerId player
+
+  -- Check if player is already in this game (rejoin)
+  if Just pid == player_white game || Just pid == player_black game
+    then do
+      liftIO $ putStrLn $ "Player " ++ T.unpack (playerName player) ++ " already in game"
+      gameWithNames <- liftIO $ gameToGameWithNames db game
+      return $ JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player}
     else do
-      maybeGame <- getGameById db gameId
-      case maybeGame of
-        Nothing -> return $ Left JEGameNotFound
-        Just game@(Game maybeWhiteId maybeBlackId cards history winner _ _ aiDiff) -> do
-          -- Determine which player is joining
-          playerResult <- case maybeProvidedToken of
-            Just token -> do
-              -- Token provided: validate it
-              maybePlayer <- getPlayerByToken db token
-              case maybePlayer of
-                Just p -> do
-                  -- Valid token: use that player
-                  putStrLn $ "Valid token for player: " ++ T.unpack (playerName p)
-                  return $ Right p
-                Nothing -> do
-                  -- Invalid token: treat like no token, check if name available
-                  putStrLn $ "Invalid token provided, treating as new player: " ++ T.unpack trimmedName
-                  existing <- getPlayerByName db trimmedName
-                  case existing of
-                    Just _ -> do
-                      putStrLn $ "Name already taken: " ++ T.unpack trimmedName
-                      return $ Left JENameTaken
-                    Nothing -> do
-                      -- Name is available, create new player
-                      newPlayer <- createPlayer db trimmedName
-                      putStrLn $ "Created new player (invalid token): " ++ T.unpack trimmedName
-                      return $ Right newPlayer
-            Nothing -> do
-              -- No token: name must be available
-              putStrLn $ "No token provided, checking if name available: " ++ T.unpack trimmedName
-              existing <- getPlayerByName db trimmedName
-              case existing of
-                Just _ -> do
-                  putStrLn $ "Name already taken: " ++ T.unpack trimmedName
-                  return $ Left JENameTaken
-                Nothing -> do
-                  -- Name is available, create new player
-                  newPlayer <- createPlayer db trimmedName
-                  putStrLn $ "Created new player: " ++ T.unpack trimmedName
-                  return $ Right newPlayer
+      -- Try to join an empty slot
+      now <- liftIO getCurrentTime
+      let updatedGame
+            | isNothing (player_white game) = Just $ game {player_white = Just pid, lastActivity = now}
+            | isNothing (player_black game) = Just $ game {player_black = Just pid, lastActivity = now}
+            | otherwise = Nothing -- Game is full
+      newGame <- noteE JEGameFull updatedGame
+      liftIO $ do
+        atomically $ do
+          modifyTVar dataVar $ \state ->
+            state {dbGames = Map.insert gameId newGame (dbGames state)}
+          writeTVar hasChangedVar True
+        putStrLn $ "Player " ++ T.unpack (playerName player) ++ " joined game"
+      gameWithNames <- liftIO $ gameToGameWithNames db newGame
+      return $ JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player}
 
-          case playerResult of
-            Left err -> return $ Left err
-            Right player -> do
-              let pid = playerId player
+-- | Resolve player identity: use existing token, or create new player by name.
+resolvePlayer :: DB -> Text -> Maybe SessionToken -> ExceptT JoinError IO Player
+resolvePlayer db name maybeToken = case maybeToken of
+  Just token -> do
+    maybePlayer <- liftIO $ getPlayerByToken db token
+    case maybePlayer of
+      Just p -> do
+        liftIO $ putStrLn $ "Valid token for player: " ++ T.unpack (playerName p)
+        return p
+      Nothing -> do
+        liftIO $ putStrLn $ "Invalid token provided, treating as new player: " ++ T.unpack name
+        findOrCreatePlayer db name
+  Nothing -> do
+    liftIO $ putStrLn $ "No token provided, checking if name available: " ++ T.unpack name
+    findOrCreatePlayer db name
 
-              -- Check if player is already in this game
-              if Just pid == maybeWhiteId || Just pid == maybeBlackId
-                then do
-                  putStrLn $ "Player " ++ T.unpack (playerName player) ++ " already in game"
-                  gameWithNames <- gameToGameWithNames db game
-                  return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
-                else do
-                  -- Try to join an empty slot
-                  now <- getCurrentTime
-                  let updatedGame
-                        | isNothing maybeWhiteId = Just $ Game {player_white = Just pid, player_black = maybeBlackId, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now, aiDifficulty = aiDiff}
-                        | isNothing maybeBlackId = Just $ Game {player_white = maybeWhiteId, player_black = Just pid, cards = cards, history = history, winner = winner, createdAt = createdAt game, lastActivity = now, aiDifficulty = aiDiff}
-                        | otherwise = Nothing -- Game is full
-                  case updatedGame of
-                    Nothing -> do
-                      putStrLn "Game is full, cannot join"
-                      return $ Left JEGameFull
-                    Just newGame -> do
-                      -- Update the game
-                      atomically $ do
-                        modifyTVar dataVar $ \state ->
-                          state {dbGames = Map.insert gameId newGame (dbGames state)}
-                        writeTVar hasChangedVar True
-                      putStrLn $ "Player " ++ T.unpack (playerName player) ++ " joined game"
-                      gameWithNames <- gameToGameWithNames db newGame
-                      return $ Right (JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player})
-
--- Get which slot a player occupies in a game (if any)
-getPlayerSlotInGame :: Game -> PlayerId -> Maybe PlayerSlot
-getPlayerSlotInGame game pid
-  | player_white game == Just pid = Just PlayerWhite
-  | player_black game == Just pid = Just PlayerBlack
-  | otherwise = Nothing
+-- | Create a new player if the name is available, otherwise throw JENameTaken.
+findOrCreatePlayer :: DB -> Text -> ExceptT JoinError IO Player
+findOrCreatePlayer db name = do
+  existing <- liftIO $ getPlayerByName db name
+  case existing of
+    Just _ -> do
+      liftIO $ putStrLn $ "Name already taken: " ++ T.unpack name
+      throwE JENameTaken
+    Nothing -> do
+      newPlayer <- liftIO $ createPlayer db name
+      liftIO $ putStrLn $ "Created new player: " ++ T.unpack name
+      return newPlayer
 
 -- Concede a game - the player with the given token admits defeat
 concedeGame :: DB -> GameId -> SessionToken -> IO (Maybe Color)
-concedeGame db@(DB dataVar _ _ _ hasChangedVar _) gameId token = do
-  maybePlayer <- getPlayerByToken db token
-  maybeGame <- getGameById db gameId
+concedeGame db@(DB dataVar _ _ _ hasChangedVar _) gameId token = runMaybeT $ do
+  player <- MaybeT $ getPlayerByToken db token
+  game <- MaybeT $ getGameById db gameId
+  loserSlot <- MaybeT $ return $ playerSlotInGame game (playerId player)
+  let winnerColor = case loserSlot of
+        PlayerWhite -> Black
+        PlayerBlack -> White
 
-  case (maybePlayer, maybeGame) of
-    (Just player, Just game) -> do
-      let pid = playerId player
-          maybeSlot = getPlayerSlotInGame game pid
-
-      case maybeSlot of
-        Nothing -> do
-          putStrLn $ "Concede failed: player not in game " ++ show gameId
-          return Nothing
-        Just loserSlot -> do
-          let winnerColor = case loserSlot of
-                PlayerWhite -> Black
-                PlayerBlack -> White
-
-          -- Update the game with the winner
-          success <- atomically $ do
-            currentState <- readTVar dataVar
-            case Map.lookup gameId (dbGames currentState) of
-              Nothing -> return False
-              Just (Game p1 p2 cards history _ created lastAct aiDiff) -> do
-                let updatedGame = Game {player_white = p1, player_black = p2, cards = cards, history = history, winner = Just winnerColor, createdAt = created, lastActivity = lastAct, aiDifficulty = aiDiff}
-                writeTVar dataVar $
-                  currentState {dbGames = Map.insert gameId updatedGame (dbGames currentState)}
-                writeTVar hasChangedVar True
-                return True
-
-          if success
-            then do
-              putStrLn $ "Game " ++ show gameId ++ " ended: " ++ show winnerColor ++ " wins"
-              return $ Just winnerColor
-            else do
-              putStrLn "Concede failed: game not found"
-              return Nothing
-    _ -> do
-      putStrLn "Concede failed: invalid token or game not found"
-      return Nothing
+  -- Update the game with the winner (re-read inside STM for consistency)
+  success <- liftIO $ atomically $ do
+    currentState <- readTVar dataVar
+    case Map.lookup gameId (dbGames currentState) of
+      Nothing -> return False
+      Just currentGame -> do
+        let updatedGame = currentGame {winner = Just winnerColor}
+        writeTVar dataVar $
+          currentState {dbGames = Map.insert gameId updatedGame (dbGames currentState)}
+        writeTVar hasChangedVar True
+        return True
+  guard success
+  liftIO $ putStrLn $ "Game " ++ show gameId ++ " ended: " ++ show winnerColor ++ " wins"
+  return winnerColor
+  where
+    playerSlotInGame game pid
+      | player_white game == Just pid = Just PlayerWhite
+      | player_black game == Just pid = Just PlayerBlack
+      | otherwise = Nothing
