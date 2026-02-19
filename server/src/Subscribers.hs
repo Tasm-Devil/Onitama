@@ -15,7 +15,6 @@ module Subscribers
   )
 where
 
-import Api (GameId)
 import Control.Concurrent.STM
   ( TQueue,
     TVar,
@@ -33,7 +32,7 @@ import qualified Data.Map.Strict as Map
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import GHC.Generics (Generic)
-import Game (Color, MoveNotation)
+import Types (Color, GameId, MoveNotation)
 
 -- | Notification broadcast to lobby subscribers (client refetches on receive)
 data LobbyEvent = LobbyChanged

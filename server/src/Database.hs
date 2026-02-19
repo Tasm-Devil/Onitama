@@ -2,7 +2,6 @@
 
 module Database where
 
-import Api (GameId (..), GameStatus (..), GameSummary (..), GameWithNames (..), JoinError (..), JoinGameResponse (..), SessionToken (..), gameToSummary)
 import Control.Concurrent (forkIO, threadDelay)
 import Control.Concurrent.STM (TVar, atomically, modifyTVar, newTVarIO, readTVar, readTVarIO, writeTVar)
 import Control.Monad (forever, guard, unless, void, when)
@@ -23,8 +22,8 @@ import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime)
 import Data.UUID (toText)
 import Data.UUID.V4 (nextRandom)
 import GHC.Generics (Generic)
-import Game (Color (..), Game (..), PlayerId, PlayerSlot (..))
 import System.Directory (doesFileExist)
+import Types
 
 -- Player type: stores player identity and token
 data Player = Player

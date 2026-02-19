@@ -1,190 +1,21 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Api where
 
-import Data.Aeson (FromJSON, ToJSON)
 import Data.ByteString.Lazy as Lazy (ByteString)
-import Data.Map (Map)
-import qualified Data.Map.Strict as Map
-import Data.Maybe (isNothing)
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Time.Clock (UTCTime)
-import GHC.Generics (Generic)
-import Game (Card, Color, Game (..), MoveNotation)
 import Network.HTTP.Media ((//), (/:))
-import Servant
-  ( Accept (contentType),
-    Capture,
-    FromHttpApiData,
-    Get,
-    Header,
-    JSON,
-    MimeRender (..),
-    Post,
-    Proxy (..),
-    Put,
-    QueryParam,
-    ReqBody,
-    ToHttpApiData,
-    type (:<|>),
-    type (:>),
-  )
+import Servant (Accept (contentType), Capture, Get, Header, JSON, MimeRender (..), Post, Proxy (..), ReqBody, type (:<|>), type (:>))
 import Servant.API (Accept (..), Raw)
+import Types
 
 -- SSE Content Type
 data EventStream = EventStream
 
 instance Accept EventStream where
   contentType _ = "text" // "event-stream"
-
-type GameId = Int
-
-newtype SessionToken = SessionToken Text
-  deriving (Show, Eq, Ord, FromHttpApiData, ToHttpApiData, Generic, ToJSON, FromJSON)
-
--- Game state with player names (for client display)
--- This is what clients receive, not the internal Game type with PlayerIds
-data GameWithNames = GameWithNames
-  { gameWhiteName :: Text,
-    gameBlackName :: Text,
-    gameCards :: [Card],
-    gameHistory :: [MoveNotation],
-    gameWinner :: Maybe Color,
-    gameCreatedAt :: UTCTime,
-    gameLastActivity :: UTCTime
-  }
-  deriving (Show, Generic)
-
-instance ToJSON GameWithNames
-
-instance FromJSON GameWithNames
-
--- Response when joining a game includes game data, session token, and player name
-data JoinGameResponse = JoinGameResponse
-  { responseGame :: GameWithNames,
-    responseToken :: SessionToken,
-    responsePlayerName :: Text -- Server explicitly tells client which player they are
-  }
-  deriving (Show, Generic)
-
--- Errors that can occur when joining a game
-data JoinError
-  = JEGameNotFound
-  | JEGameFull
-  | JEInvalidToken
-  | JENameTaken
-  | JEInvalidName
-  deriving (Eq, Show, Generic)
-
--- Errors that can occur when submitting a move
-data MoveError
-  = MEInvalidToken
-  | MENotYourTurn
-  | MEGameNotFound
-  | MEInvalidMove
-  deriving (Eq, Show, Generic)
-
--- Errors that can occur when conceding
-data ConcedeError
-  = CEInvalidToken
-  | CEGameNotFound
-  | CEAlreadyEnded
-  deriving (Eq, Show, Generic)
-
--- Lightweight game summary for listing games
-data GameSummary = GameSummary
-  { summaryId :: GameId,
-    summaryPlayer1 :: String,
-    summaryPlayer2 :: String,
-    summaryMoveCount :: Int,
-    summaryStatus :: GameStatus,
-    summaryCreatedAt :: UTCTime,
-    summaryLastActivity :: UTCTime
-  }
-  deriving (Show, Eq, Generic)
-
-data GameStatus = WaitingForPlayers | InProgress | Completed
-  deriving (Show, Eq, Generic)
-
-instance ToJSON JoinGameResponse
-
-instance FromJSON JoinGameResponse
-
-instance ToJSON JoinError
-
-instance FromJSON JoinError
-
-instance ToJSON MoveError
-
-instance FromJSON MoveError
-
-instance ToJSON ConcedeError
-
-instance FromJSON ConcedeError
-
-instance ToJSON GameSummary
-
-instance FromJSON GameSummary
-
-instance ToJSON GameStatus
-
-instance FromJSON GameStatus
-
--- Create a game summary from game data with player names
-gameToSummary :: GameId -> Text -> Text -> Game -> GameSummary
-gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner created lastAct _) =
-  GameSummary
-    { summaryId = gameId,
-      summaryPlayer1 = if isNothing maybeWhiteId then "" else T.unpack whiteName,
-      summaryPlayer2 = if isNothing maybeBlackId then "" else T.unpack blackName,
-      summaryMoveCount = Prelude.length history,
-      summaryStatus = determineStatus maybeWhiteId maybeBlackId maybeWinner,
-      summaryCreatedAt = created,
-      summaryLastActivity = lastAct
-    }
-  where
-    determineStatus _ _ (Just _) = Completed
-    determineStatus Nothing Nothing Nothing = WaitingForPlayers
-    determineStatus Nothing _ Nothing = WaitingForPlayers
-    determineStatus _ Nothing Nothing = WaitingForPlayers
-    determineStatus _ _ Nothing = InProgress
-
--- Request body for joining a game
-newtype JoinRequest
-  = JoinRequest {joinPlayerName :: String}
-  deriving (Show, Generic)
-
-instance ToJSON JoinRequest
-
-instance FromJSON JoinRequest
-
--- Request body for creating a new game
-data NewGameRequest = NewGameRequest
-  { newGamePlayerName :: String,
-    newGameVsAI :: Bool
-  }
-  deriving (Show, Generic)
-
-instance ToJSON NewGameRequest
-
-instance FromJSON NewGameRequest
-
--- Response for creating a new game
-data NewGameResponse = NewGameResponse
-  { newGameId :: GameId,
-    newGameJoinResponse :: JoinGameResponse
-  }
-  deriving (Show, Generic)
-
-instance ToJSON NewGameResponse
-
-instance FromJSON NewGameResponse
 
 -- RESTful API structure: /1/onitama/games/...
 type NewGame = "1" :> "onitama" :> "games" :> Header "X-Session-Token" SessionToken :> ReqBody '[JSON] NewGameRequest :> Post '[JSON] (Either JoinError NewGameResponse)

@@ -2,7 +2,7 @@ module Minimax (bestMove) where
 
 import Data.List (maximumBy)
 import Data.Ord (comparing)
-import Game (Color (..))
+import Types (Color (..))
 import Onitama
   ( GameState (..),
     Move (..),

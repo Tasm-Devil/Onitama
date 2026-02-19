@@ -57,7 +57,7 @@ library:
   - Api
   - App
   - Database
-  - Game
+  - Types
   - Minimax
   - Onitama
   - Options

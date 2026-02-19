@@ -4,24 +4,7 @@
 
 module App where
 
-import Api
-  ( API,
-    APIWithAssets,
-    ConcedeError (..),
-    GameId (..),
-    GameSummary,
-    GameWithNames (..),
-    JoinError (..),
-    JoinGameResponse (..),
-    JoinRequest (..),
-    MoveError (..),
-    NewGameRequest (..),
-    NewGameResponse (..),
-    RawHtml (RawHtml),
-    SessionToken (..),
-    api,
-    apiWithAssets,
-  )
+import Api (API, APIWithAssets, RawHtml (RawHtml), api, apiWithAssets)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (atomically, readTQueue)
@@ -39,30 +22,17 @@ import Data.Maybe (isNothing)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import qualified Database
-import Game (Color (..), Game (..))
-import qualified Game
 import qualified Minimax
 import Network.HTTP.Types (status200)
 import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
 import qualified Onitama
 import qualified Options
-import Servant
-  ( Application,
-    Handler,
-    HasServer (ServerT),
-    Server,
-    Tagged (Tagged),
-    err404,
-    hoistServer,
-    serve,
-    throwError,
-    unTagged,
-    type (:<|>) (..),
-  )
+import Servant (Application, Handler, HasServer (ServerT), Server, Tagged (Tagged), err404, hoistServer, serve, throwError, unTagged, type (:<|>) (..))
 import Subscribers (GameEvent (..), LobbyEvent (..))
 import qualified Subscribers
 import System.Directory (doesFileExist)
+import Types
 import WaiAppStatic.Types (MaxAge (..), ssMaxAge)
 
 -- | Application environment with DB and subscriber store
@@ -223,7 +193,7 @@ applyAIOpening db gameId depth gs currentGame =
         Nothing -> return currentGame
         Just finalState -> do
           aiNow <- liftIO getCurrentTime
-          _ <- liftIO $ Database.updateGame db gameId (Game.addMoveToGame moveStr aiNow (Onitama.gsWinner finalState))
+          _ <- liftIO $ Database.updateGame db gameId (Types.addMoveToGame moveStr aiNow (Onitama.gsWinner finalState))
           liftIO $ putStrLn $ "AI made opening move: " ++ moveStr
           noteE JEGameNotFound =<< liftIO (Database.getGameById db gameId)
 
@@ -273,7 +243,7 @@ getGame gameId = do
     Nothing -> throwError err404
     Just game -> return game
 
-newMove :: GameId -> Maybe SessionToken -> Game.MoveNotation -> AppM (Either MoveError Game.MoveNotation)
+newMove :: GameId -> Maybe SessionToken -> Types.MoveNotation -> AppM (Either MoveError Types.MoveNotation)
 newMove gameId maybeToken move = runExceptT $ do
   token <- noteE MEInvalidToken maybeToken
   env <- lift ask
@@ -303,7 +273,7 @@ newMove gameId maybeToken move = runExceptT $ do
 
   -- Apply move
   now <- liftIO getCurrentTime
-  success <- liftIO $ Database.updateGame db gameId (Game.addMoveToGame move now maybeWinner)
+  success <- liftIO $ Database.updateGame db gameId (Types.addMoveToGame move now maybeWinner)
   unless success $ throwE MEGameNotFound
   liftIO $ do
     putStrLn "Move accepted"
@@ -349,7 +319,7 @@ triggerAIMove gameId = void $ runMaybeT $ do
   finalState <- MaybeT $ return $ Onitama.replayGame (cards game) historyMoves
 
   now <- liftIO getCurrentTime
-  success <- liftIO $ Database.updateGame db gameId (Game.addMoveToGame moveStr now (Onitama.gsWinner finalState))
+  success <- liftIO $ Database.updateGame db gameId (Types.addMoveToGame moveStr now (Onitama.gsWinner finalState))
   guard success
   liftIO $ do
     putStrLn $ "AI move: " ++ moveStr
