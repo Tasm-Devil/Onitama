@@ -8,7 +8,8 @@ import Api (API, APIWithAssets, RawHtml (RawHtml), api, apiWithAssets)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (race)
 import Control.Concurrent.STM (atomically, readTQueue)
-import Control.Exception (finally)
+import Control.DeepSeq (NFData, force)
+import Control.Exception (evaluate, finally)
 import Control.Monad (guard, unless, void, when)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.Trans.Class (lift)
@@ -20,7 +21,7 @@ import Data.ByteString.Builder (byteString, lazyByteString)
 import Data.ByteString.Lazy as Lazy (ByteString, readFile)
 import Data.Maybe (isNothing)
 import qualified Data.Text as T
-import Data.Time.Clock (getCurrentTime)
+import Data.Time.Clock (diffUTCTime, getCurrentTime)
 import qualified Database
 import qualified Minimax
 import Network.HTTP.Types (status200)
@@ -61,6 +62,16 @@ noteE err = maybe (throwE err) return
 hoistEither :: (Monad m) => Either e a -> ExceptT e m a
 hoistEither = either throwE return
 
+-- | Time a pure computation, forcing full evaluation via NFData.
+timed :: (NFData a) => String -> a -> IO a
+timed label val = do
+  start <- getCurrentTime
+  result <- evaluate (force val)
+  end <- getCurrentTime
+  let ms = realToFrac (diffUTCTime end start) * (1000 :: Double)
+  putStrLn $ label ++ " took " ++ show (round ms :: Int) ++ "ms"
+  return result
+
 -- | Build the complete server: typed API routes + static file serving
 makeServer :: Maybe FilePath -> Bool -> Database.CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
@@ -97,21 +108,21 @@ handlers env =
     :<|> getIndexHtml
 
 newGame :: Maybe SessionToken -> NewGameRequest -> AppM (Either JoinError NewGameResponse)
-newGame maybeToken (NewGameRequest name vsAI) = do
+newGame maybeToken (NewGameRequest name vsAI cardSet) = do
   let trimmedName = T.strip (T.pack name)
   if T.null trimmedName
     then return $ Left JEInvalidName
     else
       if vsAI
-        then newAIGame maybeToken trimmedName
-        else newMultiplayerGame maybeToken trimmedName
+        then newAIGame maybeToken trimmedName cardSet
+        else newMultiplayerGame maybeToken trimmedName cardSet
 
-newMultiplayerGame :: Maybe SessionToken -> T.Text -> AppM (Either JoinError NewGameResponse)
-newMultiplayerGame maybeToken playerName = do
+newMultiplayerGame :: Maybe SessionToken -> T.Text -> CardSet -> AppM (Either JoinError NewGameResponse)
+newMultiplayerGame maybeToken playerName cardSet = do
   env <- ask
   let db = appDB env
       store = appSubscribers env
-  newCards <- liftIO Onitama.give5Cards
+  newCards <- liftIO $ Onitama.give5Cards cardSet
   now <- liftIO getCurrentTime
   let game =
         Game
@@ -136,8 +147,8 @@ newMultiplayerGame maybeToken playerName = do
         Subscribers.broadcastGame store gameId (PlayerJoinedEvent playerName White)
       return $ Right (NewGameResponse {newGameId = gameId, newGameJoinResponse = joinResponse})
 
-newAIGame :: Maybe SessionToken -> T.Text -> AppM (Either JoinError NewGameResponse)
-newAIGame maybeToken playerName = runExceptT $ do
+newAIGame :: Maybe SessionToken -> T.Text -> CardSet -> AppM (Either JoinError NewGameResponse)
+newAIGame maybeToken playerName cardSet = runExceptT $ do
   env <- lift ask
   let db = appDB env
       store = appSubscribers env
@@ -149,7 +160,7 @@ newAIGame maybeToken playerName = runExceptT $ do
   aiPlayer <- maybe (liftIO $ Database.createPlayer db aiName) return maybeAI
 
   -- Create game with AI as Black
-  newCards <- liftIO Onitama.give5Cards
+  newCards <- liftIO $ Onitama.give5Cards cardSet
   now <- liftIO getCurrentTime
   let game =
         Game
@@ -184,8 +195,9 @@ newAIGame maybeToken playerName = runExceptT $ do
 
 -- | Apply AI opening move if possible, otherwise return game unchanged.
 applyAIOpening :: Database.DB -> GameId -> Int -> Onitama.GameState -> Game -> ExceptT JoinError AppM Game
-applyAIOpening db gameId depth gs currentGame =
-  case Minimax.bestMove depth gs of
+applyAIOpening db gameId depth gs currentGame = do
+  maybePm <- liftIO $ timed "AI opening" (Minimax.bestMove depth gs)
+  case maybePm of
     Nothing -> return currentGame
     Just pm -> do
       let moveStr = Onitama.formatMove pm
@@ -312,7 +324,8 @@ triggerAIMove gameId = void $ runMaybeT $ do
   gs <- MaybeT $ return $ Onitama.replayGame (cards game) (map fst $ history game)
   guard $ isNothing (Onitama.gsWinner gs)
   guard $ Onitama.gsNextColor gs == Black
-  pm <- MaybeT $ return $ Minimax.bestMove depth gs
+  maybePm <- liftIO $ timed "AI move" (Minimax.bestMove depth gs)
+  pm <- MaybeT $ return maybePm
 
   let moveStr = Onitama.formatMove pm
       historyMoves = moveStr : map fst (history game)

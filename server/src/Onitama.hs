@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Onitama
@@ -17,14 +19,16 @@ module Onitama
   )
 where
 
+import Control.DeepSeq (NFData)
 import Control.Monad (guard)
+import GHC.Generics (Generic)
 import Data.Bifunctor (bimap, first, second)
 import Data.Char (isAlpha, isDigit, toLower, toUpper)
 import Data.Foldable (foldrM)
 import Data.List (find)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
-import Types (Card, Color (..), MoveNotation, PlayerSlot (..))
+import Types (Card, CardSet (..), Color (..), MoveNotation, PlayerSlot (..))
 import System.Random (newStdGen)
 import System.Random.Shuffle (shuffle')
 
@@ -43,7 +47,7 @@ data Move = Move
     moveTo :: (Int, Int),
     moveCard :: String
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Generic, NFData)
 
 data GameState = GameState
   { gsBoard :: [Piece],
@@ -58,7 +62,11 @@ data GameState = GameState
 -- | Single source of truth for all card definitions.
 -- (lowercase name, movement vectors from White's perspective, starting player)
 cardDefs :: [(String, [(Int, Int)], Color)]
-cardDefs =
+cardDefs = baseCardDefs ++ expansionCardDefs
+
+-- | Base game cards (16 cards).
+baseCardDefs :: [(String, [(Int, Int)], Color)]
+baseCardDefs =
   [ ("boar", [(-1, 0), (1, 0), (0, 1)], White),
     ("cobra", [(1, 1), (1, -1), (-1, 0)], White),
     ("crab", [(-2, 0), (2, 0), (0, 1)], Black),
@@ -75,6 +83,27 @@ cardDefs =
     ("rabbit", [(2, 0), (1, 1), (-1, -1)], Black),
     ("rooster", [(-1, 0), (-1, -1), (1, 0), (1, 1)], White),
     ("tiger", [(0, 2), (0, -1)], Black)
+  ]
+
+-- | Sensei's Path expansion cards (16 cards).
+expansionCardDefs :: [(String, [(Int, Int)], Color)]
+expansionCardDefs =
+  [ ("bear", [(-1, 1), (0, 1), (1, -1)], Black),
+    ("dog", [(-1, 1), (-1, 0), (-1, -1)], Black),
+    ("fox", [(1, 1), (1, 0), (1, -1)], White),
+    ("giraffe", [(-2, 1), (0, -1), (2, 1)], Black),
+    ("iguana", [(-2, 1), (0, 1), (1, -1)], White),
+    ("kirin", [(-1, 2), (0, -2), (1, 2)], White),
+    ("mouse", [(-1, -1), (0, 1), (1, 0)], Black),
+    ("otter", [(-1, 1), (1, -1), (2, 0)], White),
+    ("panda", [(-1, -1), (0, 1), (1, 1)], White),
+    ("phoenix", [(-2, 0), (-1, 1), (1, 1), (2, 0)], Black),
+    ("rat", [(-1, 0), (0, 1), (1, -1)], White),
+    ("sable", [(-2, 0), (-1, -1), (1, 1)], Black),
+    ("sea snake", [(-1, -1), (0, 1), (2, 0)], Black),
+    ("tanuki", [(-1, -1), (0, 1), (2, 1)], Black),
+    ("turtle", [(-2, 0), (-1, -1), (1, -1), (2, 0)], White),
+    ("viper", [(-2, 0), (0, 1), (1, -1)], White)
   ]
 
 -- | Card name → movement vectors lookup map.
@@ -220,18 +249,23 @@ applyMove pm gs = do
         gsWinner = maybeWinner
       }
 
--- | All card names (capitalized) derived from cardDefs.
-validCards :: [Card]
-validCards = [capitalize name | (name, _, _) <- cardDefs]
+-- | Card names (title-cased) for a given card set.
+validCards :: CardSet -> [Card]
+validCards cardSet = [titleCase name | (name, _, _) <- defs]
   where
+    defs = case cardSet of
+      BaseOnly -> baseCardDefs
+      WithExpansion -> cardDefs
+    titleCase = unwords . map capitalize . words
     capitalize [] = []
     capitalize (c : cs) = toUpper c : cs
 
--- | Deal 5 random cards from the full set.
-give5Cards :: IO [Card]
-give5Cards = do
+-- | Deal 5 random cards from the given card set.
+give5Cards :: CardSet -> IO [Card]
+give5Cards cardSet = do
+  let pool = validCards cardSet
   rng <- newStdGen
-  return . take 5 . shuffle' validCards (length validCards) $ rng
+  return . take 5 . shuffle' pool (length pool) $ rng
 
 -- | Flip White ↔ Black.
 oppositeColor :: Color -> Color

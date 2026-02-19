@@ -48,6 +48,7 @@ dependencies:
 - optparse-applicative # for command-line options
 - yaml               # for config file support
 - async              # for race in SSE keepalive
+- deepseq            # for timing AI computation
 
 
 library:

@@ -38,12 +38,13 @@ client/src/           # Elm frontend
     Cell.elm          # Board cell rendering
 
 server/src/           # Haskell backend
+  Types.hs            # Shared domain types (Game, Color, errors, requests)
   Api.hs              # Servant API route definitions
   App.hs              # Request handlers, SSE streaming
   Subscribers.hs      # SSE subscription management (STM-based)
-  Game.hs             # Game data types (pure data, no logic)
   Database.hs         # JSON persistence and session management
   Onitama.hs          # Onitama game logic (move validation, win detection)
+  Minimax.hs          # AI opponent (negamax with alpha-beta pruning)
   Options.hs          # CLI and YAML config parsing
 
 assets/               # Static files served to browser
@@ -86,7 +87,8 @@ All authenticated endpoints use `X-Session-Token` header.
 ### Server-Side Move Validation
 
 The server validates all moves against Onitama rules before accepting them:
-- `Onitama.hs` is the single source of truth for card definitions (names, moves, starting player), plus move parsing and game state replay
+- `Onitama.hs` is the single source of truth for card definitions (16 base + 16 Sensei's Path expansion), plus move parsing and game state replay
+- Card set selection (`BaseOnly` or `WithExpansion`) is chosen at game creation time; move validation always knows all cards
 - Moves are validated by replaying the full history then checking the new move
 - Win detection (king capture / temple reached) sets the `winner` field on the server
 - Invalid moves return `MEInvalidMove`, completed games return `MEGameOver`
@@ -102,7 +104,7 @@ The server validates all moves against Onitama rules before accepting them:
 
 - TEA architecture with record Model + Page type: `Redirect | LobbyPage | EnterNamePage GameCreation | GamePage`
 - `GameCreation = JoinExisting GameId | CreateNew | CreateNewVsAI` — unified game creation/join flow
-- EnterName module handles name entry/join flow with its own Msg/update/view
+- EnterName module handles name entry/join flow with its own Msg/update/view; holds `CardSet` as form state
 - SSE subscriptions replace polling for real-time updates
 - Moves applied exclusively via game SSE stream (HTTP response only for error handling)
 - Player identities stored in localStorage with bidirectional port sync
@@ -112,6 +114,8 @@ The server validates all moves against Onitama rules before accepting them:
 ### Backend (Haskell)
 
 - Type-safe API with Servant
+- `Types.hs` holds all shared domain types; `Api.hs` is purely route definitions
+- `Database.hs` depends on `Types.hs` (not `Api.hs`) — clean layering
 - TVar/STM for concurrent game state and SSE subscribers
 - UUID-based session tokens per player
 - Auto-saves to `gamedb.json` (configurable interval)
@@ -152,7 +156,6 @@ curl -N localhost:8080/1/onitama/games/1/stream
 ## Known Limitations
 
 - No chat feature
-- No expansion cards (Sensei's Path)
 
 ## Docker
 

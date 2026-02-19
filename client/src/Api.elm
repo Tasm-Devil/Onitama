@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, PlayerToken, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (CardSet(..), ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, PlayerToken, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -14,6 +14,21 @@ import Time exposing (Posix)
 
 type alias GameId =
     Int
+
+
+type CardSet
+    = BaseOnly
+    | WithExpansion
+
+
+encodeCardSet : CardSet -> Encode.Value
+encodeCardSet cardSet =
+    case cardSet of
+        BaseOnly ->
+            Encode.string "BaseOnly"
+
+        WithExpansion ->
+            Encode.string "WithExpansion"
 
 
 
@@ -260,8 +275,8 @@ getGameFromServer gameid =
         }
 
 
-createGame : String -> Bool -> Maybe PlayerToken -> Cmd Msg
-createGame name vsAI maybeToken =
+createGame : String -> Bool -> CardSet -> Maybe PlayerToken -> Cmd Msg
+createGame name vsAI cardSet maybeToken =
     let
         tokenHeader =
             case maybeToken of
@@ -281,6 +296,7 @@ createGame name vsAI maybeToken =
             Encode.object
                 [ ( "newGamePlayerName", Encode.string name )
                 , ( "newGameVsAI", Encode.bool vsAI )
+                , ( "newGameCardSet", encodeCardSet cardSet )
                 ]
     in
     Http.request

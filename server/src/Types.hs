@@ -6,8 +6,8 @@
 
 module Types where
 
-import Data.Aeson (FromJSON (..), ToJSON, (.:), (.:?))
-import qualified Data.Aeson as Aeson
+import Control.DeepSeq (NFData)
+import Data.Aeson (FromJSON, ToJSON)
 import Data.Maybe (isNothing)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -18,7 +18,7 @@ import Servant (FromHttpApiData, ToHttpApiData)
 data Color
   = White
   | Black
-  deriving (Eq, Read, Show, Generic, ToJSON, FromJSON)
+  deriving (Eq, Read, Show, Generic, NFData, ToJSON, FromJSON)
 
 -- Player slot identifier: which position in the game
 data PlayerSlot = PlayerWhite | PlayerBlack
@@ -53,19 +53,7 @@ data Game = Game
     lastActivity :: UTCTime,
     aiDifficulty :: Maybe Int
   }
-  deriving (Eq, Show, Generic, ToJSON)
-
-instance FromJSON Game where
-  parseJSON = Aeson.withObject "Game" $ \v ->
-    Game
-      <$> v .: "player_white"
-      <*> v .: "player_black"
-      <*> v .: "cards"
-      <*> v .: "history"
-      <*> v .: "winner"
-      <*> v .: "createdAt"
-      <*> v .: "lastActivity"
-      <*> v .:? "aiDifficulty"
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 addMoveToGame :: MoveNotation -> UTCTime -> Maybe Color -> Game -> Game
 addMoveToGame move now maybeWinner g =
@@ -191,10 +179,14 @@ instance ToJSON JoinRequest
 
 instance FromJSON JoinRequest
 
+data CardSet = BaseOnly | WithExpansion
+  deriving (Eq, Show, Generic, ToJSON, FromJSON)
+
 -- Request body for creating a new game
 data NewGameRequest = NewGameRequest
   { newGamePlayerName :: String,
-    newGameVsAI :: Bool
+    newGameVsAI :: Bool,
+    newGameCardSet :: CardSet
   }
   deriving (Show, Generic)
 

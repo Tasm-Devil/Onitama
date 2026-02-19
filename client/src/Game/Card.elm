@@ -22,6 +22,11 @@ dummyCard =
 
 allCards : List Card
 allCards =
+    baseCards ++ expansionCards
+
+
+baseCards : List Card
+baseCards =
     [ { name = "Boar", moves = [ ( -1, 0 ), ( 1, 0 ), ( 0, 1 ) ], startPlayer = White }
     , { name = "Cobra", moves = [ ( 1, 1 ), ( 1, -1 ), ( -1, 0 ) ], startPlayer = White }
     , { name = "Crab", moves = [ ( -2, 0 ), ( 2, 0 ), ( 0, 1 ) ], startPlayer = Black }
@@ -41,28 +46,25 @@ allCards =
     ]
 
 
-
-{-
-   moreCards : List Card -- Senseis Path
-   moreCards =
-       [ { name = "bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = Black }
-       , { name = "dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ] , startPlayer = Black }
-       , { name = "fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ] , startPlayer = White }
-       , { name = "giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ] , startPlayer = Black }
-       , { name = "iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = White }
-       , { name = "kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ] , startPlayer = White }
-       , { name = "mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ] , startPlayer = Black }
-       , { name = "otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ] , startPlayer = White }
-       , { name = "panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ] , startPlayer = White }
-       , { name = "phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ] , startPlayer = Black }
-       , { name = "rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = White }
-       , { name = "sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ] , startPlayer = Black }
-       , { name = "sea_snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ] , startPlayer = Black }
-       , { name = "tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ] , startPlayer = Black }
-       , { name = "turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ] , startPlayer = White }
-       , { name = "viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ] , startPlayer = White }
-       ]
--}
+expansionCards : List Card
+expansionCards =
+    [ { name = "Bear", moves = [ ( -1, 1 ), ( 0, 1 ), ( 1, -1 ) ], startPlayer = Black }
+    , { name = "Dog", moves = [ ( -1, 1 ), ( -1, 0 ), ( -1, -1 ) ], startPlayer = Black }
+    , { name = "Fox", moves = [ ( 1, 1 ), ( 1, 0 ), ( 1, -1 ) ], startPlayer = White }
+    , { name = "Giraffe", moves = [ ( -2, 1 ), ( 0, -1 ), ( 2, 1 ) ], startPlayer = Black }
+    , { name = "Iguana", moves = [ ( -2, 1 ), ( 0, 1 ), ( 1, -1 ) ], startPlayer = White }
+    , { name = "Kirin", moves = [ ( -1, 2 ), ( 0, -2 ), ( 1, 2 ) ], startPlayer = White }
+    , { name = "Mouse", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 0 ) ], startPlayer = Black }
+    , { name = "Otter", moves = [ ( -1, 1 ), ( 1, -1 ), ( 2, 0 ) ], startPlayer = White }
+    , { name = "Panda", moves = [ ( -1, -1 ), ( 0, 1 ), ( 1, 1 ) ], startPlayer = White }
+    , { name = "Phoenix", moves = [ ( -2, 0 ), ( -1, 1 ), ( 1, 1 ), ( 2, 0 ) ], startPlayer = Black }
+    , { name = "Rat", moves = [ ( -1, 0 ), ( 0, 1 ), ( 1, -1 ) ], startPlayer = White }
+    , { name = "Sable", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, 1 ) ], startPlayer = Black }
+    , { name = "Sea Snake", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 0 ) ], startPlayer = Black }
+    , { name = "Tanuki", moves = [ ( -1, -1 ), ( 0, 1 ), ( 2, 1 ) ], startPlayer = Black }
+    , { name = "Turtle", moves = [ ( -2, 0 ), ( -1, -1 ), ( 1, -1 ), ( 2, 0 ) ], startPlayer = White }
+    , { name = "Viper", moves = [ ( -2, 0 ), ( 0, 1 ), ( 1, -1 ) ], startPlayer = White }
+    ]
 
 
 cardByName : String -> Card
@@ -153,6 +155,6 @@ drawCard { name, moves } =
                     ]
                     []
                ]
-    , Svg.text_ [ SvgA.class "card-caption", SvgA.textAnchor "middle", SvgA.dominantBaseline "central", SvgA.fontSize "28", SvgA.x "175", SvgA.y "62.5" ]
+    , Svg.text_ [ SvgA.class "card-caption", SvgA.textAnchor "middle", SvgA.dominantBaseline "central", SvgA.fontSize "22", SvgA.x "175", SvgA.y "62.5" ]
         [ Svg.text name ]
     ]

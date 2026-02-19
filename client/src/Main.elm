@@ -129,9 +129,18 @@ view model =
                         [ Lobby.view (List.map .name model.storedPlayers) m
                         ]
 
-                EnterNamePage _ enterNameModel ->
+                EnterNamePage creation enterNameModel ->
+                    let
+                        showCardSetOption =
+                            case creation of
+                                JoinExisting _ ->
+                                    False
+
+                                _ ->
+                                    True
+                    in
                     Html.div [ HtmlA.class "landing-screen" ]
-                        (EnterName.view enterNameModel (List.map .name model.storedPlayers)
+                        (EnterName.view showCardSetOption enterNameModel (List.map .name model.storedPlayers)
                             |> List.map (Html.map GotEnterNameMsg)
                         )
 
@@ -344,12 +353,12 @@ handleUrlChange url model =
     case model.page of
         LobbyPage lobbyModel ->
             if gameidStr == "newgame" then
-                ( { model | page = EnterNamePage CreateNew (EnterName.Entering "") }
+                ( { model | page = EnterNamePage CreateNew (EnterName.Entering "" Api.BaseOnly) }
                 , Ports.closeLobbyStream ()
                 )
 
             else if gameidStr == "newgame-ai" then
-                ( { model | page = EnterNamePage CreateNewVsAI (EnterName.Entering "") }
+                ( { model | page = EnterNamePage CreateNewVsAI (EnterName.Entering "" Api.BaseOnly) }
                 , Ports.closeLobbyStream ()
                 )
 
@@ -360,7 +369,7 @@ handleUrlChange url model =
                 case String.toInt gameidStr of
                     Just gameid ->
                         if shouldJoinGame model.storedPlayers lobbyModel.games gameid then
-                            ( { model | page = EnterNamePage (JoinExisting gameid) (EnterName.Entering "") }
+                            ( { model | page = EnterNamePage (JoinExisting gameid) (EnterName.Entering "" Api.BaseOnly) }
                             , Ports.closeLobbyStream ()
                             )
 
@@ -493,18 +502,21 @@ handleRequestGame model creation enterNameModel =
                             |> List.head
                             |> Maybe.map .token
 
+                    cardSet =
+                        EnterName.getCardSet enterNameModel
+
                     cmd =
                         case creation of
                             JoinExisting gameid ->
                                 Api.joinGame gameid name maybeToken
 
                             CreateNew ->
-                                Api.createGame name False maybeToken
+                                Api.createGame name False cardSet maybeToken
 
                             CreateNewVsAI ->
-                                Api.createGame name True maybeToken
+                                Api.createGame name True cardSet maybeToken
                 in
-                ( { model | page = EnterNamePage creation (EnterName.Joining name) }
+                ( { model | page = EnterNamePage creation (EnterName.Joining name cardSet) }
                 , Cmd.map GotServerMsg cmd
                 )
 
@@ -556,7 +568,7 @@ handleGameSummaries result model =
                 Just gameid ->
                     if List.member gameid gameIds then
                         if shouldJoinGame model.storedPlayers summaries gameid then
-                            ( { model | page = EnterNamePage (JoinExisting gameid) (EnterName.Entering "") }
+                            ( { model | page = EnterNamePage (JoinExisting gameid) (EnterName.Entering "" Api.BaseOnly) }
                             , Cmd.none
                             )
 
@@ -572,12 +584,12 @@ handleGameSummaries result model =
 
                 Nothing ->
                     if gameidStr == "newgame" then
-                        ( { model | page = EnterNamePage CreateNew (EnterName.Entering "") }
+                        ( { model | page = EnterNamePage CreateNew (EnterName.Entering "" Api.BaseOnly) }
                         , Cmd.none
                         )
 
                     else if gameidStr == "newgame-ai" then
-                        ( { model | page = EnterNamePage CreateNewVsAI (EnterName.Entering "") }
+                        ( { model | page = EnterNamePage CreateNewVsAI (EnterName.Entering "" Api.BaseOnly) }
                         , Cmd.none
                         )
 
@@ -609,12 +621,12 @@ handleJoinResponse result model =
         ( Ok (Ok joinResponse), EnterNamePage (JoinExisting gameid) _ ) ->
             joinGameSuccess model gameid joinResponse
 
-        ( Ok (Err joinError), EnterNamePage creation (EnterName.Joining name) ) ->
-            ( { model | page = EnterNamePage creation (EnterName.JoinError name (Api.joinErrorToString joinError)) }
+        ( Ok (Err joinError), EnterNamePage creation (EnterName.Joining name cardSet) ) ->
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name (Api.joinErrorToString joinError) cardSet) }
             , Cmd.none
             )
 
-        ( Err httpError, EnterNamePage creation (EnterName.Joining name) ) ->
+        ( Err httpError, EnterNamePage creation (EnterName.Joining name cardSet) ) ->
             let
                 errorMsg =
                     case httpError of
@@ -633,7 +645,7 @@ handleJoinResponse result model =
                         Http.BadBody msg_ ->
                             "Invalid response: " ++ msg_
             in
-            ( { model | page = EnterNamePage creation (EnterName.JoinError name errorMsg) }
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name errorMsg cardSet) }
             , Cmd.none
             )
 
@@ -732,12 +744,12 @@ handleNewGameResponse result model =
         ( Ok (Ok response), EnterNamePage _ _ ) ->
             joinGameSuccess model response.newGameId response.newGameJoinResponse
 
-        ( Ok (Err joinError), EnterNamePage creation (EnterName.Joining name) ) ->
-            ( { model | page = EnterNamePage creation (EnterName.JoinError name (Api.joinErrorToString joinError)) }
+        ( Ok (Err joinError), EnterNamePage creation (EnterName.Joining name cardSet) ) ->
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name (Api.joinErrorToString joinError) cardSet) }
             , Cmd.none
             )
 
-        ( Err httpError, EnterNamePage creation (EnterName.Joining name) ) ->
+        ( Err httpError, EnterNamePage creation (EnterName.Joining name cardSet) ) ->
             let
                 errorMsg =
                     case httpError of
@@ -756,7 +768,7 @@ handleNewGameResponse result model =
                         Http.BadBody msg_ ->
                             "Invalid response: " ++ msg_
             in
-            ( { model | page = EnterNamePage creation (EnterName.JoinError name errorMsg) }
+            ( { model | page = EnterNamePage creation (EnterName.JoinError name errorMsg cardSet) }
             , Cmd.none
             )
 

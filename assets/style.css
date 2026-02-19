@@ -248,6 +248,15 @@ p a {
     flex-direction: column;
     align-items: center;
 
+    .card-set-toggle {
+      margin-top: 1rem;
+      color: var(--text-muted);
+
+      input[type="checkbox"] {
+        accent-color: var(--border);
+      }
+    }
+
     .name-line {
       margin-top: 20px;
       display: block;

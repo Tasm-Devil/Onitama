@@ -61,7 +61,7 @@ Base: `http://localhost:8080/1/onitama`
 
 | Method | Endpoint | Body | Headers | Returns |
 |--------|----------|------|---------|---------|
-| POST | `/games` | - | - | `GameId` |
+| POST | `/games` | `{newGamePlayerName, newGameVsAI, newGameCardSet}` | `X-Session-Token?` | `Either JoinError NewGameResponse` |
 | GET | `/games` | - | - | `[GameSummary]` |
 | GET | `/games/{id}` | - | - | `GameWithNames` |
 | POST | `/games/{id}/players` | `{joinPlayerName}` | `X-Session-Token?` | `Either JoinError JoinGameResponse` |
@@ -125,10 +125,11 @@ Together they enable fearless refactoring: the compilers catch structural errors
 - [X] Server-side move validation
 - [x] Dark mode (prefers-color-scheme) and CSS custom properties
 - [X] Spectator mode
-- [X] Move playback
 - [X] AI opponent (minmax 5-ply)
+- [x] Sensei's Path expansion cards (optional at game creation)
+- [ ] Move playback showing GameState
+- [ ] Choose different AI depths
 - [ ] Multi-language support (i18n via browser language)
-- [ ] Sensei's Path expansion cards
 - [ ] Traefik + Authelia for auth
 
 ---
