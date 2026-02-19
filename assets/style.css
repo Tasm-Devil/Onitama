@@ -479,7 +479,7 @@ p a {
   }
 
   .game-log {
-    width: 360px;
+    width: 375px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;

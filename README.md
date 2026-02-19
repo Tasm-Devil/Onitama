@@ -106,6 +106,16 @@ make docker-start  # Build + run on http://localhost:8080
 
 ---
 
+## Why Haskell + Elm?
+
+**Haskell** is a natural fit for a board game server: algebraic data types model game state precisely, pattern matching expresses game rules clearly, and pure functions keep logic easy to test and reason about. STM (Software Transactional Memory) makes concurrent multiplayer state safe without manual locking, and Servant provides type-safe API routing with minimal boilerplate.
+
+**Elm** brings the same philosophy to the frontend: a strong type system, immutable data, and The Elm Architecture (TEA) make UI state predictable. If it compiles, it runs — no runtime exceptions.
+
+Together they enable fearless refactoring: the compilers catch structural errors, so changes compose like building blocks rather than a house of cards.
+
+---
+
 ## Roadmap
 
 - [x] SSE real-time updates
