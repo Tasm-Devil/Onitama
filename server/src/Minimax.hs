@@ -10,7 +10,6 @@ import Onitama
     PieceKind (..),
     applyMove,
     legalMoves,
-    oppositeColor,
   )
 
 bestMove :: Int -> GameState -> Maybe Move
@@ -19,15 +18,14 @@ bestMove depth gs
   | otherwise = Just $ maximumBy (comparing score) moves
   where
     moves = legalMoves gs
-    color = gsNextColor gs
     score pm = case applyMove pm gs of
       Nothing -> minBound
-      Just gs' -> -negamax (depth - 1) minBound maxBound (oppositeColor color) gs'
+      Just gs' -> -negamax (depth - 1) minBound maxBound gs'
 
-negamax :: Int -> Int -> Int -> Color -> GameState -> Int
-negamax depth alpha beta color gs
-  | depth == 0 || not (null (gsWinner gs)) = evaluate color gs
-  | null moves = evaluate color gs
+negamax :: Int -> Int -> Int -> GameState -> Int
+negamax depth alpha beta gs
+  | depth == 0 || not (null (gsWinner gs)) = evaluate gs
+  | null moves = evaluate gs
   | otherwise = go alpha moves
   where
     moves = legalMoves gs
@@ -35,17 +33,18 @@ negamax depth alpha beta color gs
     go a (m : ms) = case applyMove m gs of
       Nothing -> go a ms
       Just gs' ->
-        let val = -negamax (depth - 1) (-beta) (-a) (oppositeColor color) gs'
+        let val = -negamax (depth - 1) (-beta) (-a) gs'
             a' = max a val
          in if a' >= beta then a' else go a' ms
 
-evaluate :: Color -> GameState -> Int
-evaluate color gs = case gsWinner gs of
+evaluate :: GameState -> Int
+evaluate gs = case gsWinner gs of
   Just w
     | w == color -> 10000
     | otherwise -> -10000
   Nothing -> material + templeProximity
   where
+    color = gsNextColor gs
     board = gsBoard gs
     friendlyPieces = filter (\p -> pieceColor p == color) board
     enemyPieces = filter (\p -> pieceColor p /= color) board
