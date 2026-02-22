@@ -10,14 +10,14 @@ services:
       - /app/server
       - --database
       - /data/gamedb.json
-      - --reset-db
+      # - --reset-db
       # - --no-cleanup
       # - --cleanup-waiting
       # - "2.0"
       # - --cleanup-active
       # - "24.0"
-      # - --cleanup-completed
-      # - "0.0"
+      - --cleanup-completed
+      - "72.0"
     restart: unless-stopped
 
 volumes:

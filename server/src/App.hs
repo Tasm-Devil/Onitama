@@ -116,34 +116,44 @@ newGame maybeToken (NewGameRequest name vsAI cardSet) = do
         else newMultiplayerGame maybeToken trimmedName cardSet
 
 newMultiplayerGame :: Maybe SessionToken -> T.Text -> CardSet -> AppM (Either JoinError NewGameResponse)
-newMultiplayerGame maybeToken playerName cardSet = do
-  env <- ask
+newMultiplayerGame maybeToken playerName cardSet = runExceptT $ do
+  env <- lift ask
   let db = appDB env
       store = appSubscribers env
-  newCards <- liftIO $ Onitama.give5Cards cardSet
-  now <- liftIO getCurrentTime
-  let game =
-        Game
-          { player_white = Nothing,
-            player_black = Nothing,
-            cards = newCards,
-            history = [],
-            winner = Nothing,
-            createdAt = now,
-            lastActivity = now,
-            aiDifficulty = Nothing
+
+  -- Resolve player identity first (can fail with JENameTaken/JEInvalidName)
+  player <- liftIO $ Database.resolvePlayerForGame db playerName maybeToken
+  hoistEither player >>= \p -> do
+    let pid = Database.playerId p
+
+    -- Create game with the creator already assigned
+    newCards <- liftIO $ Onitama.give5Cards cardSet
+    now <- liftIO getCurrentTime
+    let game =
+          Game
+            { player_white = Just pid,
+              player_black = Nothing,
+              cards = newCards,
+              history = [],
+              winner = Nothing,
+              createdAt = now,
+              lastActivity = now,
+              aiDifficulty = Nothing
+            }
+    gameId <- liftIO $ Database.insertGameWithNewId db game
+    liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
+
+    gameWithNames <- liftIO $ Database.gameToGameWithNames db game
+    let joinResponse = JoinGameResponse
+          { responseGame = gameWithNames,
+            responseToken = Database.playerToken p,
+            responsePlayerName = Database.playerName p
           }
-  gameId <- liftIO $ Database.insertGameWithNewId db game
-  liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
-  result <- liftIO $ Database.joinGameWithToken db gameId playerName maybeToken
-  case result of
-    Left err -> return $ Left err
-    Right joinResponse -> do
-      liftIO $ do
-        Database.logDBState "After creating game" db
-        Subscribers.broadcastLobby store LobbyChanged
-        Subscribers.broadcastGame store gameId (PlayerJoinedEvent playerName White)
-      return $ Right (NewGameResponse {newGameId = gameId, newGameJoinResponse = joinResponse})
+    liftIO $ do
+      Database.logDBState "After creating game" db
+      Subscribers.broadcastLobby store LobbyChanged
+      Subscribers.broadcastGame store gameId (PlayerJoinedEvent playerName White)
+    return $ NewGameResponse {newGameId = gameId, newGameJoinResponse = joinResponse}
 
 newAIGame :: Maybe SessionToken -> T.Text -> CardSet -> AppM (Either JoinError NewGameResponse)
 newAIGame maybeToken playerName cardSet = runExceptT $ do

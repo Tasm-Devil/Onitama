@@ -127,6 +127,7 @@ Together they enable fearless refactoring: the compilers catch structural errors
 - [X] Spectator mode
 - [X] AI opponent (minmax 5-ply)
 - [x] Sensei's Path expansion cards (optional at game creation)
+- [ ] Make a howto play
 - [ ] Move playback showing GameState
 - [ ] Choose different AI depths
 - [ ] Multi-language support (i18n via browser language)

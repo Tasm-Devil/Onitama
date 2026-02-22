@@ -41,4 +41,8 @@ docker: release
 docker-start: docker
 	docker run -p 8080:8080 onitama:latest
 
-.PHONY: all build release client-build client-release setup server-build server-start test clean docker docker-start
+deploy: docker
+	rsync --partial --progress onitama.tar deneaux.de:~
+	ssh deneaux.de 'docker load < ~/onitama.tar && rm ~/onitama.tar'
+
+.PHONY: all build release client-build client-release setup server-build server-start test clean docker docker-start deploy

@@ -384,6 +384,13 @@ joinGameWithToken db@(DB dataVar _ _ _ hasChangedVar _) gameId playerNameText ma
       gameWithNames <- liftIO $ gameToGameWithNames db newGame
       return $ JoinGameResponse {responseGame = gameWithNames, responseToken = playerToken player, responsePlayerName = playerName player}
 
+-- | Resolve player identity (public API): validates name, then finds or creates player.
+resolvePlayerForGame :: DB -> Text -> Maybe SessionToken -> IO (Either JoinError Player)
+resolvePlayerForGame db nameText maybeToken = runExceptT $ do
+  let trimmedName = T.strip nameText
+  when (T.null trimmedName) $ throwE JEInvalidName
+  resolvePlayer db trimmedName maybeToken
+
 -- | Resolve player identity: use existing token, or create new player by name.
 resolvePlayer :: DB -> Text -> Maybe SessionToken -> ExceptT JoinError IO Player
 resolvePlayer db name maybeToken = case maybeToken of
