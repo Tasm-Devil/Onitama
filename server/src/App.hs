@@ -103,8 +103,6 @@ handlers env =
     :<|> concede
     :<|> lobbyStreamHandler env
     :<|> gameStreamHandler env
-    :<|> getNewGamePageHtml
-    :<|> getNewGameAIPageHtml
     :<|> getIndexHtml
 
 newGame :: Maybe SessionToken -> NewGameRequest -> AppM (Either JoinError NewGameResponse)
@@ -215,8 +213,8 @@ getGameSummaries = do
   liftIO $ Database.getAllGameSummaries db
 
 joinGame :: GameId -> Maybe SessionToken -> JoinRequest -> AppM (Either JoinError JoinGameResponse)
-joinGame gameId maybeToken (JoinRequest name) = do
-  env <- ask
+joinGame gameId maybeToken (JoinRequest name) = runExceptT $ do
+  env <- lift ask
   let db = appDB env
       store = appSubscribers env
       playerName = T.pack name
@@ -225,27 +223,23 @@ joinGame gameId maybeToken (JoinRequest name) = do
   -- Get game state before join to detect new joins vs rejoins
   maybeGameBefore <- liftIO $ Database.getGameById db gameId
 
-  result <- liftIO $ Database.joinGameWithToken db gameId playerName maybeToken
-  case result of
-    Left err -> do
-      liftIO $ putStrLn $ "Join failed: " ++ show err
-      return $ Left err
-    Right joinResponse -> do
-      -- Broadcast PlayerJoinedEvent only for new joins (not rejoins)
-      let respGame = responseGame joinResponse
-          joinedName = responsePlayerName joinResponse
-          joinedColor = if joinedName == gameWhiteName respGame then White else Black
-      case maybeGameBefore of
-        Just gameBefore -> do
-          let slotWasEmpty = case joinedColor of
-                White -> isNothing (player_white gameBefore)
-                Black -> isNothing (player_black gameBefore)
-          when slotWasEmpty $
-            liftIO $
-              Subscribers.broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
-        Nothing -> return ()
-      liftIO $ Subscribers.broadcastLobby store LobbyChanged
-      return $ Right joinResponse
+  joinResponse <- hoistEither =<< liftIO (Database.joinGameWithToken db gameId playerName maybeToken)
+
+  -- Broadcast PlayerJoinedEvent only for new joins (not rejoins)
+  let respGame = responseGame joinResponse
+      joinedName = responsePlayerName joinResponse
+      joinedColor = if joinedName == gameWhiteName respGame then White else Black
+  case maybeGameBefore of
+    Just gameBefore -> do
+      let slotWasEmpty = case joinedColor of
+            White -> isNothing (player_white gameBefore)
+            Black -> isNothing (player_black gameBefore)
+      when slotWasEmpty $
+        liftIO $
+          Subscribers.broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
+    Nothing -> return ()
+  liftIO $ Subscribers.broadcastLobby store LobbyChanged
+  return joinResponse
 
 getGame :: GameId -> AppM GameWithNames
 getGame gameId = do
@@ -297,21 +291,16 @@ newMove gameId maybeToken move = runExceptT $ do
   return move
 
 concede :: GameId -> Maybe SessionToken -> AppM (Either ConcedeError Color)
-concede gameId maybeToken = do
-  case maybeToken of
-    Nothing -> return $ Left CEInvalidToken
-    Just token -> do
-      env <- ask
-      let db = appDB env
-          store = appSubscribers env
-      result <- liftIO $ Database.concedeGame db gameId token
-      case result of
-        Nothing -> return $ Left CEGameNotFound
-        Just winnerColor -> do
-          liftIO $ do
-            Subscribers.broadcastGame store gameId (ConcedeEvent winnerColor)
-            Subscribers.broadcastLobby store LobbyChanged
-          return $ Right winnerColor
+concede gameId maybeToken = runExceptT $ do
+  token <- noteE CEInvalidToken maybeToken
+  env <- lift ask
+  let db = appDB env
+      store = appSubscribers env
+  winnerColor <- noteE CEGameNotFound =<< liftIO (Database.concedeGame db gameId token)
+  liftIO $ do
+    Subscribers.broadcastGame store gameId (ConcedeEvent winnerColor)
+    Subscribers.broadcastLobby store LobbyChanged
+  return winnerColor
 
 triggerAIMove :: GameId -> AppM ()
 triggerAIMove gameId = void $ runMaybeT $ do
@@ -348,15 +337,12 @@ lobbyStreamHandler env = Tagged $ \req respond -> do
   -- Send SSE response
   respond $
     responseStream status200 [("Content-Type", "text/event-stream"), ("Cache-Control", "no-cache"), ("Connection", "keep-alive")] $ \write flush -> do
-      -- Send initial lobbyChanged so client fetches current state
-      write ("data: " <> lazyByteString (encode LobbyChanged) <> "\n\n")
-      flush
-      -- Loop forever, sending keepalive every 15s to prevent proxy timeouts
+      -- Loop forever, sending tick every 15s (doubles as keepalive for proxies)
       let loop = do
             result <- race (threadDelay 15000000) (atomically $ readTQueue queue)
             case result of
               Left () -> do
-                write (byteString ": keepalive\n\n")
+                write (byteString "data: {\"event\":\"tick\"}\n\n")
                 flush
                 loop
               Right event -> do
@@ -390,17 +376,6 @@ gameStreamHandler env gameId = Tagged $ \req respond -> do
                 flush
                 loop
       loop `finally` Subscribers.unsubscribeGame store gameId queue
-
-getNewGamePageHtml :: AppM RawHtml
-getNewGamePageHtml = do
-  let path = "assets/index.html"
-  exists <- liftIO $ doesFileExist path
-  if exists
-    then RawHtml <$> liftIO (Lazy.readFile path)
-    else throwError err404
-
-getNewGameAIPageHtml :: AppM RawHtml
-getNewGameAIPageHtml = getNewGamePageHtml
 
 getIndexHtml :: GameId -> AppM RawHtml
 getIndexHtml _ = do

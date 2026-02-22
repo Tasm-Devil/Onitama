@@ -80,30 +80,34 @@ body {
   background: radial-gradient(ellipse at center, var(--bg-surface) 0%, var(--bg) 70%);
   background-attachment: fixed;
   color: var(--text);
-}
 
-h1 {
-  text-shadow: 2px 2px 2px var(--shadow);
-}
+  h1 {
+    text-shadow: 2px 2px 2px var(--shadow);
+  }
 
-p a {
-  color: var(--text);
-}
+  p a {
+    color: var(--text);
+  }
 
-/* ── Scrollbars ── */
+  input[type="checkbox"] {
+    accent-color: var(--border);
+  }
 
-* {
-  scrollbar-color: var(--border) var(--bg-surface);
-}
+  /* ── Scrollbars ── */
 
-/* ── Page Wrapper ── */
+  * {
+    scrollbar-color: var(--border) var(--bg-surface);
+  }
 
-.page-wrapper {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  /* ── Page Wrapper ── */
+
+  .page-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
 }
 
 /* ── Lobby ── */
@@ -133,14 +137,14 @@ p a {
     }
   }
 
-  .new-game,
-  .join-game {
+  .new-game {
     padding: .6rem 2.2rem;
     border: .5px solid var(--btn-border);
     border-radius: .5rem;
     text-decoration: none;
     color: var(--text);
     cursor: pointer;
+    font: inherit;
     font-size: 1.05em;
     background: linear-gradient(120deg, var(--btn-bg) 40%, var(--bg-hover) 50%, var(--btn-bg) 60%);
     background-size: 200% 100%;
@@ -165,9 +169,31 @@ p a {
     margin: 2rem auto 2rem;
   }
 
-  .new-game {
-    width: 100px;
+  .card-set-picker {
     text-align: center;
+    padding: 1rem 1.5rem;
+    margin: 0 auto 1.5rem;
+    max-width: 350px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--card-bg);
+
+    h3 {
+      margin: 0 0 0.75rem;
+    }
+
+    .card-set-toggle {
+      display: block;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .card-set-picker-actions {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+
   }
 
   .empty-state {
@@ -224,10 +250,49 @@ p a {
     }
 
     .join-game {
-      padding: .5rem 1rem;
-      min-width: 4rem;
+      width: 5rem;
       text-align: center;
       display: inline-block;
+      box-sizing: border-box;
+      padding: .3rem .8rem;
+      border: .5px solid var(--btn-border);
+      border-radius: 5px;
+      text-decoration: none;
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+      background: var(--btn-bg);
+      transition: background-color 0.2s;
+
+      &:hover {
+        background: var(--bg-hover);
+        box-shadow: none;
+      }
+    }
+
+    .action-group {
+      display: inline-flex;
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid var(--btn-border);
+
+      .join-game {
+        border: none;
+        border-radius: 0;
+        width: 4.5rem;
+        box-shadow: none;
+
+
+        &:hover {
+          background: var(--bg-hover);
+          box-shadow: none;
+        }
+
+        &+.join-game {
+          border-left: 1px solid var(--btn-border);
+        }
+      }
     }
   }
 }
@@ -251,9 +316,20 @@ p a {
     .card-set-toggle {
       margin-top: 1rem;
       color: var(--text-muted);
+    }
 
-      input[type="checkbox"] {
-        accent-color: var(--border);
+    .cancel-button {
+      margin-top: 1rem;
+      padding: .4rem 1.5rem;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font: inherit;
+      text-decoration: underline;
+
+      &:hover {
+        color: var(--text);
       }
     }
 
@@ -505,6 +581,7 @@ p a {
 @media (max-width: 600px) {
   .lobby #game-table {
 
+    td:nth-child(2),
     td:nth-child(4),
     td:nth-child(5) {
       display: none;

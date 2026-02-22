@@ -1,18 +1,34 @@
-module Lobby exposing (GameStatus(..), GameSummary, Model, view)
+module Lobby exposing (CardSet(..), GameStatus(..), GameSummary, GameType(..), Model, Msg(..), getCardSet, getGameType, getGames, init, update, updateGames, updateTime, view)
 
 import Html exposing (Html)
 import Html.Attributes as HtmlA
+import Html.Events exposing (onCheck, onClick)
 import Time exposing (Posix)
+
+
+type CardSet
+    = BaseOnly
+    | WithExpansion
 
 
 
 -- TYPES
 
 
-type alias Model =
+type alias BrowsingData =
     { games : List GameSummary
     , currentTime : Posix
     }
+
+
+type Model
+    = Browsing BrowsingData
+    | PickingCardSet GameType CardSet BrowsingData
+
+
+type GameType
+    = Multiplayer
+    | VsAI
 
 
 type GameStatus
@@ -32,12 +48,143 @@ type alias GameSummary =
     }
 
 
+type Msg
+    = ClickNewGame
+    | ClickNewGameAI
+    | ToggleExpansion Bool
+    | ConfirmCreate
+    | CancelCreate
+    | ClickPlay Int
+
+
+
+-- INIT
+
+
+init : List GameSummary -> Model
+init games =
+    Browsing { games = games, currentTime = Time.millisToPosix 0 }
+
+
+
+-- HELPERS
+
+
+getBrowsingData : Model -> BrowsingData
+getBrowsingData model =
+    case model of
+        Browsing data ->
+            data
+
+        PickingCardSet _ _ data ->
+            data
+
+
+getGames : Model -> List GameSummary
+getGames model =
+    (getBrowsingData model).games
+
+
+getCardSet : Model -> Maybe CardSet
+getCardSet model =
+    case model of
+        PickingCardSet _ cardSet _ ->
+            Just cardSet
+
+        _ ->
+            Nothing
+
+
+getGameType : Model -> Maybe GameType
+getGameType model =
+    case model of
+        PickingCardSet gameType _ _ ->
+            Just gameType
+
+        _ ->
+            Nothing
+
+
+updateGames : List GameSummary -> Model -> Model
+updateGames games model =
+    let
+        data =
+            getBrowsingData model
+    in
+    case model of
+        Browsing _ ->
+            Browsing { data | games = games }
+
+        PickingCardSet gameType cardSet _ ->
+            PickingCardSet gameType cardSet { data | games = games }
+
+
+updateTime : Posix -> Model -> Model
+updateTime time model =
+    let
+        data =
+            getBrowsingData model
+    in
+    case model of
+        Browsing _ ->
+            Browsing { data | currentTime = time }
+
+        PickingCardSet gameType cardSet _ ->
+            PickingCardSet gameType cardSet { data | currentTime = time }
+
+
+
+-- UPDATE
+
+
+update : Msg -> Model -> Model
+update msg model =
+    let
+        data =
+            getBrowsingData model
+    in
+    case msg of
+        ClickNewGame ->
+            PickingCardSet Multiplayer BaseOnly data
+
+        ClickNewGameAI ->
+            PickingCardSet VsAI BaseOnly data
+
+        ToggleExpansion checked ->
+            case model of
+                PickingCardSet gameType _ _ ->
+                    PickingCardSet gameType
+                        (if checked then
+                            WithExpansion
+
+                         else
+                            BaseOnly
+                        )
+                        data
+
+                _ ->
+                    model
+
+        ConfirmCreate ->
+            model
+
+        CancelCreate ->
+            Browsing data
+
+        ClickPlay _ ->
+            model
+
+
 
 -- VIEW
 
 
-view : List String -> Model -> Html msg
+view : List String -> Model -> Html Msg
 view myNames model =
+    let
+        data =
+            getBrowsingData model
+    in
     Html.div [ HtmlA.class "gamelist" ]
         [ Html.h1 []
             [ Html.text "ONITAMA" ]
@@ -50,14 +197,20 @@ view myNames model =
             , Html.text " if you haven't played before."
             ]
         , Html.div [ HtmlA.class "lobby-actions" ]
-            [ Html.a [ HtmlA.class "new-game", HtmlA.href "/newgame" ]
+            [ Html.button [ HtmlA.class "new-game", onClick ClickNewGame ]
                 [ Html.text "New Game" ]
-            , Html.a [ HtmlA.class "new-game", HtmlA.href "/newgame-ai" ]
+            , Html.button [ HtmlA.class "new-game", onClick ClickNewGameAI ]
                 [ Html.text "Play vs AI" ]
             ]
-        , if List.isEmpty model.games then
+        , case model of
+            PickingCardSet gameType cardSet _ ->
+                viewCardSetPicker gameType cardSet
+
+            _ ->
+                Html.text ""
+        , if List.isEmpty data.games then
             Html.div [ HtmlA.class "empty-state" ]
-                [ Html.text "No games yet \u{2014} start one!" ]
+                [ Html.text "No games yet — start one!" ]
 
           else
             Html.table [ HtmlA.id "game-table" ]
@@ -77,12 +230,43 @@ view myNames model =
                             [ Html.text "" ]
                         ]
                     ]
-                    :: List.map (createGameTableRow myNames model.currentTime) model.games
+                    :: List.map (createGameTableRow myNames data.currentTime) data.games
                 )
         ]
 
 
-createGameTableRow : List String -> Posix -> GameSummary -> Html msg
+viewCardSetPicker : GameType -> CardSet -> Html Msg
+viewCardSetPicker gameType cardSet =
+    let
+        title =
+            case gameType of
+                Multiplayer ->
+                    "New Game"
+
+                VsAI ->
+                    "Play vs AI"
+    in
+    Html.div [ HtmlA.class "card-set-picker" ]
+        [ Html.h3 [] [ Html.text title ]
+        , Html.label [ HtmlA.class "card-set-toggle" ]
+            [ Html.input
+                [ HtmlA.type_ "checkbox"
+                , HtmlA.checked (cardSet == WithExpansion)
+                , onCheck ToggleExpansion
+                ]
+                []
+            , Html.text " Include Sensei's Path expansion cards"
+            ]
+        , Html.div [ HtmlA.class "card-set-picker-actions" ]
+            [ Html.button [ HtmlA.class "new-game", onClick ConfirmCreate ]
+                [ Html.text "Create" ]
+            , Html.button [ HtmlA.class "new-game", onClick CancelCreate ]
+                [ Html.text "Cancel" ]
+            ]
+        ]
+
+
+createGameTableRow : List String -> Posix -> GameSummary -> Html Msg
 createGameTableRow myNames currentTime summary =
     let
         player1Display =
@@ -136,32 +320,40 @@ createGameTableRow myNames currentTime summary =
         , Html.td []
             [ Html.text lastActivityAgo ]
         , Html.td []
-            [ Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
-                [ Html.text
-                    (let
-                        isMyGame =
-                            List.any
-                                (\n ->
-                                    n == summary.summaryPlayer1 || n == summary.summaryPlayer2
-                                )
-                                myNames
-                     in
-                     case summary.summaryStatus of
-                        WaitingForPlayers ->
-                            "Join"
+            (let
+                isMyGame =
+                    List.any
+                        (\n ->
+                            n == summary.summaryPlayer1 || n == summary.summaryPlayer2
+                        )
+                        myNames
 
-                        InProgress ->
-                            if isMyGame then
-                                "Play"
+                gameLink label =
+                    Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
+                        [ Html.text label ]
+             in
+             case summary.summaryStatus of
+                WaitingForPlayers ->
+                    [ gameLink "Join" ]
 
-                            else
-                                "Watch"
+                InProgress ->
+                    if isMyGame then
+                        [ gameLink "Play" ]
 
-                        Completed ->
-                            "Review"
-                    )
-                ]
-            ]
+                    else if List.isEmpty myNames then
+                        [ Html.span [ HtmlA.class "action-group" ]
+                            [ Html.button [ HtmlA.class "join-game", onClick (ClickPlay summary.summaryId) ]
+                                [ Html.text "Play" ]
+                            , gameLink "Watch"
+                            ]
+                        ]
+
+                    else
+                        [ gameLink "Watch" ]
+
+                Completed ->
+                    [ gameLink "Review" ]
+            )
         ]
 
 

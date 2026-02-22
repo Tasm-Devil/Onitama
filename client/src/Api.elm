@@ -1,4 +1,4 @@
-module Api exposing (CardSet(..), ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, PlayerToken, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, PlayerToken, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -8,17 +8,12 @@ import Iso8601
 import Json.Decode as Decode exposing (Decoder, Error(..))
 import Json.Decode.Pipeline exposing (required)
 import Json.Encode as Encode
-import Lobby exposing (GameStatus(..), GameSummary)
+import Lobby exposing (CardSet(..), GameStatus(..), GameSummary)
 import Time exposing (Posix)
 
 
 type alias GameId =
     Int
-
-
-type CardSet
-    = BaseOnly
-    | WithExpansion
 
 
 encodeCardSet : CardSet -> Encode.Value
@@ -383,8 +378,6 @@ concede gameid token =
         , timeout = Nothing
         , tracker = Nothing
         }
-
-
 
 
 

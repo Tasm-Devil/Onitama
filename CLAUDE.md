@@ -71,7 +71,6 @@ Base URL: `http://localhost:8080/1/onitama`
 | POST | `/games/{id}/players` | Join game |
 | POST | `/games/{id}/moves` | Submit move |
 | POST | `/games/{id}/concede` | Concede game |
-| GET | `/newgame` | Serve index.html (client creates game) |
 
 ### SSE Endpoints
 
@@ -102,9 +101,14 @@ The server validates all moves against Onitama rules before accepting them:
 
 ### Frontend (Elm)
 
-- TEA architecture with record Model + Page type: `Redirect | LobbyPage | EnterNamePage GameCreation | GamePage`
-- `GameCreation = JoinExisting GameId | CreateNew | CreateNewVsAI` — unified game creation/join flow
-- EnterName module handles name entry/join flow with its own Msg/update/view; holds `CardSet` as form state
+- TEA architecture with record Model `{ key, storedPlayers, currentPlayer, page }` + Page union type
+- Page states: `Loading Route | LobbyPage Lobby.Model | EnterNamePage PendingAction EnterName.Model | AwaitingGame PendingAction String | GamePage GameId Game LogEntries`
+- `currentPlayer : Maybe PlayerSession` — tab-level identity set once per session, persists until refresh
+- `PendingAction = PendingCreate Bool CardSet | PendingJoin GameId` — tracks what action triggered name entry
+- Lobby.elm is stateful: `Browsing | PickingCardSet GameType CardSet` with card set picker inline
+- EnterName.elm is name-only (no card set); shown only when identity is needed for an action
+- Only two URL patterns: `/` (lobby) and `/{gameId}` (game). No `/newgame` routes.
+- "New Game" / "Play vs AI" are button clicks in lobby, not navigation
 - SSE subscriptions replace polling for real-time updates
 - Moves applied exclusively via game SSE stream (HTTP response only for error handling)
 - Player identities stored in localStorage with bidirectional port sync

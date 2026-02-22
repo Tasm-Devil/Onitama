@@ -1,47 +1,29 @@
-module EnterName exposing (Model(..), Msg(..), getCardSet, getName, update, view)
+module EnterName exposing (Model(..), Msg(..), getName, update, view)
 
-import Api exposing (CardSet(..))
 import Html exposing (Html)
 import Html.Attributes as HtmlA
-import Html.Events exposing (onCheck, onInput, onSubmit)
+import Html.Events exposing (onClick, onInput, onSubmit)
 
 
 type Model
-    = Entering String CardSet
-    | Joining String CardSet
-    | JoinError String String CardSet
+    = Entering String
+    | JoinError String String
 
 
 getName : Model -> Maybe String
 getName model =
     case model of
-        Entering name _ ->
+        Entering name ->
             Just name
 
-        JoinError name _ _ ->
+        JoinError name _ ->
             Just name
-
-        Joining _ _ ->
-            Nothing
-
-
-getCardSet : Model -> CardSet
-getCardSet model =
-    case model of
-        Entering _ cardSet ->
-            cardSet
-
-        JoinError _ _ cardSet ->
-            cardSet
-
-        Joining _ cardSet ->
-            cardSet
 
 
 type Msg
     = TypingName String
-    | ToggleExpansion Bool
     | RequestJoin
+    | Cancel
 
 
 update : Msg -> Model -> Model
@@ -49,72 +31,41 @@ update msg model =
     case msg of
         TypingName newname ->
             case model of
-                Entering _ cardSet ->
-                    Entering newname cardSet
+                Entering _ ->
+                    Entering newname
 
-                JoinError _ error cardSet ->
-                    JoinError newname error cardSet
-
-                Joining _ _ ->
-                    model
-
-        ToggleExpansion checked ->
-            let
-                cardSet =
-                    if checked then
-                        WithExpansion
-
-                    else
-                        BaseOnly
-            in
-            case model of
-                Entering name _ ->
-                    Entering name cardSet
-
-                JoinError name error _ ->
-                    JoinError name error cardSet
-
-                Joining _ _ ->
-                    model
+                JoinError _ error ->
+                    JoinError newname error
 
         RequestJoin ->
             model
 
+        Cancel ->
+            model
 
-view : Bool -> Model -> List String -> List (Html Msg)
-view showCardSetOption model playerNames =
+
+view : Model -> List String -> List (Html Msg)
+view model playerNames =
     case model of
-        Entering currentName cardSet ->
+        Entering currentName ->
             [ Html.form [ HtmlA.id "name-form", onSubmit RequestJoin ]
                 [ Html.h1 []
                     [ Html.text "Onitama" ]
-                , Html.small [] [ Html.text "Enter your name or select from existing players..." ]
-                , viewNameInput currentName "Join" playerNames
-                , if showCardSetOption then
-                    viewCardSetToggle cardSet
-
-                  else
-                    Html.text ""
+                , Html.small [] [ Html.text "Enter your name to continue..." ]
+                , viewNameInput currentName "Continue" playerNames
+                , Html.button [ HtmlA.class "cancel-button", HtmlA.type_ "button", onClick Cancel ]
+                    [ Html.text "Cancel" ]
                 ]
             ]
 
-        Joining playerName _ ->
-            [ Html.h2 [] [ Html.text "Joining game..." ]
-            , Html.p [] [ Html.text ("Joining as " ++ playerName) ]
-            , Html.div [ HtmlA.class "spinner" ] []
-            ]
-
-        JoinError playerName errorMsg cardSet ->
+        JoinError playerName errorMsg ->
             [ Html.form [ HtmlA.id "name-form", onSubmit RequestJoin ]
                 [ Html.h1 [] [ Html.text "Onitama" ]
                 , Html.div [ HtmlA.class "error-message" ]
                     [ Html.text errorMsg ]
                 , viewNameInput playerName "Try Again" playerNames
-                , if showCardSetOption then
-                    viewCardSetToggle cardSet
-
-                  else
-                    Html.text ""
+                , Html.button [ HtmlA.class "cancel-button", HtmlA.type_ "button", onClick Cancel ]
+                    [ Html.text "Cancel" ]
                 ]
             ]
 
@@ -139,17 +90,4 @@ viewNameInput name submitLabel playerNames =
             , HtmlA.disabled (String.isEmpty name)
             ]
             []
-        ]
-
-
-viewCardSetToggle : CardSet -> Html Msg
-viewCardSetToggle cardSet =
-    Html.label [ HtmlA.class "card-set-toggle" ]
-        [ Html.input
-            [ HtmlA.type_ "checkbox"
-            , HtmlA.checked (cardSet == WithExpansion)
-            , onCheck ToggleExpansion
-            ]
-            []
-        , Html.text " Include Sensei's Path expansion cards"
         ]

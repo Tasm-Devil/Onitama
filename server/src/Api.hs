@@ -35,13 +35,9 @@ type LobbyStream = "1" :> "onitama" :> "games" :> "stream" :> Raw
 
 type GameStream = "1" :> "onitama" :> "games" :> Capture "gameId" GameId :> "stream" :> Raw
 
-type NewGamePage = "newgame" :> Get '[HTML] RawHtml
-
-type NewGameAIPage = "newgame-ai" :> Get '[HTML] RawHtml
-
 type Index = Capture "gameid" GameId :> Get '[HTML] RawHtml
 
-type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> LobbyStream :<|> GameStream :<|> NewGamePage :<|> NewGameAIPage :<|> Index
+type API = NewGame :<|> GetGameSummaries :<|> JoinGame :<|> GetGame :<|> NewMove :<|> Concede :<|> LobbyStream :<|> GameStream :<|> Index
 
 api :: Proxy API
 api = Proxy
