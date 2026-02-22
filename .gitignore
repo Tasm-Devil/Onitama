@@ -8,3 +8,4 @@ onitama.tar
 *.old
 make-docker.sh
 onitama-server.yaml
+.env

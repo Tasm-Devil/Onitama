@@ -1,4 +1,4 @@
-module Api exposing (ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, PlayerToken, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
+module Api exposing (AuthUser, ConcedeError(..), GameEvent(..), GameId, JoinError, JoinGameResponse, MoveError(..), Msg(..), NewGameResponse, ServerGame, concede, createGame, decodeGameEvent, gameMoveToString, getGameFromServer, getGameSummariesFromServer, getMe, joinErrorToString, joinGame, postNewGameMove, stringToGameMove)
 
 import Game.Card exposing (Card, cardByName)
 import Game.Figure exposing (Color(..))
@@ -121,7 +121,7 @@ stringToGameMove str =
                         Nothing
 
                 card =
-                    cardByName (capitalizeFirst cardStr)
+                    cardByName (capitalizeWords cardStr)
             in
             case ( maybeColor, maybeFromTo ) of
                 ( Just color, Just ( from, to ) ) ->
@@ -136,6 +136,13 @@ stringToGameMove str =
 
         _ ->
             Nothing
+
+
+capitalizeWords : String -> String
+capitalizeWords str =
+    String.words str
+        |> List.map capitalizeFirst
+        |> String.join " "
 
 
 capitalizeFirst : String -> String
@@ -159,39 +166,38 @@ type alias ServerGame =
     }
 
 
-type alias PlayerToken =
-    String
+type alias AuthUser =
+    { userId : String
+    , displayName : String
+    }
 
 
 type alias JoinGameResponse =
     { responseGame : ServerGame
-    , responseToken : PlayerToken
-    , responsePlayerName : String -- Server explicitly tells us who we are
+    , responsePlayerName : String
     }
 
 
 type JoinError
     = JEGameNotFound
     | JEGameFull
-    | JEInvalidToken
-    | JENameTaken
-    | JEInvalidName
+    | JENotAuthenticated
     | JENetworkError String
 
 
 type MoveError
-    = MEInvalidToken
-    | MENotYourTurn
+    = MENotYourTurn
     | MEGameNotFound
     | MEGameOver
     | MEInvalidMove
+    | MENotAuthenticated
     | MENetworkError String
 
 
 type ConcedeError
-    = CEInvalidToken
-    | CEGameNotFound
+    = CEGameNotFound
     | CEAlreadyEnded
+    | CENotAuthenticated
     | CENetworkError String
 
 
@@ -214,14 +220,8 @@ joinErrorToString error =
         JEGameFull ->
             "This game is full. Both players have already joined."
 
-        JEInvalidToken ->
-            "Your session expired. Please try again."
-
-        JENameTaken ->
-            "This name is already taken. Please choose another name."
-
-        JEInvalidName ->
-            "Please enter a valid name (at least 1 character)."
+        JENotAuthenticated ->
+            "Not authenticated. Please log in."
 
         JENetworkError msg ->
             "Network error: " ++ msg
@@ -240,6 +240,7 @@ type Msg
     | ReceivedConcedeResponse (Result Http.Error (Result ConcedeError Color))
     | ReceivedGameFromServer (Result Http.Error ServerGame)
     | ReceivedNewGameResponse (Result Http.Error (Result JoinError NewGameResponse))
+    | ReceivedMe (Result Http.Error AuthUser)
 
 
 
@@ -270,17 +271,17 @@ getGameFromServer gameid =
         }
 
 
-createGame : String -> Bool -> CardSet -> Maybe PlayerToken -> Cmd Msg
-createGame name vsAI cardSet maybeToken =
+getMe : Cmd Msg
+getMe =
+    Http.get
+        { url = "/1/onitama/me"
+        , expect = Http.expectJson ReceivedMe decodeAuthUser
+        }
+
+
+createGame : Bool -> CardSet -> Cmd Msg
+createGame vsAI cardSet =
     let
-        tokenHeader =
-            case maybeToken of
-                Just token ->
-                    [ Http.header "X-Session-Token" token ]
-
-                Nothing ->
-                    []
-
         eitherDecoder =
             Decode.oneOf
                 [ Decode.field "Right" decodeNewGameResponse |> Decode.map Ok
@@ -289,14 +290,13 @@ createGame name vsAI cardSet maybeToken =
 
         requestBody =
             Encode.object
-                [ ( "newGamePlayerName", Encode.string name )
-                , ( "newGameVsAI", Encode.bool vsAI )
+                [ ( "newGameVsAI", Encode.bool vsAI )
                 , ( "newGameCardSet", encodeCardSet cardSet )
                 ]
     in
     Http.request
         { method = "POST"
-        , headers = tokenHeader
+        , headers = []
         , url = "/1/onitama/games"
         , body = Http.jsonBody requestBody
         , expect = Http.expectJson ReceivedNewGameResponse eitherDecoder
@@ -305,43 +305,28 @@ createGame name vsAI cardSet maybeToken =
         }
 
 
-joinGame : GameId -> String -> Maybe PlayerToken -> Cmd Msg
-joinGame gameid name maybeToken =
+joinGame : GameId -> Cmd Msg
+joinGame gameid =
     let
-        tokenHeader =
-            case maybeToken of
-                Just token ->
-                    [ Http.header "X-Session-Token" token ]
-
-                Nothing ->
-                    []
-
-        -- Decode Either JoinError JoinGameResponse
-        -- Server returns: {"Left": "JENameTaken"} or {"Right": {...}}
         eitherDecoder =
             Decode.oneOf
                 [ Decode.field "Right" decodeJoinGameResponse |> Decode.map Ok
                 , Decode.field "Left" decodeJoinError |> Decode.map Err
                 ]
-
-        requestBody =
-            Encode.object
-                [ ( "joinPlayerName", Encode.string name )
-                ]
     in
     Http.request
         { method = "POST"
-        , headers = tokenHeader
+        , headers = []
         , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/players"
-        , body = Http.jsonBody requestBody
+        , body = Http.emptyBody
         , expect = Http.expectJson ReceivedJoinGameResponse eitherDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
 
 
-postNewGameMove : GameId -> PlayerToken -> Game.GameMove -> Cmd Msg
-postNewGameMove gameid token gameMove =
+postNewGameMove : GameId -> Game.GameMove -> Cmd Msg
+postNewGameMove gameid gameMove =
     let
         eitherDecoder =
             Decode.oneOf
@@ -351,7 +336,7 @@ postNewGameMove gameid token gameMove =
     in
     Http.request
         { method = "POST"
-        , headers = [ Http.header "X-Session-Token" token ]
+        , headers = []
         , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/moves"
         , body = Http.jsonBody (encodeGameMove gameMove)
         , expect = Http.expectJson ReceivedPostCreatedFromServer eitherDecoder
@@ -360,8 +345,8 @@ postNewGameMove gameid token gameMove =
         }
 
 
-concede : GameId -> PlayerToken -> Cmd Msg
-concede gameid token =
+concede : GameId -> Cmd Msg
+concede gameid =
     let
         eitherDecoder =
             Decode.oneOf
@@ -371,7 +356,7 @@ concede gameid token =
     in
     Http.request
         { method = "POST"
-        , headers = [ Http.header "X-Session-Token" token ]
+        , headers = []
         , url = "/1/onitama/games/" ++ String.fromInt gameid ++ "/concede"
         , body = Http.emptyBody
         , expect = Http.expectJson ReceivedConcedeResponse eitherDecoder
@@ -382,6 +367,13 @@ concede gameid token =
 
 
 -- DECODERS
+
+
+decodeAuthUser : Decoder AuthUser
+decodeAuthUser =
+    Decode.succeed AuthUser
+        |> required "authUserId" Decode.string
+        |> required "authUserName" Decode.string
 
 
 decodeJoinError : Decoder JoinError
@@ -396,14 +388,8 @@ decodeJoinError =
                     "JEGameFull" ->
                         Decode.succeed JEGameFull
 
-                    "JEInvalidToken" ->
-                        Decode.succeed JEInvalidToken
-
-                    "JENameTaken" ->
-                        Decode.succeed JENameTaken
-
-                    "JEInvalidName" ->
-                        Decode.succeed JEInvalidName
+                    "JENotAuthenticated" ->
+                        Decode.succeed JENotAuthenticated
 
                     _ ->
                         Decode.fail ("Unknown join error: " ++ str)
@@ -416,9 +402,6 @@ decodeMoveError =
         |> Decode.andThen
             (\str ->
                 case str of
-                    "MEInvalidToken" ->
-                        Decode.succeed MEInvalidToken
-
                     "MENotYourTurn" ->
                         Decode.succeed MENotYourTurn
 
@@ -431,6 +414,9 @@ decodeMoveError =
                     "MEInvalidMove" ->
                         Decode.succeed MEInvalidMove
 
+                    "MENotAuthenticated" ->
+                        Decode.succeed MENotAuthenticated
+
                     _ ->
                         Decode.fail ("Unknown move error: " ++ str)
             )
@@ -442,14 +428,14 @@ decodeConcedeError =
         |> Decode.andThen
             (\str ->
                 case str of
-                    "CEInvalidToken" ->
-                        Decode.succeed CEInvalidToken
-
                     "CEGameNotFound" ->
                         Decode.succeed CEGameNotFound
 
                     "CEAlreadyEnded" ->
                         Decode.succeed CEAlreadyEnded
+
+                    "CENotAuthenticated" ->
+                        Decode.succeed CENotAuthenticated
 
                     _ ->
                         Decode.fail ("Unknown concede error: " ++ str)
@@ -535,7 +521,6 @@ decodeJoinGameResponse : Decoder JoinGameResponse
 decodeJoinGameResponse =
     Decode.succeed JoinGameResponse
         |> required "responseGame" decodeGame
-        |> required "responseToken" Decode.string
         |> required "responsePlayerName" Decode.string
 
 

@@ -29,7 +29,7 @@ import Network.Wai (Application, responseStream)
 import Network.Wai.Application.Static (defaultFileServerSettings, staticApp)
 import qualified Onitama
 import qualified Options
-import Servant (Application, Handler, HasServer (ServerT), Server, Tagged (Tagged), err404, hoistServer, serve, throwError, unTagged, type (:<|>) (..))
+import Servant (Application, Handler, HasServer (ServerT), Server, Tagged (Tagged), err401, err404, hoistServer, serve, throwError, unTagged, type (:<|>) (..))
 import Subscribers (GameEvent (..), LobbyEvent (..))
 import qualified Subscribers
 import System.Directory (doesFileExist)
@@ -72,6 +72,14 @@ timed label val = do
   putStrLn $ label ++ " took " ++ show (round ms :: Int) ++ "ms"
   return result
 
+-- | Extract authenticated user from OIDC headers, or throw error.
+requireAuth :: Maybe OidcUserId -> Maybe T.Text -> Either e AuthUser -> Either e AuthUser
+requireAuth maybeUserId maybeName _ =
+  case (maybeUserId, maybeName) of
+    (Just uid, Just name) -> Right (AuthUser uid name)
+    (Just uid, Nothing) -> Right (AuthUser uid (let OidcUserId t = uid in t))
+    _ -> Left undefined -- will be handled per-endpoint
+
 -- | Build the complete server: typed API routes + static file serving
 makeServer :: Maybe FilePath -> Bool -> Database.CleanupConfig -> Int -> Int -> Bool -> IO (Server APIWithAssets)
 makeServer dbPath resetDB cleanupCfg saveIntervalMins cleanupIntervalMins cleanupEnabled = do
@@ -103,69 +111,72 @@ handlers env =
     :<|> concede
     :<|> lobbyStreamHandler env
     :<|> gameStreamHandler env
+    :<|> whoAmI
     :<|> getIndexHtml
 
-newGame :: Maybe SessionToken -> NewGameRequest -> AppM (Either JoinError NewGameResponse)
-newGame maybeToken (NewGameRequest name vsAI cardSet) = do
-  let trimmedName = T.strip (T.pack name)
-  if T.null trimmedName
-    then return $ Left JEInvalidName
-    else
+-- | Extract AuthUser from headers or return an error
+extractAuth :: Maybe OidcUserId -> Maybe T.Text -> Maybe AuthUser
+extractAuth (Just uid) (Just name) = Just (AuthUser uid name)
+extractAuth (Just uid) Nothing = Just (AuthUser uid (let OidcUserId t = uid in t))
+extractAuth _ _ = Nothing
+
+newGame :: Maybe OidcUserId -> Maybe T.Text -> NewGameRequest -> AppM (Either JoinError NewGameResponse)
+newGame maybeUserId maybeName (NewGameRequest vsAI cardSet) =
+  case extractAuth maybeUserId maybeName of
+    Nothing -> return $ Left JENotAuthenticated
+    Just user ->
       if vsAI
-        then newAIGame maybeToken trimmedName cardSet
-        else newMultiplayerGame maybeToken trimmedName cardSet
+        then newAIGame user cardSet
+        else newMultiplayerGame user cardSet
 
-newMultiplayerGame :: Maybe SessionToken -> T.Text -> CardSet -> AppM (Either JoinError NewGameResponse)
-newMultiplayerGame maybeToken playerName cardSet = runExceptT $ do
+newMultiplayerGame :: AuthUser -> CardSet -> AppM (Either JoinError NewGameResponse)
+newMultiplayerGame user cardSet = runExceptT $ do
   env <- lift ask
   let db = appDB env
       store = appSubscribers env
+      userId = authUserId user
+      displayName = authUserName user
 
-  -- Resolve player identity first (can fail with JENameTaken/JEInvalidName)
-  player <- liftIO $ Database.resolvePlayerForGame db playerName maybeToken
-  hoistEither player >>= \p -> do
-    let pid = Database.playerId p
-
-    -- Create game with the creator already assigned
-    newCards <- liftIO $ Onitama.give5Cards cardSet
-    now <- liftIO getCurrentTime
-    let game =
-          Game
-            { player_white = Just pid,
-              player_black = Nothing,
-              cards = newCards,
-              history = [],
-              winner = Nothing,
-              createdAt = now,
-              lastActivity = now,
-              aiDifficulty = Nothing
-            }
-    gameId <- liftIO $ Database.insertGameWithNewId db game
-    liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
-
-    gameWithNames <- liftIO $ Database.gameToGameWithNames db game
-    let joinResponse = JoinGameResponse
-          { responseGame = gameWithNames,
-            responseToken = Database.playerToken p,
-            responsePlayerName = Database.playerName p
+  -- Create game with the creator already assigned
+  newCards <- liftIO $ Onitama.give5Cards cardSet
+  now <- liftIO getCurrentTime
+  let game =
+        Game
+          { player_white = Just userId,
+            player_black = Nothing,
+            player_white_name = displayName,
+            player_black_name = T.empty,
+            cards = newCards,
+            history = [],
+            winner = Nothing,
+            createdAt = now,
+            lastActivity = now,
+            aiDifficulty = Nothing
           }
-    liftIO $ do
-      Database.logDBState "After creating game" db
-      Subscribers.broadcastLobby store LobbyChanged
-      Subscribers.broadcastGame store gameId (PlayerJoinedEvent playerName White)
-    return $ NewGameResponse {newGameId = gameId, newGameJoinResponse = joinResponse}
+  gameId <- liftIO $ Database.insertGameWithNewId db game
+  liftIO $ putStrLn $ "Creating new game with ID: " ++ show gameId
 
-newAIGame :: Maybe SessionToken -> T.Text -> CardSet -> AppM (Either JoinError NewGameResponse)
-newAIGame maybeToken playerName cardSet = runExceptT $ do
+  let gameWithNames = gameToGameWithNames game
+      joinResponse = JoinGameResponse
+        { responseGame = gameWithNames,
+          responsePlayerName = displayName
+        }
+  liftIO $ do
+    Database.logDBState "After creating game" db
+    Subscribers.broadcastLobby store LobbyChanged
+    Subscribers.broadcastGame store gameId (PlayerJoinedEvent displayName White)
+  return $ NewGameResponse {newGameId = gameId, newGameJoinResponse = joinResponse}
+
+newAIGame :: AuthUser -> CardSet -> AppM (Either JoinError NewGameResponse)
+newAIGame user cardSet = runExceptT $ do
   env <- lift ask
   let db = appDB env
       store = appSubscribers env
+      userId = authUserId user
+      displayName = authUserName user
+      aiUserId = OidcUserId "__ai__"
       aiName = T.pack "Computer"
       depth = 5
-
-  -- Get or create AI player
-  maybeAI <- liftIO $ Database.getPlayerByName db aiName
-  aiPlayer <- maybe (liftIO $ Database.createPlayer db aiName) return maybeAI
 
   -- Create game with AI as Black
   newCards <- liftIO $ Onitama.give5Cards cardSet
@@ -173,7 +184,9 @@ newAIGame maybeToken playerName cardSet = runExceptT $ do
   let game =
         Game
           { player_white = Nothing,
-            player_black = Just (Database.playerId aiPlayer),
+            player_black = Just aiUserId,
+            player_white_name = T.empty,
+            player_black_name = aiName,
             cards = newCards,
             history = [],
             winner = Nothing,
@@ -192,10 +205,10 @@ newAIGame maybeToken playerName cardSet = runExceptT $ do
     White -> return currentGame
 
   -- Join human as White
-  joinResponse <- hoistEither =<< liftIO (Database.joinGameWithToken db gameId playerName maybeToken)
+  joinResponse <- hoistEither =<< liftIO (Database.joinGame db gameId userId displayName)
   liftIO $ do
     Subscribers.broadcastLobby store LobbyChanged
-    Subscribers.broadcastGame store gameId (PlayerJoinedEvent playerName White)
+    Subscribers.broadcastGame store gameId (PlayerJoinedEvent displayName White)
   unless (null $ history gameAfterAI) $ do
     let (aiMove, aiTime) = head (history gameAfterAI)
     liftIO $ Subscribers.broadcastGame store gameId (MoveEvent aiMove aiTime (winner gameAfterAI))
@@ -222,34 +235,38 @@ getGameSummaries = do
   db <- asks appDB
   liftIO $ Database.getAllGameSummaries db
 
-joinGame :: GameId -> Maybe SessionToken -> JoinRequest -> AppM (Either JoinError JoinGameResponse)
-joinGame gameId maybeToken (JoinRequest name) = runExceptT $ do
-  env <- lift ask
-  let db = appDB env
-      store = appSubscribers env
-      playerName = T.pack name
-  liftIO $ putStrLn $ "Player '" ++ name ++ "' attempting to join game " ++ show gameId
+joinGame :: GameId -> Maybe OidcUserId -> Maybe T.Text -> AppM (Either JoinError JoinGameResponse)
+joinGame gameId maybeUserId maybeName = runExceptT $ do
+  case extractAuth maybeUserId maybeName of
+    Nothing -> throwE JENotAuthenticated
+    Just user -> do
+      env <- lift ask
+      let db = appDB env
+          store = appSubscribers env
+          userId = authUserId user
+          displayName = authUserName user
+      liftIO $ putStrLn $ "Player '" ++ T.unpack displayName ++ "' attempting to join game " ++ show gameId
 
-  -- Get game state before join to detect new joins vs rejoins
-  maybeGameBefore <- liftIO $ Database.getGameById db gameId
+      -- Get game state before join to detect new joins vs rejoins
+      maybeGameBefore <- liftIO $ Database.getGameById db gameId
 
-  joinResponse <- hoistEither =<< liftIO (Database.joinGameWithToken db gameId playerName maybeToken)
+      joinResponse <- hoistEither =<< liftIO (Database.joinGame db gameId userId displayName)
 
-  -- Broadcast PlayerJoinedEvent only for new joins (not rejoins)
-  let respGame = responseGame joinResponse
-      joinedName = responsePlayerName joinResponse
-      joinedColor = if joinedName == gameWhiteName respGame then White else Black
-  case maybeGameBefore of
-    Just gameBefore -> do
-      let slotWasEmpty = case joinedColor of
-            White -> isNothing (player_white gameBefore)
-            Black -> isNothing (player_black gameBefore)
-      when slotWasEmpty $
-        liftIO $
-          Subscribers.broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
-    Nothing -> return ()
-  liftIO $ Subscribers.broadcastLobby store LobbyChanged
-  return joinResponse
+      -- Broadcast PlayerJoinedEvent only for new joins (not rejoins)
+      let respGame = responseGame joinResponse
+          joinedName = responsePlayerName joinResponse
+          joinedColor = if joinedName == gameWhiteName respGame then White else Black
+      case maybeGameBefore of
+        Just gameBefore -> do
+          let slotWasEmpty = case joinedColor of
+                White -> isNothing (player_white gameBefore)
+                Black -> isNothing (player_black gameBefore)
+          when slotWasEmpty $
+            liftIO $
+              Subscribers.broadcastGame store gameId (PlayerJoinedEvent joinedName joinedColor)
+        Nothing -> return ()
+      liftIO $ Subscribers.broadcastLobby store LobbyChanged
+      return joinResponse
 
 getGame :: GameId -> AppM GameWithNames
 getGame gameId = do
@@ -259,21 +276,19 @@ getGame gameId = do
     Nothing -> throwError err404
     Just game -> return game
 
-newMove :: GameId -> Maybe SessionToken -> Types.MoveNotation -> AppM (Either MoveError Types.MoveNotation)
-newMove gameId maybeToken move = runExceptT $ do
-  token <- noteE MEInvalidToken maybeToken
+newMove :: GameId -> Maybe OidcUserId -> Maybe T.Text -> Types.MoveNotation -> AppM (Either MoveError Types.MoveNotation)
+newMove gameId maybeUserId maybeName move = runExceptT $ do
+  user <- case extractAuth maybeUserId maybeName of
+    Nothing -> throwE MENotAuthenticated
+    Just u -> return u
   env <- lift ask
   let db = appDB env
       store = appSubscribers env
+      userId = authUserId user
 
   -- Get game and validate player
   game <- noteE MEGameNotFound =<< liftIO (Database.getGameById db gameId)
-  maybePlayer <- liftIO $ Database.getPlayerByToken db token
-  let isInGame = case maybePlayer of
-        Just p ->
-          let pid = Database.playerId p
-           in player_white game == Just pid || player_black game == Just pid
-        Nothing -> False
+  let isInGame = player_white game == Just userId || player_black game == Just userId
   unless isInGame $ do
     liftIO $ putStrLn "Move rejected: player not in game"
     throwE MENotYourTurn
@@ -300,17 +315,26 @@ newMove gameId maybeToken move = runExceptT $ do
   when (isNothing maybeWinner) $ lift $ triggerAIMove gameId
   return move
 
-concede :: GameId -> Maybe SessionToken -> AppM (Either ConcedeError Color)
-concede gameId maybeToken = runExceptT $ do
-  token <- noteE CEInvalidToken maybeToken
+concede :: GameId -> Maybe OidcUserId -> Maybe T.Text -> AppM (Either ConcedeError Color)
+concede gameId maybeUserId maybeName = runExceptT $ do
+  user <- case extractAuth maybeUserId maybeName of
+    Nothing -> throwE CENotAuthenticated
+    Just u -> return u
   env <- lift ask
   let db = appDB env
       store = appSubscribers env
-  winnerColor <- noteE CEGameNotFound =<< liftIO (Database.concedeGame db gameId token)
+      userId = authUserId user
+  winnerColor <- noteE CEGameNotFound =<< liftIO (Database.concedeGame db gameId userId)
   liftIO $ do
     Subscribers.broadcastGame store gameId (ConcedeEvent winnerColor)
     Subscribers.broadcastLobby store LobbyChanged
   return winnerColor
+
+whoAmI :: Maybe OidcUserId -> Maybe T.Text -> AppM AuthUser
+whoAmI maybeUserId maybeName =
+  case extractAuth maybeUserId maybeName of
+    Nothing -> throwError err401
+    Just user -> return user
 
 triggerAIMove :: GameId -> AppM ()
 triggerAIMove gameId = void $ runMaybeT $ do

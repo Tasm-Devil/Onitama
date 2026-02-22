@@ -179,8 +179,8 @@ update msg model =
 -- VIEW
 
 
-view : List String -> Model -> Html Msg
-view myNames model =
+view : Maybe String -> Model -> Html Msg
+view myName model =
     let
         data =
             getBrowsingData model
@@ -196,12 +196,20 @@ view myNames model =
                 [ Html.text "the rules" ]
             , Html.text " if you haven't played before."
             ]
-        , Html.div [ HtmlA.class "lobby-actions" ]
-            [ Html.button [ HtmlA.class "new-game", onClick ClickNewGame ]
-                [ Html.text "New Game" ]
-            , Html.button [ HtmlA.class "new-game", onClick ClickNewGameAI ]
-                [ Html.text "Play vs AI" ]
-            ]
+        , case myName of
+            Just _ ->
+                Html.div [ HtmlA.class "lobby-actions" ]
+                    [ Html.button [ HtmlA.class "new-game", onClick ClickNewGame ]
+                        [ Html.text "New Game" ]
+                    , Html.button [ HtmlA.class "new-game", onClick ClickNewGameAI ]
+                        [ Html.text "Play vs AI" ]
+                    ]
+
+            Nothing ->
+                Html.div [ HtmlA.class "lobby-actions" ]
+                    [ Html.a [ HtmlA.class "new-game", HtmlA.href "/oauth2/sign_in" ]
+                        [ Html.text "Login with GitHub" ]
+                    ]
         , case model of
             PickingCardSet gameType cardSet _ ->
                 viewCardSetPicker gameType cardSet
@@ -230,7 +238,7 @@ view myNames model =
                             [ Html.text "Action" ]
                         ]
                     ]
-                    :: List.map (createGameTableRow myNames data.currentTime) data.games
+                    :: List.map (createGameTableRow myName data.currentTime) data.games
                 )
         ]
 
@@ -266,8 +274,8 @@ viewCardSetPicker gameType cardSet =
         ]
 
 
-createGameTableRow : List String -> Posix -> GameSummary -> Html Msg
-createGameTableRow myNames currentTime summary =
+createGameTableRow : Maybe String -> Posix -> GameSummary -> Html Msg
+createGameTableRow myName currentTime summary =
     let
         player1Display =
             if String.isEmpty summary.summaryPlayer1 then
@@ -322,11 +330,12 @@ createGameTableRow myNames currentTime summary =
         , Html.td []
             (let
                 isMyGame =
-                    List.any
-                        (\n ->
+                    case myName of
+                        Just n ->
                             n == summary.summaryPlayer1 || n == summary.summaryPlayer2
-                        )
-                        myNames
+
+                        Nothing ->
+                            False
 
                 gameLink label =
                     Html.a [ HtmlA.class "join-game", HtmlA.href (String.fromInt summary.summaryId) ]
@@ -334,19 +343,15 @@ createGameTableRow myNames currentTime summary =
              in
              case summary.summaryStatus of
                 WaitingForPlayers ->
-                    [ gameLink "Join" ]
+                    if myName == Nothing then
+                        [ gameLink "Watch" ]
+
+                    else
+                        [ gameLink "Join" ]
 
                 InProgress ->
                     if isMyGame then
                         [ gameLink "Play" ]
-
-                    else if List.isEmpty myNames then
-                        [ Html.span [ HtmlA.class "action-group" ]
-                            [ Html.button [ HtmlA.class "join-game", onClick (ClickPlay summary.summaryId) ]
-                                [ Html.text "Play" ]
-                            , gameLink "Watch"
-                            ]
-                        ]
 
                     else
                         [ gameLink "Watch" ]

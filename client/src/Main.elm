@@ -3,7 +3,6 @@ module Main exposing (main)
 import Api exposing (GameEvent(..), GameId, Msg(..), ServerGame)
 import Browser
 import Browser.Navigation as Nav exposing (Key)
-import EnterName
 import Game.Card exposing (dummyCard)
 import Game.Figure exposing (Color(..))
 import Game.Game as Game exposing (Game, GameState(..), Msg(..), transformGameMove)
@@ -23,31 +22,11 @@ import Url exposing (Url)
 -- TYPES
 
 
-type alias PlayerName =
-    String
-
-
-type alias PlayerToken =
-    String
-
-
-type alias PlayerSession =
-    { name : PlayerName
-    , token : PlayerToken
-    }
-
-
 type alias Model =
     { key : Key
-    , storedPlayers : List PlayerSession
-    , currentPlayer : Maybe PlayerSession
+    , currentUser : Maybe Api.AuthUser
     , page : Page
     }
-
-
-type PendingAction
-    = PendingCreate Bool Lobby.CardSet
-    | PendingJoin GameId
 
 
 type Route
@@ -58,8 +37,7 @@ type Route
 type Page
     = Loading Route
     | LobbyPage Lobby.Model
-    | EnterNamePage PendingAction EnterName.Model
-    | AwaitingGame PendingAction String
+    | AwaitingGame (Maybe GameId) String
     | GamePage GameId Game (List Game.LogEntry)
 
 
@@ -67,19 +45,11 @@ type Msg
     = ChangedUrl Url
     | ClickedLink Browser.UrlRequest
     | GotGameMsg Game.Msg
-    | GotEnterNameMsg EnterName.Msg
     | GotLobbyMsg Lobby.Msg
-    | StoredPlayersLoaded Encode.Value
     | GotServerMsg Api.Msg
     | LobbyEventReceived Encode.Value
     | GameEventReceived Encode.Value
     | LobbyTick Time.Posix
-
-
-type NavigationAction
-    = JoinDirectly PlayerSession
-    | NeedIdentity
-    | SpectateGame
 
 
 
@@ -100,17 +70,17 @@ main =
 
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( { key = key, storedPlayers = [], currentPlayer = Nothing, page = Loading (routeFromUrl url) }
-    , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+    ( { key = key, currentUser = Nothing, page = Loading (routeFromUrl url) }
+    , Cmd.batch
+        [ Cmd.map GotServerMsg Api.getMe
+        , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+        ]
     )
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     let
-        playersSub =
-            Ports.loadPlayers StoredPlayersLoaded
-
         sseSub =
             case model.page of
                 GamePage _ game _ ->
@@ -127,7 +97,7 @@ subscriptions model =
                 _ ->
                     Sub.none
     in
-    Sub.batch [ playersSub, sseSub ]
+    sseSub
 
 
 
@@ -146,14 +116,8 @@ update msg model =
         GotGameMsg gamemsg ->
             handleGameMsg gamemsg model
 
-        GotEnterNameMsg enterNameMsg ->
-            handleEnterNameMsg enterNameMsg model
-
         GotLobbyMsg lobbyMsg ->
             handleLobbyMsg lobbyMsg model
-
-        StoredPlayersLoaded value ->
-            ( { model | storedPlayers = decodePlayers value }, Cmd.none )
 
         GotServerMsg servermsg ->
             handleServerMsg servermsg model
@@ -194,16 +158,6 @@ handleUrlChange url model =
                 LobbyRoute ->
                     ( model, Cmd.none )
 
-        EnterNamePage (PendingJoin currentGameId) _ ->
-            if route == GameRoute currentGameId then
-                ( model, Cmd.none )
-
-            else
-                ( { model | page = Loading route }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
-
-        EnterNamePage _ _ ->
-            ( { model | page = Loading route }, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
-
         GamePage currentGameId _ _ ->
             if route == GameRoute currentGameId then
                 ( model, Cmd.none )
@@ -227,26 +181,29 @@ handleClickedLink : Browser.UrlRequest -> Model -> ( Model, Cmd Msg )
 handleClickedLink urlRequest model =
     case urlRequest of
         Browser.Internal url ->
-            ( model, Nav.pushUrl model.key (Url.toString url) )
+            if String.startsWith "/oauth2/" url.path then
+                ( model, Nav.load (Url.toString url) )
 
-        _ ->
-            ( model, Cmd.none )
+            else
+                ( model, Nav.pushUrl model.key (Url.toString url) )
+
+        Browser.External href ->
+            ( model, Nav.load href )
 
 
 handleGameNavigation : Model -> Lobby.Model -> GameId -> ( Model, Cmd Msg )
 handleGameNavigation model lobbyModel gameid =
-    case resolveGameNavigation model.currentPlayer (Lobby.getGames lobbyModel) gameid of
-        JoinDirectly session ->
-            ( { model | currentPlayer = Just session, page = AwaitingGame (PendingJoin gameid) session.name }
+    case resolveGameNavigation model.currentUser (Lobby.getGames lobbyModel) gameid of
+        JoinDirectly ->
+            let
+                displayName =
+                    model.currentUser |> Maybe.map .displayName |> Maybe.withDefault ""
+            in
+            ( { model | page = AwaitingGame (Just gameid) displayName }
             , Cmd.batch
                 [ Ports.closeLobbyStream ()
-                , Cmd.map GotServerMsg (Api.joinGame gameid session.name (Just session.token))
+                , Cmd.map GotServerMsg (Api.joinGame gameid)
                 ]
-            )
-
-        NeedIdentity ->
-            ( { model | page = EnterNamePage (PendingJoin gameid) (EnterName.Entering "") }
-            , Ports.closeLobbyStream ()
             )
 
         SpectateGame ->
@@ -255,8 +212,13 @@ handleGameNavigation model lobbyModel gameid =
             )
 
 
-resolveGameNavigation : Maybe PlayerSession -> List Lobby.GameSummary -> GameId -> NavigationAction
-resolveGameNavigation currentPlayer summaries gameid =
+type NavigationAction
+    = JoinDirectly
+    | SpectateGame
+
+
+resolveGameNavigation : Maybe Api.AuthUser -> List Lobby.GameSummary -> GameId -> NavigationAction
+resolveGameNavigation currentUser summaries gameid =
     let
         summary =
             List.filter (\s -> s.summaryId == gameid) summaries |> List.head
@@ -264,10 +226,10 @@ resolveGameNavigation currentPlayer summaries gameid =
         status =
             Maybe.map .summaryStatus summary
 
-        matchesGamePlayer session =
+        matchesGamePlayer user =
             case summary of
                 Just s ->
-                    session.name == s.summaryPlayer1 || session.name == s.summaryPlayer2
+                    user.displayName == s.summaryPlayer1 || user.displayName == s.summaryPlayer2
 
                 Nothing ->
                     False
@@ -277,18 +239,18 @@ resolveGameNavigation currentPlayer summaries gameid =
             SpectateGame
 
         Just Lobby.WaitingForPlayers ->
-            case currentPlayer of
-                Just session ->
-                    JoinDirectly session
+            case currentUser of
+                Just _ ->
+                    JoinDirectly
 
                 Nothing ->
-                    NeedIdentity
+                    SpectateGame
 
         Just Lobby.InProgress ->
-            case currentPlayer of
-                Just session ->
-                    if matchesGamePlayer session then
-                        JoinDirectly session
+            case currentUser of
+                Just user ->
+                    if matchesGamePlayer user then
+                        JoinDirectly
 
                     else
                         SpectateGame
@@ -297,20 +259,24 @@ resolveGameNavigation currentPlayer summaries gameid =
                     SpectateGame
 
         Nothing ->
-            NeedIdentity
+            case currentUser of
+                Just _ ->
+                    JoinDirectly
+
+                Nothing ->
+                    SpectateGame
 
 
 resolveGameRoute : Model -> List Lobby.GameSummary -> GameId -> ( Model, Cmd Msg )
 resolveGameRoute model summaries gameid =
-    case resolveGameNavigation model.currentPlayer summaries gameid of
-        JoinDirectly session ->
-            ( { model | currentPlayer = Just session, page = AwaitingGame (PendingJoin gameid) session.name }
-            , Cmd.map GotServerMsg (Api.joinGame gameid session.name (Just session.token))
-            )
-
-        NeedIdentity ->
-            ( { model | page = EnterNamePage (PendingJoin gameid) (EnterName.Entering "") }
-            , Cmd.none
+    case resolveGameNavigation model.currentUser summaries gameid of
+        JoinDirectly ->
+            let
+                displayName =
+                    model.currentUser |> Maybe.map .displayName |> Maybe.withDefault ""
+            in
+            ( { model | page = AwaitingGame (Just gameid) displayName }
+            , Cmd.map GotServerMsg (Api.joinGame gameid)
             )
 
         SpectateGame ->
@@ -348,9 +314,10 @@ handleLobbyMsg msg model =
                     handleLobbyCreate model lobbyModel
 
                 Lobby.ClickPlay gameid ->
-                    ( { model | page = EnterNamePage (PendingJoin gameid) (EnterName.Entering "") }
+                    ( { model | page = AwaitingGame (Just gameid) (model.currentUser |> Maybe.map .displayName |> Maybe.withDefault "") }
                     , Cmd.batch
                         [ Ports.closeLobbyStream ()
+                        , Cmd.map GotServerMsg (Api.joinGame gameid)
                         , Nav.pushUrl model.key ("/" ++ String.fromInt gameid)
                         ]
                     )
@@ -370,74 +337,17 @@ handleLobbyCreate model lobbyModel =
                 vsAI =
                     gameType == Lobby.VsAI
 
-                action =
-                    PendingCreate vsAI cardSet
+                displayName =
+                    model.currentUser |> Maybe.map .displayName |> Maybe.withDefault ""
             in
-            case model.currentPlayer of
-                Just session ->
-                    ( { model | page = AwaitingGame action session.name }
-                    , Cmd.batch
-                        [ Ports.closeLobbyStream ()
-                        , Cmd.map GotServerMsg (Api.createGame session.name vsAI cardSet (Just session.token))
-                        ]
-                    )
-
-                Nothing ->
-                    ( { model | page = EnterNamePage action (EnterName.Entering "") }
-                    , Ports.closeLobbyStream ()
-                    )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-
--- ENTER NAME HANDLERS
-
-
-handleEnterNameMsg : EnterName.Msg -> Model -> ( Model, Cmd Msg )
-handleEnterNameMsg enterNameMsg model =
-    case ( enterNameMsg, model.page ) of
-        ( EnterName.RequestJoin, EnterNamePage pendingAction enterNameModel ) ->
-            handleIdentitySubmit model pendingAction enterNameModel
-
-        ( EnterName.Cancel, EnterNamePage _ _ ) ->
-            ( { model | page = Loading LobbyRoute }
+            ( { model | page = AwaitingGame Nothing displayName }
             , Cmd.batch
-                [ Nav.pushUrl model.key "/"
-                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                [ Ports.closeLobbyStream ()
+                , Cmd.map GotServerMsg (Api.createGame vsAI cardSet)
                 ]
             )
 
-        ( _, EnterNamePage action enterNameModel ) ->
-            ( { model | page = EnterNamePage action (EnterName.update enterNameMsg enterNameModel) }
-            , Cmd.none
-            )
-
         _ ->
-            ( model, Cmd.none )
-
-
-handleIdentitySubmit : Model -> PendingAction -> EnterName.Model -> ( Model, Cmd Msg )
-handleIdentitySubmit model pendingAction enterNameModel =
-    case EnterName.getName enterNameModel of
-        Just name ->
-            if String.isEmpty (String.trim name) then
-                ( model, Cmd.none )
-
-            else
-                let
-                    maybeToken =
-                        findTokenForName name model.storedPlayers
-
-                    session =
-                        { name = name, token = Maybe.withDefault "" maybeToken }
-                in
-                ( { model | currentPlayer = Just session, page = AwaitingGame pendingAction name }
-                , Cmd.map GotServerMsg (fireCreateOrJoin pendingAction name maybeToken)
-                )
-
-        Nothing ->
             ( model, Cmd.none )
 
 
@@ -449,9 +359,9 @@ handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
 handleGameMsg gamemsg model =
     case model.page of
         GamePage gameid game log ->
-            case ( gamemsg, model.currentPlayer ) of
-                ( Game.UserClickedConcede, Just session ) ->
-                    ( model, Cmd.map GotServerMsg (Api.concede gameid session.token) )
+            case gamemsg of
+                Game.UserClickedConcede ->
+                    ( model, Cmd.map GotServerMsg (Api.concede gameid) )
 
                 _ ->
                     let
@@ -459,10 +369,10 @@ handleGameMsg gamemsg model =
                             Game.update gamemsg game
 
                         cmd =
-                            case ( updatedGame.state, model.currentPlayer ) of
-                                ( MoveDone gameMove, Just session ) ->
+                            case updatedGame.state of
+                                MoveDone gameMove ->
                                     transformGameMove gameMove
-                                        |> Api.postNewGameMove gameid session.token
+                                        |> Api.postNewGameMove gameid
                                         |> Cmd.map GotServerMsg
 
                                 _ ->
@@ -499,6 +409,19 @@ handleServerMsg servermsg model =
         ReceivedNewGameResponse result ->
             handleNewGameResponse result model
 
+        ReceivedMe result ->
+            handleMeResponse result model
+
+
+handleMeResponse : Result Http.Error Api.AuthUser -> Model -> ( Model, Cmd Msg )
+handleMeResponse result model =
+    case result of
+        Ok user ->
+            ( { model | currentUser = Just user }, Cmd.none )
+
+        Err _ ->
+            ( model, Cmd.none )
+
 
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )
 handleGameSummaries result model =
@@ -528,17 +451,23 @@ handleGameSummaries result model =
 handleJoinResponse : Result Http.Error (Result Api.JoinError Api.JoinGameResponse) -> Model -> ( Model, Cmd Msg )
 handleJoinResponse result model =
     case ( result, model.page ) of
-        ( Ok (Ok joinResponse), AwaitingGame (PendingJoin gameid) _ ) ->
+        ( Ok (Ok joinResponse), AwaitingGame (Just gameid) _ ) ->
             joinGameSuccess model gameid joinResponse
 
-        ( Ok (Err joinError), AwaitingGame action playerName ) ->
-            ( { model | page = EnterNamePage action (EnterName.JoinError playerName (Api.joinErrorToString joinError)) }
-            , Cmd.none
+        ( Ok (Err _), AwaitingGame _ _ ) ->
+            ( { model | page = Loading LobbyRoute }
+            , Cmd.batch
+                [ Nav.pushUrl model.key "/"
+                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                ]
             )
 
-        ( Err httpError, AwaitingGame action playerName ) ->
-            ( { model | page = EnterNamePage action (EnterName.JoinError playerName (httpErrorToString httpError)) }
-            , Cmd.none
+        ( Err _, AwaitingGame _ _ ) ->
+            ( { model | page = Loading LobbyRoute }
+            , Cmd.batch
+                [ Nav.pushUrl model.key "/"
+                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                ]
             )
 
         _ ->
@@ -553,9 +482,6 @@ joinGameSuccess model gameid joinResponse =
 
         name =
             joinResponse.responsePlayerName
-
-        session =
-            { name = name, token = joinResponse.responseToken }
 
         finalgame =
             buildGame name servergame
@@ -611,25 +537,19 @@ joinGameSuccess model gameid joinResponse =
             else
                 { finalgame | state = WaitingForOpponent }
 
-        saveCmd =
-            if not (String.isEmpty name) then
-                Ports.savePlayer (encodePlayer session)
-
-            else
-                Cmd.none
-
         urlCmd =
             case model.page of
-                AwaitingGame (PendingCreate _ _) _ ->
+                AwaitingGame Nothing _ ->
+                    -- Game creation: push new URL
                     Nav.pushUrl model.key ("/" ++ String.fromInt gameid)
 
                 _ ->
+                    -- Join: URL was already set
                     Nav.replaceUrl model.key ("/" ++ String.fromInt gameid)
     in
-    ( { model | currentPlayer = Just session, page = GamePage gameid gameWithState initialLog }
+    ( { model | page = GamePage gameid gameWithState initialLog }
     , Cmd.batch
-        [ saveCmd
-        , Ports.closeLobbyStream ()
+        [ Ports.closeLobbyStream ()
         , Ports.openGameStream gameid
         , urlCmd
         ]
@@ -642,14 +562,20 @@ handleNewGameResponse result model =
         ( Ok (Ok response), AwaitingGame _ _ ) ->
             joinGameSuccess model response.newGameId response.newGameJoinResponse
 
-        ( Ok (Err joinError), AwaitingGame action playerName ) ->
-            ( { model | page = EnterNamePage action (EnterName.JoinError playerName (Api.joinErrorToString joinError)) }
-            , Cmd.none
+        ( Ok (Err _), AwaitingGame _ _ ) ->
+            ( { model | page = Loading LobbyRoute }
+            , Cmd.batch
+                [ Nav.pushUrl model.key "/"
+                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                ]
             )
 
-        ( Err httpError, AwaitingGame action playerName ) ->
-            ( { model | page = EnterNamePage action (EnterName.JoinError playerName (httpErrorToString httpError)) }
-            , Cmd.none
+        ( Err _, AwaitingGame _ _ ) ->
+            ( { model | page = Loading LobbyRoute }
+            , Cmd.batch
+                [ Nav.pushUrl model.key "/"
+                , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+                ]
             )
 
         _ ->
@@ -768,28 +694,13 @@ view model =
                         [ Html.div [ HtmlA.class "spinner" ] [] ]
 
                 LobbyPage lobbyModel ->
-                    let
-                        playerNames =
-                            case model.currentPlayer of
-                                Just s ->
-                                    [ s.name ]
-
-                                Nothing ->
-                                    []
-                    in
                     Html.div [ HtmlA.class "lobby" ]
-                        [ Lobby.view playerNames lobbyModel |> Html.map GotLobbyMsg ]
+                        [ Lobby.view (Maybe.map .displayName model.currentUser) lobbyModel |> Html.map GotLobbyMsg ]
 
-                EnterNamePage _ enterNameModel ->
-                    Html.div [ HtmlA.class "landing-screen" ]
-                        (EnterName.view enterNameModel (List.map .name model.storedPlayers)
-                            |> List.map (Html.map GotEnterNameMsg)
-                        )
-
-                AwaitingGame _ playerName ->
+                AwaitingGame _ displayName ->
                     Html.div [ HtmlA.class "landing-screen" ]
                         [ Html.h2 [] [ Html.text "Joining game..." ]
-                        , Html.p [] [ Html.text ("Joining as " ++ playerName) ]
+                        , Html.p [] [ Html.text ("Joining as " ++ displayName) ]
                         , Html.div [ HtmlA.class "spinner" ] []
                         ]
 
@@ -816,7 +727,7 @@ viewFooter =
             , HtmlA.class "game-title"
             ]
             [ Html.text "Onitama" ]
-        , Html.span [ HtmlA.class "separator" ] [ Html.text "•" ]
+        , Html.span [ HtmlA.class "separator" ] [ Html.text "\u{2022}" ]
         , Html.text "Made with "
         , Html.a
             [ HtmlA.href "https://elm-lang.org"
@@ -831,7 +742,7 @@ viewFooter =
             , HtmlA.rel "noopener noreferrer"
             ]
             [ Html.i [ HtmlA.class "nf nf-dev-haskell tech-icon" ] [] ]
-        , Html.span [ HtmlA.class "separator" ] [ Html.text "•" ]
+        , Html.span [ HtmlA.class "separator" ] [ Html.text "\u{2022}" ]
         , Html.text "View source on "
         , Html.a
             [ HtmlA.href "https://github.com/Tasm-Devil/Onitama"
@@ -856,26 +767,6 @@ routeFromUrl url =
             LobbyRoute
 
 
-encodePlayer : PlayerSession -> Encode.Value
-encodePlayer player =
-    Encode.object
-        [ ( "playerName", Encode.string player.name )
-        , ( "token", Encode.string player.token )
-        ]
-
-
-decodePlayers : Encode.Value -> List PlayerSession
-decodePlayers value =
-    let
-        playerDecoder =
-            Decode.map2 PlayerSession
-                (Decode.field "playerName" Decode.string)
-                (Decode.field "token" Decode.string)
-    in
-    Decode.decodeValue (Decode.list playerDecoder) value
-        |> Result.withDefault []
-
-
 parseWinnerColor : String -> Color
 parseWinnerColor str =
     if str == "White" then
@@ -883,14 +774,6 @@ parseWinnerColor str =
 
     else
         Black
-
-
-findTokenForName : String -> List PlayerSession -> Maybe String
-findTokenForName name players =
-    players
-        |> List.filter (\p -> p.name == name)
-        |> List.head
-        |> Maybe.map .token
 
 
 buildGame : String -> ServerGame -> Game
@@ -955,16 +838,6 @@ buildSpectatorLog servergame =
     List.map Game.MoveEntry servergame.gameHistory ++ startMsg ++ playerMsgs blackName "black" ++ playerMsgs whiteName "white"
 
 
-fireCreateOrJoin : PendingAction -> String -> Maybe String -> Cmd Api.Msg
-fireCreateOrJoin action name maybeToken =
-    case action of
-        PendingCreate vsAI cardSet ->
-            Api.createGame name vsAI cardSet maybeToken
-
-        PendingJoin gameid ->
-            Api.joinGame gameid name maybeToken
-
-
 toLobby : Model -> List Lobby.GameSummary -> Bool -> ( Model, Cmd Msg )
 toLobby model summaries redirectToRoot =
     ( { model | page = LobbyPage (Lobby.init summaries) }
@@ -978,22 +851,3 @@ toLobby model summaries redirectToRoot =
                )
         )
     )
-
-
-httpErrorToString : Http.Error -> String
-httpErrorToString httpError =
-    case httpError of
-        Http.BadUrl _ ->
-            "Invalid URL"
-
-        Http.Timeout ->
-            "Request timed out"
-
-        Http.NetworkError ->
-            "Network error. Check your connection."
-
-        Http.BadStatus code ->
-            "Server error: " ++ String.fromInt code
-
-        Http.BadBody msg_ ->
-            "Invalid response: " ++ msg_

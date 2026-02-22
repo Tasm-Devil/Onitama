@@ -2,33 +2,13 @@ port module Ports exposing
     ( closeGameStream
     , closeLobbyStream
     , gameEventReceived
-    , loadPlayers
     , lobbyEventReceived
     , openGameStream
     , openLobbyStream
     , playSound
-    , savePlayer
     )
 
 import Json.Encode as Encode
-
-
-
--- PLAYER IDENTITY PORTS (localStorage)
--- Save player identity to localStorage (adds or updates)
--- Expects: { playerName: String, token: String }
-
-
-port savePlayer : Encode.Value -> Cmd msg
-
-
-
--- Load all player identities from localStorage on startup
--- Receives: [{ playerName: String, token: String }, ...]
--- This is called automatically by JavaScript on page load
-
-
-port loadPlayers : (Encode.Value -> msg) -> Sub msg
 
 
 

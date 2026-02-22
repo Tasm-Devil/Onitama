@@ -46,10 +46,11 @@ make server-start # Run on http://localhost:8080
 |-------|------------|
 | Frontend | Elm 0.19.1 (TEA) |
 | Backend | Haskell + Servant |
+| Auth | GitHub OAuth via oauth2-proxy |
 | Real-time | Server-Sent Events |
 | Persistence | In-memory (STM); optional JSON file via `--database` |
 
-The server validates all moves against Onitama rules and handles win detection. The client renders the board and applies moves received via SSE.
+The server validates all moves against Onitama rules and handles win detection. The client renders the board and applies moves received via SSE. Authentication is handled by oauth2-proxy, which sets `X-Forwarded-User` and `X-Forwarded-Preferred-Username` headers.
 
 ---
 
@@ -59,15 +60,18 @@ Base: `http://localhost:8080/1/onitama`
 
 ### REST
 
-| Method | Endpoint | Body | Headers | Returns |
-|--------|----------|------|---------|---------|
-| POST | `/games` | `{newGamePlayerName, newGameVsAI, newGameCardSet}` | `X-Session-Token?` | `Either JoinError NewGameResponse` |
-| GET | `/games` | - | - | `[GameSummary]` |
-| GET | `/games/{id}` | - | - | `GameWithNames` |
-| POST | `/games/{id}/players` | `{joinPlayerName}` | `X-Session-Token?` | `Either JoinError JoinGameResponse` |
-| POST | `/games/{id}/moves` | `MoveNotation` | `X-Session-Token` | `Either MoveError MoveNotation` |
-| POST | `/games/{id}/concede` | - | `X-Session-Token` | `Either ConcedeError Color` |
-| GET | `/{gameId}` | - | - | Serves `index.html` (client-side routing) |
+| Method | Endpoint | Body | Returns |
+|--------|----------|------|---------|
+| GET | `/me` | - | `AuthUser` |
+| POST | `/games` | `{newGameVsAI, newGameCardSet}` | `Either JoinError NewGameResponse` |
+| GET | `/games` | - | `[GameSummary]` |
+| GET | `/games/{id}` | - | `GameWithNames` |
+| POST | `/games/{id}/players` | - | `Either JoinError JoinGameResponse` |
+| POST | `/games/{id}/moves` | `MoveNotation` | `Either MoveError MoveNotation` |
+| POST | `/games/{id}/concede` | - | `Either ConcedeError Color` |
+| GET | `/{gameId}` | - | Serves `index.html` (client-side routing) |
+
+Authenticated endpoints use `X-Forwarded-User` and `X-Forwarded-Preferred-Username` headers (set by oauth2-proxy, or dev middleware).
 
 ### SSE Streams
 
@@ -91,6 +95,8 @@ server --port 3000           # Custom port
 server --verbose             # HTTP logging
 server --config server.yaml  # YAML config
 server --no-cleanup          # Disable auto-cleanup
+server --dev                 # Dev mode (inject auth headers)
+server --dev-user alice      # Dev mode with custom user name
 ```
 
 See `onitama-server.example.yaml` for all options.
@@ -103,6 +109,8 @@ See `onitama-server.example.yaml` for all options.
 make docker        # Build release + Docker image + save tar
 make docker-start  # Build + run on http://localhost:8080
 ```
+
+Deployment uses oauth2-proxy for GitHub OAuth + Nginx Proxy Manager as reverse proxy. See `.env.example` for required secrets and `docker-compose.yml` for the full stack.
 
 ---
 
@@ -119,19 +127,18 @@ Together they enable fearless refactoring: the compilers catch structural errors
 ## Roadmap
 
 - [x] SSE real-time updates
-- [x] Per-player token system
 - [x] Automatic game cleanup
 - [x] CLI & YAML config
-- [X] Server-side move validation
+- [x] Server-side move validation
 - [x] Dark mode (prefers-color-scheme) and CSS custom properties
-- [X] Spectator mode
-- [X] AI opponent (minmax 5-ply)
+- [x] Spectator mode
+- [x] AI opponent (minmax 5-ply)
 - [x] Sensei's Path expansion cards (optional at game creation)
+- [x] GitHub OAuth via oauth2-proxy
 - [ ] Make a howto play
 - [ ] Move playback showing GameState
 - [ ] Choose different AI depths
 - [ ] Multi-language support (i18n via browser language)
-- [ ] Traefik + Authelia for auth
 
 ---
 

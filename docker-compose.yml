@@ -1,4 +1,36 @@
 services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    container_name: oauth2-proxy
+    environment:
+      # GitHub OAuth App (create at https://github.com/settings/developers)
+      OAUTH2_PROXY_PROVIDER: github
+      OAUTH2_PROXY_CLIENT_ID: ${GITHUB_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET}
+
+      # Generate with: python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
+      OAUTH2_PROXY_COOKIE_SECRET: ${COOKIE_SECRET}
+
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_UPSTREAMS: http://onitama:8080
+      OAUTH2_PROXY_REDIRECT_URL: https://onitama.deneaux.de/oauth2/callback
+      OAUTH2_PROXY_EMAIL_DOMAINS: "*"
+
+      # Pass user identity headers to upstream (when session cookie exists)
+      OAUTH2_PROXY_PASS_USER_HEADERS: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+
+      # Don't force login — allow anonymous access for spectators
+      # Authenticated users get headers from their cookie; anonymous users pass through without headers
+      OAUTH2_PROXY_SKIP_AUTH_REGEX: ".*"
+
+      # Cookie settings
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+    networks:
+      - web
+    restart: unless-stopped
+
   onitama:
     image: onitama:latest
     container_name: onitama
@@ -12,13 +44,14 @@ services:
       - /data/gamedb.json
       # - --reset-db
       # - --no-cleanup
-      # - --cleanup-waiting
-      # - "2.0"
-      # - --cleanup-active
-      # - "24.0"
       - --cleanup-completed
       - "72.0"
     restart: unless-stopped
+
+# Portainer deployment:
+#   1. Create Stack from this file
+#   2. Add environment variables: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, COOKIE_SECRET
+#   3. In NPM: Proxy Host onitama.deneaux.de → oauth2-proxy:4180 (enable WebSocket support)
 
 volumes:
   onitama-data:

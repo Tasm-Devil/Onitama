@@ -28,7 +28,7 @@ import Data.Foldable (foldrM)
 import Data.List (find)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (isNothing)
-import Types (Card, CardSet (..), Color (..), MoveNotation, PlayerSlot (..))
+import Types (Card, CardSet (..), Color (..), MoveNotation)
 import System.Random (newStdGen)
 import System.Random.Shuffle (shuffle')
 

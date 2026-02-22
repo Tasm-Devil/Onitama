@@ -40,7 +40,9 @@ data ServerOptions = ServerOptions
     optSaveInterval :: Int, -- Database save interval in minutes
     optCleanup :: CleanupOptions, -- Cleanup configuration
     optConfig :: Maybe FilePath, -- Config file path
-    optShowVersion :: Bool -- Show version and exit
+    optShowVersion :: Bool, -- Show version and exit
+    optDevMode :: Bool, -- Enable dev mode (inject auth headers)
+    optDevUser :: Maybe String -- Dev mode user name (default: "dev")
   }
   deriving (Show, Generic)
 
@@ -69,7 +71,9 @@ defaultOptions =
       optSaveInterval = 1, -- 1 minute
       optCleanup = defaultCleanup,
       optConfig = Nothing,
-      optShowVersion = False
+      optShowVersion = False,
+      optDevMode = False,
+      optDevUser = Nothing
     }
 
 -- | Option parser for cleanup configuration
@@ -173,6 +177,17 @@ serverOptionsParser =
       ( long "version"
           <> help "Show version information"
       )
+    <*> switch
+      ( long "dev"
+          <> help "Enable dev mode (inject auth headers when missing)"
+      )
+    <*> optional
+      ( strOption
+          ( long "dev-user"
+              <> metavar "NAME"
+              <> help "Dev mode user name (default: dev)"
+          )
+      )
 
 -- | Load configuration from YAML file
 loadConfigFile :: FilePath -> IO (Maybe ServerOptions)
@@ -205,7 +220,11 @@ mergeOptions config cli =
       optSaveInterval = if optSaveInterval cli == optSaveInterval defaultOptions then optSaveInterval config else optSaveInterval cli,
       optCleanup = mergeCleanup (optCleanup config) (optCleanup cli),
       optConfig = optConfig cli,
-      optShowVersion = optShowVersion cli || optShowVersion config
+      optShowVersion = optShowVersion cli || optShowVersion config,
+      optDevMode = optDevMode cli || optDevMode config,
+      optDevUser = case optDevUser cli of
+        Just _ -> optDevUser cli
+        Nothing -> optDevUser config
     }
   where
     mergeCleanup cfg cliClean =

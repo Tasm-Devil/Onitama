@@ -20,17 +20,6 @@ data Color
   | Black
   deriving (Eq, Read, Show, Generic, NFData, ToJSON, FromJSON)
 
--- Player slot identifier: which position in the game
-data PlayerSlot = PlayerWhite | PlayerBlack
-  deriving (Show, Eq, Ord, Generic)
-
-instance ToJSON PlayerSlot
-
-instance FromJSON PlayerSlot
-
--- PlayerId is an internal database key (foreign key to dbPlayers)
-type PlayerId = Int
-
 type Card = String
 
 -- MoveNotation format: "<color>:<from><to>:<card>" e.g. "w:c1c3:tiger"
@@ -38,14 +27,27 @@ type MoveNotation = String
 
 type GameId = Int
 
-newtype SessionToken = SessionToken Text
+-- OIDC user identity from Authelia headers
+newtype OidcUserId = OidcUserId Text
   deriving stock (Show, Eq, Ord, Generic)
   deriving newtype (FromHttpApiData, ToHttpApiData, ToJSON, FromJSON)
 
+data AuthUser = AuthUser
+  { authUserId :: OidcUserId,
+    authUserName :: Text
+  }
+  deriving (Show, Eq, Generic)
+
+instance ToJSON AuthUser
+
+instance FromJSON AuthUser
+
 -- Persistence record for a game
 data Game = Game
-  { player_white :: Maybe PlayerId,
-    player_black :: Maybe PlayerId,
+  { player_white :: Maybe OidcUserId,
+    player_black :: Maybe OidcUserId,
+    player_white_name :: Text,
+    player_black_name :: Text,
     cards :: [Card],
     history :: [(MoveNotation, UTCTime)],
     winner :: Maybe Color,
@@ -64,7 +66,7 @@ addMoveToGame move now maybeWinner g =
     }
 
 -- Game state with player names (for client display)
--- This is what clients receive, not the internal Game type with PlayerIds
+-- This is what clients receive, not the internal Game type
 data GameWithNames = GameWithNames
   { gameWhiteName :: Text,
     gameBlackName :: Text,
@@ -80,11 +82,10 @@ instance ToJSON GameWithNames
 
 instance FromJSON GameWithNames
 
--- Response when joining a game includes game data, session token, and player name
+-- Response when joining a game
 data JoinGameResponse = JoinGameResponse
   { responseGame :: GameWithNames,
-    responseToken :: SessionToken,
-    responsePlayerName :: Text -- Server explicitly tells client which player they are
+    responsePlayerName :: Text
   }
   deriving (Show, Generic)
 
@@ -96,24 +97,22 @@ instance FromJSON JoinGameResponse
 data JoinError
   = JEGameNotFound
   | JEGameFull
-  | JEInvalidToken
-  | JENameTaken
-  | JEInvalidName
+  | JENotAuthenticated
   deriving (Eq, Show, Generic)
 
 -- Errors that can occur when submitting a move
 data MoveError
-  = MEInvalidToken
-  | MENotYourTurn
+  = MENotYourTurn
   | MEGameNotFound
   | MEInvalidMove
+  | MENotAuthenticated
   deriving (Eq, Show, Generic)
 
 -- Errors that can occur when conceding
 data ConcedeError
-  = CEInvalidToken
-  | CEGameNotFound
+  = CEGameNotFound
   | CEAlreadyEnded
+  | CENotAuthenticated
   deriving (Eq, Show, Generic)
 
 instance ToJSON JoinError
@@ -151,17 +150,17 @@ instance ToJSON GameStatus
 
 instance FromJSON GameStatus
 
--- Create a game summary from game data with player names
-gameToSummary :: GameId -> Text -> Text -> Game -> GameSummary
-gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ history maybeWinner created lastAct _) =
+-- Create a game summary from game data (names from Game record directly)
+gameToSummary :: GameId -> Game -> GameSummary
+gameToSummary gameId game =
   GameSummary
     { summaryId = gameId,
-      summaryPlayer1 = if isNothing maybeWhiteId then "" else T.unpack whiteName,
-      summaryPlayer2 = if isNothing maybeBlackId then "" else T.unpack blackName,
-      summaryMoveCount = Prelude.length history,
-      summaryStatus = determineStatus maybeWhiteId maybeBlackId maybeWinner,
-      summaryCreatedAt = created,
-      summaryLastActivity = lastAct
+      summaryPlayer1 = if isNothing (player_white game) then "" else T.unpack (player_white_name game),
+      summaryPlayer2 = if isNothing (player_black game) then "" else T.unpack (player_black_name game),
+      summaryMoveCount = Prelude.length (history game),
+      summaryStatus = determineStatus (player_white game) (player_black game) (winner game),
+      summaryCreatedAt = createdAt game,
+      summaryLastActivity = lastActivity game
     }
   where
     determineStatus _ _ (Just _) = Completed
@@ -170,22 +169,25 @@ gameToSummary gameId whiteName blackName (Game maybeWhiteId maybeBlackId _ histo
     determineStatus _ Nothing Nothing = WaitingForPlayers
     determineStatus _ _ Nothing = InProgress
 
--- Request body for joining a game
-newtype JoinRequest
-  = JoinRequest {joinPlayerName :: String}
-  deriving (Show, Generic)
-
-instance ToJSON JoinRequest
-
-instance FromJSON JoinRequest
+-- Pure projection from Game to GameWithNames (no DB lookup needed)
+gameToGameWithNames :: Game -> GameWithNames
+gameToGameWithNames game =
+  GameWithNames
+    { gameWhiteName = player_white_name game,
+      gameBlackName = player_black_name game,
+      gameCards = cards game,
+      gameHistory = map fst (history game),
+      gameWinner = winner game,
+      gameCreatedAt = createdAt game,
+      gameLastActivity = lastActivity game
+    }
 
 data CardSet = BaseOnly | WithExpansion
   deriving (Eq, Show, Generic, ToJSON, FromJSON)
 
 -- Request body for creating a new game
 data NewGameRequest = NewGameRequest
-  { newGamePlayerName :: String,
-    newGameVsAI :: Bool,
+  { newGameVsAI :: Bool,
     newGameCardSet :: CardSet
   }
   deriving (Show, Generic)

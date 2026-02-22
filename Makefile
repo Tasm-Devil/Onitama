@@ -20,7 +20,7 @@ server-build:
 	stack build
 
 server-start: build
-	stack exec server
+	stack exec -- server --dev
 
 server-start-config: build
 	stack exec -- server --config 'onitama-server.yaml'
