@@ -65,9 +65,9 @@ Base: `http://localhost:8080/1/onitama`
 | GET | `/games` | - | - | `[GameSummary]` |
 | GET | `/games/{id}` | - | - | `GameWithNames` |
 | POST | `/games/{id}/players` | `{joinPlayerName}` | `X-Session-Token?` | `Either JoinError JoinGameResponse` |
-| POST | `/games/{id}/moves` | `GameMove` | `X-Session-Token` | `Either MoveError GameMove` |
+| POST | `/games/{id}/moves` | `MoveNotation` | `X-Session-Token` | `Either MoveError MoveNotation` |
 | POST | `/games/{id}/concede` | - | `X-Session-Token` | `Either ConcedeError Color` |
-| GET | `/newgame` | - | - | Serves `index.html` (creates game via client) |
+| GET | `/{gameId}` | - | - | Serves `index.html` (client-side routing) |
 
 ### SSE Streams
 

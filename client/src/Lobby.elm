@@ -188,9 +188,9 @@ view myNames model =
     Html.div [ HtmlA.class "gamelist" ]
         [ Html.h1 []
             [ Html.text "ONITAMA" ]
-        , Html.p [ HtmlA.class "lobby-description" ]
+        , Html.small [ HtmlA.class "lobby-description" ]
             [ Html.text "A two-player abstract board game. Play with friends or challenge the AI." ]
-        , Html.p [ HtmlA.class "lobby-description" ]
+        , Html.small [ HtmlA.class "lobby-description" ]
             [ Html.text "Be sure to read "
             , Html.a [ HtmlA.href "https://www.arcanewonders.com/wp-content/uploads/2021/05/Onitama-Rulebook.pdf", HtmlA.target "_blank" ]
                 [ Html.text "the rules" ]
@@ -227,7 +227,7 @@ view myNames model =
                         , Html.td []
                             [ Html.text "Last Activity" ]
                         , Html.td []
-                            [ Html.text "" ]
+                            [ Html.text "Action" ]
                         ]
                     ]
                     :: List.map (createGameTableRow myNames data.currentTime) data.games

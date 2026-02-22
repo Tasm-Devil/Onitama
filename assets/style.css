@@ -76,7 +76,12 @@
 
 body {
   font-family: system-ui, Helvetica, sans-serif;
+  font-size: 14px;
   margin: 0;
+
+  small {
+    font-size: 0.9em;
+  }
   background: radial-gradient(ellipse at center, var(--bg-surface) 0%, var(--bg) 70%);
   background-attachment: fixed;
   color: var(--text);
@@ -85,7 +90,7 @@ body {
     text-shadow: 2px 2px 2px var(--shadow);
   }
 
-  p a {
+  a {
     color: var(--text);
   }
 
@@ -132,7 +137,7 @@ body {
     .lobby-description {
       text-align: center;
       color: var(--text-muted);
-      font-size: 0.95em;
+      display: block;
       margin: 0.25rem 0;
     }
   }
@@ -230,12 +235,15 @@ body {
   #game-table {
     border-spacing: 0;
     width: 100%;
+    max-width: 1000px;
+    margin: 0 auto;
 
     td {
       border-bottom: 1px solid var(--border-light);
       padding: .5rem;
       height: 3em;
       vertical-align: middle;
+      text-align: center;
       transition: background-color 0.2s;
     }
 
@@ -264,6 +272,7 @@ body {
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
       background: var(--btn-bg);
       transition: background-color 0.2s;
+      width: 9rem;
 
       &:hover {
         background: var(--bg-hover);
@@ -282,12 +291,6 @@ body {
         border-radius: 0;
         width: 4.5rem;
         box-shadow: none;
-
-
-        &:hover {
-          background: var(--bg-hover);
-          box-shadow: none;
-        }
 
         &+.join-game {
           border-left: 1px solid var(--btn-border);
@@ -320,17 +323,30 @@ body {
 
     .cancel-button {
       margin-top: 1rem;
-      padding: .4rem 1.5rem;
-      background: none;
-      border: none;
-      color: var(--text-muted);
+      padding: .5rem 1.5rem;
+      border: 1px solid var(--input-border);
+      border-radius: 5px;
+      background-color: var(--btn-bg);
+      color: var(--text);
       cursor: pointer;
       font: inherit;
-      text-decoration: underline;
+      transition: background-color 0.2s;
 
       &:hover {
-        color: var(--text);
+        background-color: var(--bg-hover);
       }
+
+      &:active {
+        transform: scale(0.97);
+      }
+    }
+
+    .privacy-notice {
+      margin-top: 2rem;
+      max-width: 320px;
+      display: block;
+      line-height: 1.5;
+      color: var(--text-muted);
     }
 
     .name-line {
@@ -351,6 +367,7 @@ body {
         background-color: var(--btn-bg);
         color: var(--text);
         cursor: pointer;
+        font: inherit;
         transition: background-color 0.2s;
 
         &:hover {

@@ -6,7 +6,18 @@ services:
       - web
     volumes:
       - onitama-data:/data
-    command: ["/app/server", "--database", "/data/gamedb.json"]
+    command:
+      - /app/server
+      - --database
+      - /data/gamedb.json
+      - --reset-db
+      # - --no-cleanup
+      # - --cleanup-waiting
+      # - "2.0"
+      # - --cleanup-active
+      # - "24.0"
+      # - --cleanup-completed
+      # - "0.0"
     restart: unless-stopped
 
 volumes:

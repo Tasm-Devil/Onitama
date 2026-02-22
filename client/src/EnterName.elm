@@ -55,6 +55,7 @@ view model playerNames =
                 , viewNameInput currentName "Continue" playerNames
                 , Html.button [ HtmlA.class "cancel-button", HtmlA.type_ "button", onClick Cancel ]
                     [ Html.text "Cancel" ]
+                , privacyNotice
                 ]
             ]
 
@@ -66,8 +67,15 @@ view model playerNames =
                 , viewNameInput playerName "Try Again" playerNames
                 , Html.button [ HtmlA.class "cancel-button", HtmlA.type_ "button", onClick Cancel ]
                     [ Html.text "Cancel" ]
+                , privacyNotice
                 ]
             ]
+
+
+privacyNotice : Html Msg
+privacyNotice =
+    Html.small [ HtmlA.class "privacy-notice" ]
+        [ Html.text "Your player name and a session token are stored on a server in Falkenstein, Germany to identify you during the game. No other personal data is collected." ]
 
 
 viewNameInput : String -> String -> List String -> Html Msg
