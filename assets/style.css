@@ -34,6 +34,9 @@
   --status-active-text: #4a8a30;
   --status-completed-bg: rgba(140, 130, 120, 0.15);
   --status-completed-text: #7a6e60;
+  --danger: #a04040;
+  --danger-bg: rgba(160, 64, 64, 0.1);
+  --dropdown-shadow: rgba(0, 0, 0, 0.15);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -69,6 +72,9 @@
     --status-active-text: #6aaa50;
     --status-completed-bg: rgba(140, 130, 120, 0.2);
     --status-completed-text: #9a8e80;
+    --danger: #c06050;
+    --danger-bg: rgba(192, 96, 80, 0.15);
+    --dropdown-shadow: rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -112,6 +118,112 @@ body {
     height: 100vh;
     height: 100dvh;
     overflow: hidden;
+  }
+}
+
+/* ── App Header ── */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px;
+  flex-shrink: 0;
+
+  .header-left {
+    flex: 1;
+  }
+
+  .header-center {
+    flex: 1;
+    text-align: center;
+
+    .header-status {
+      color: var(--text);
+      font-size: 0.9em;
+    }
+  }
+
+  .header-right {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .header-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--btn-bg);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.85em;
+    text-decoration: none;
+
+    &:hover {
+      background: var(--bg-hover);
+    }
+
+    &.concede-btn {
+      border-color: var(--danger);
+      color: var(--danger);
+
+      &:hover {
+        background: var(--danger-bg);
+      }
+    }
+  }
+
+  .user-menu-wrapper {
+    position: relative;
+    display: inline-block;
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 1px solid var(--border-light);
+      vertical-align: middle;
+
+      &:hover {
+        border-color: var(--border);
+      }
+    }
+
+    .user-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px var(--dropdown-shadow);
+      min-width: 140px;
+      z-index: 100;
+      overflow: hidden;
+
+      .dropdown-name {
+        padding: 8px 12px;
+        font-size: 0.85em;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border-light);
+      }
+
+      .dropdown-item {
+        display: block;
+        padding: 8px 12px;
+        font-size: 0.85em;
+        color: var(--text);
+        text-decoration: none;
+
+        &:hover {
+          background: var(--bg-hover);
+        }
+      }
+    }
   }
 }
 
@@ -430,33 +542,6 @@ body {
 
 .card-overlay {
   fill: var(--overlay-bg);
-}
-
-/* ── Concede Button ── */
-
-.concede-btn {
-  cursor: pointer;
-
-  rect {
-    fill: var(--bg-surface);
-    stroke: var(--border);
-    stroke-width: 0.5;
-  }
-
-  text {
-    fill: var(--text-muted);
-    font-size: 3.5px;
-  }
-
-  &:hover rect {
-    fill: var(--bg-hover);
-  }
-}
-
-/* ── Status Line ── */
-
-.status-line {
-  fill: var(--text);
 }
 
 /* ── Dark Mode: Black Figures ── */

@@ -148,7 +148,7 @@ Together they enable fearless refactoring: the compilers catch structural errors
 - [x] AI opponent (minmax 5-ply)
 - [x] Sensei's Path expansion cards (optional at game creation)
 - [x] GitHub OAuth via oauth2-proxy
-- [ ] User identity label in the lobby + my username also in the gamelog + logout button in UI (absolute position top right)
+- [x] App header with user avatar, game status, and logout
 - [ ] Make a howto play
 - [ ] Move playback showing GameState
 - [ ] Choose different AI depths

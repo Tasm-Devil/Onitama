@@ -10,7 +10,6 @@ import Html.Events
 import List.Extra
 import Svg
 import Svg.Attributes as SvgA
-import Svg.Events as SvgE
 
 
 
@@ -135,92 +134,6 @@ view game =
                 )
             ]
             (drawCardPrompt game.myCards UserChoseOneCard)
-        , Svg.g
-            [ SvgA.class "concede-btn"
-            , SvgA.display
-                (if game.spectating then
-                    "none"
-
-                 else
-                    case game.state of
-                        WaitingForOpponent ->
-                            "none"
-
-                        GameOver _ ->
-                            "none"
-
-                        _ ->
-                            "block"
-                )
-            , SvgE.onClick UserClickedConcede
-            ]
-            [ Svg.rect
-                [ SvgA.x "111"
-                , SvgA.y "12"
-                , SvgA.width "34"
-                , SvgA.height "8"
-                , SvgA.rx "1.5"
-                ]
-                []
-            , Svg.text_
-                [ SvgA.x "128"
-                , SvgA.y "17.5"
-                , SvgA.fontSize "3.5"
-                , SvgA.textAnchor "middle"
-                ]
-                [ Svg.text "Concede" ]
-            ]
-        , Svg.text_ [ SvgA.class "status-line", SvgA.x "145", SvgA.y "2", SvgA.fontSize "4", SvgA.textAnchor "end" ]
-            (case game.state of
-                WaitingForOpponent ->
-                    [ Svg.text "waiting for opponent..." ]
-
-                GameOver winner ->
-                    [ Svg.text <|
-                        case winner of
-                            White ->
-                                "White wins!"
-
-                            Black ->
-                                "Black wins!"
-                    ]
-
-                _ ->
-                    if game.spectating then
-                        let
-                            colorStr =
-                                case game.nextColor of
-                                    White ->
-                                        "white"
-
-                                    Black ->
-                                        "black"
-                        in
-                        [ Svg.tspan [] [ Svg.text (colorStr ++ " to move") ]
-                        , Svg.tspan [ SvgA.x "145", SvgA.dy "5" ] [ Svg.text "Spectator" ]
-                        ]
-
-                    else
-                        let
-                            isYourTurn =
-                                game.nextColor == game.myColor
-
-                            suffix =
-                                if isYourTurn then
-                                    " (you) to move"
-
-                                else
-                                    " to move"
-                        in
-                        [ Svg.text <|
-                            case game.nextColor of
-                                White ->
-                                    "white" ++ suffix
-
-                                Black ->
-                                    "black" ++ suffix
-                        ]
-            )
         ]
     ]
 
@@ -233,7 +146,6 @@ type Msg
     = UserChoseOneCard Card
     | UserClickedOnCell ( Int, Int )
     | NewGameMove GameMove
-    | UserClickedConcede
     | HoverMove (Maybe GameMove)
 
 
@@ -266,9 +178,6 @@ update msg game =
         NewGameMove gm ->
             { game | state = MoveDone gm }
                 |> execGameMove
-
-        UserClickedConcede ->
-            game
 
         HoverMove maybeMove ->
             { game | hoveredMove = maybeMove }

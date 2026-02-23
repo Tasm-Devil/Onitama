@@ -2,12 +2,14 @@ module Main exposing (main)
 
 import Api exposing (GameEvent(..), GameId, Msg(..), ServerGame)
 import Browser
+import Browser.Events
 import Browser.Navigation as Nav exposing (Key)
 import Game.Card exposing (dummyCard)
 import Game.Figure exposing (Color(..))
 import Game.Game as Game exposing (Game, GameState(..), Msg(..), transformGameMove)
 import Html exposing (Html)
 import Html.Attributes as HtmlA
+import Html.Events
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -26,6 +28,7 @@ type alias Model =
     { key : Key
     , currentUser : Maybe Api.AuthUser
     , page : Page
+    , userMenuOpen : Bool
     }
 
 
@@ -50,6 +53,9 @@ type Msg
     | LobbyEventReceived Encode.Value
     | GameEventReceived Encode.Value
     | LobbyTick Time.Posix
+    | ToggleUserMenu
+    | CloseUserMenu
+    | ClickedConcede
 
 
 
@@ -70,7 +76,7 @@ main =
 
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
-    ( { key = key, currentUser = Nothing, page = Loading (routeFromUrl url) }
+    ( { key = key, currentUser = Nothing, page = Loading (routeFromUrl url), userMenuOpen = False }
     , Cmd.batch
         [ Cmd.map GotServerMsg Api.getMe
         , Cmd.map GotServerMsg Api.getGameSummariesFromServer
@@ -96,8 +102,15 @@ subscriptions model =
 
                 _ ->
                     Sub.none
+
+        userMenuSub =
+            if model.userMenuOpen then
+                Browser.Events.onClick (Decode.succeed CloseUserMenu)
+
+            else
+                Sub.none
     in
-    sseSub
+    Sub.batch [ sseSub, userMenuSub ]
 
 
 
@@ -134,6 +147,20 @@ update msg model =
                     ( { model | page = LobbyPage (Lobby.updateTime currentTime lobbyModel) }
                     , Cmd.none
                     )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        ToggleUserMenu ->
+            ( { model | userMenuOpen = not model.userMenuOpen }, Cmd.none )
+
+        CloseUserMenu ->
+            ( { model | userMenuOpen = False }, Cmd.none )
+
+        ClickedConcede ->
+            case model.page of
+                GamePage gameid _ _ ->
+                    ( model, Cmd.map GotServerMsg (Api.concede gameid) )
 
                 _ ->
                     ( model, Cmd.none )
@@ -359,26 +386,21 @@ handleGameMsg : Game.Msg -> Model -> ( Model, Cmd Msg )
 handleGameMsg gamemsg model =
     case model.page of
         GamePage gameid game log ->
-            case gamemsg of
-                Game.UserClickedConcede ->
-                    ( model, Cmd.map GotServerMsg (Api.concede gameid) )
+            let
+                updatedGame =
+                    Game.update gamemsg game
 
-                _ ->
-                    let
-                        updatedGame =
-                            Game.update gamemsg game
+                cmd =
+                    case updatedGame.state of
+                        MoveDone gameMove ->
+                            transformGameMove gameMove
+                                |> Api.postNewGameMove gameid
+                                |> Cmd.map GotServerMsg
 
-                        cmd =
-                            case updatedGame.state of
-                                MoveDone gameMove ->
-                                    transformGameMove gameMove
-                                        |> Api.postNewGameMove gameid
-                                        |> Cmd.map GotServerMsg
-
-                                _ ->
-                                    Cmd.none
-                    in
-                    ( { model | page = GamePage gameid updatedGame log }, cmd )
+                        _ ->
+                            Cmd.none
+            in
+            ( { model | page = GamePage gameid updatedGame log }, cmd )
 
         _ ->
             ( model, Cmd.none )
@@ -517,7 +539,7 @@ joinGameSuccess model gameid joinResponse =
             List.map Game.MoveEntry servergame.gameHistory
 
         joinMsg =
-            Game.SystemEntry ("You joined game as " ++ myColor ++ ".")
+            Game.SystemEntry (name ++ " joined game as " ++ myColor ++ ".")
 
         initialLog =
             if bothPresent then
@@ -688,7 +710,8 @@ view model =
     Browser.Document
         "Onitama"
         [ Html.div [ HtmlA.class "page-wrapper" ]
-            [ case model.page of
+            [ viewHeader model
+            , case model.page of
                 Loading _ ->
                     Html.div [ HtmlA.class "landing-screen" ]
                         [ Html.div [ HtmlA.class "spinner" ] [] ]
@@ -715,6 +738,131 @@ view model =
             , viewFooter
             ]
         ]
+
+
+viewHeader : Model -> Html Msg
+viewHeader model =
+    Html.header [ HtmlA.class "app-header" ]
+        [ viewHeaderLeft model.currentUser model.userMenuOpen
+        , viewHeaderCenter model.page
+        , viewHeaderRight model.page
+        ]
+
+
+viewHeaderLeft : Maybe Api.AuthUser -> Bool -> Html Msg
+viewHeaderLeft maybeUser menuOpen =
+    Html.div [ HtmlA.class "header-left" ]
+        (case maybeUser of
+            Just user ->
+                [ Html.div [ HtmlA.class "user-menu-wrapper" ]
+                    [ Html.img
+                        [ HtmlA.class "user-avatar"
+                        , HtmlA.src ("https://github.com/" ++ user.displayName ++ ".png?size=56")
+                        , HtmlA.alt user.displayName
+                        , Html.Events.custom "click"
+                            (Decode.succeed
+                                { message = ToggleUserMenu
+                                , stopPropagation = True
+                                , preventDefault = False
+                                }
+                            )
+                        ]
+                        []
+                    , if menuOpen then
+                        Html.div [ HtmlA.class "user-dropdown" ]
+                            [ Html.div [ HtmlA.class "dropdown-name" ] [ Html.text user.displayName ]
+                            , Html.a [ HtmlA.class "dropdown-item", HtmlA.href "/oauth2/sign_out?rd=/" ] [ Html.text "Logout" ]
+                            ]
+
+                      else
+                        Html.text ""
+                    ]
+                ]
+
+            Nothing ->
+                []
+        )
+
+
+viewHeaderCenter : Page -> Html Msg
+viewHeaderCenter page =
+    Html.div [ HtmlA.class "header-center" ]
+        [ Html.span [ HtmlA.class "header-status" ]
+            (case page of
+                GamePage _ game _ ->
+                    [ Html.text (gameStatusText game) ]
+
+                AwaitingGame _ _ ->
+                    [ Html.text "Joining game..." ]
+
+                _ ->
+                    []
+            )
+        ]
+
+
+gameStatusText : Game -> String
+gameStatusText game =
+    let
+        colorStr color =
+            case color of
+                White ->
+                    "White"
+
+                Black ->
+                    "Black"
+    in
+    case game.state of
+        WaitingForOpponent ->
+            "Waiting for opponent..."
+
+        GameOver winner ->
+            colorStr winner ++ " wins!"
+
+        _ ->
+            let
+                nextStr =
+                    colorStr game.nextColor
+            in
+            if game.spectating then
+                nextStr ++ " to move"
+
+            else if game.nextColor == game.myColor then
+                nextStr ++ " (you) to move"
+
+            else
+                nextStr ++ " to move"
+
+
+viewHeaderRight : Page -> Html Msg
+viewHeaderRight page =
+    Html.div [ HtmlA.class "header-right" ]
+        (case page of
+            GamePage _ game _ ->
+                Html.a [ HtmlA.class "header-btn", HtmlA.href "/" ] [ Html.text "Back" ]
+                    :: (if not game.spectating then
+                            case game.state of
+                                WaitingForOpponent ->
+                                    []
+
+                                GameOver _ ->
+                                    []
+
+                                _ ->
+                                    [ Html.button
+                                        [ HtmlA.class "header-btn concede-btn"
+                                        , Html.Events.onClick ClickedConcede
+                                        ]
+                                        [ Html.text "Concede" ]
+                                    ]
+
+                        else
+                            []
+                       )
+
+            _ ->
+                []
+        )
 
 
 viewFooter : Html Msg
