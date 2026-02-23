@@ -19,6 +19,12 @@
       node: document.getElementById("myapp"),
     });
 
+    // Release implicit pointer capture on touch so pointerup fires on the
+    // element under the finger (like mouseup), enabling drag-to-move on mobile.
+    document.addEventListener("gotpointercapture", function (e) {
+      e.target.releasePointerCapture(e.pointerId);
+    }, true);
+
     // Initialize SSE (Server-Sent Events) integration
     if (window.initSSE) {
       window.initSSE(app);

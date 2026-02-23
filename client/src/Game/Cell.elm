@@ -1,6 +1,7 @@
 module Game.Cell exposing (..)
 
 import Global exposing (gridsize)
+import Json.Decode as Decode
 import List.Extra
 import Svg
 import Svg.Attributes as SvgA
@@ -19,8 +20,8 @@ type CellType
     | MoveToCell
 
 
-draw : CellType -> (( Int, Int ) -> msg) -> ( Int, Int ) -> Svg.Svg msg
-draw celltype callback ( u, v ) =
+draw : CellType -> (( Int, Int ) -> msg) -> (( Int, Int ) -> msg) -> ( Int, Int ) -> Svg.Svg msg
+draw celltype onPress onRelease ( u, v ) =
     Svg.rect
         [ SvgA.x <| String.fromInt <| u * gridsize
         , SvgA.y <| String.fromInt <| (4 - v) * gridsize
@@ -37,7 +38,8 @@ draw celltype callback ( u, v ) =
                 MoveToCell ->
                     "cell cell--selected"
             )
-        , SvgE.onClick <| callback ( u, v )
+        , SvgE.on "pointerdown" (Decode.succeed (onPress ( u, v )))
+        , SvgE.on "pointerup" (Decode.succeed (onRelease ( u, v )))
         ]
         []
 

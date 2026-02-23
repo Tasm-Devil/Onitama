@@ -77,10 +77,7 @@ main =
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
     ( { key = key, currentUser = Nothing, page = Loading (routeFromUrl url), userMenuOpen = False }
-    , Cmd.batch
-        [ Cmd.map GotServerMsg Api.getMe
-        , Cmd.map GotServerMsg Api.getGameSummariesFromServer
-        ]
+    , Cmd.map GotServerMsg Api.getMe
     )
 
 
@@ -393,9 +390,14 @@ handleGameMsg gamemsg model =
                 cmd =
                     case updatedGame.state of
                         MoveDone gameMove ->
-                            transformGameMove gameMove
-                                |> Api.postNewGameMove gameid
-                                |> Cmd.map GotServerMsg
+                            case game.state of
+                                MoveDone _ ->
+                                    Cmd.none
+
+                                _ ->
+                                    transformGameMove gameMove
+                                        |> Api.postNewGameMove gameid
+                                        |> Cmd.map GotServerMsg
 
                         _ ->
                             Cmd.none
@@ -439,10 +441,12 @@ handleMeResponse : Result Http.Error Api.AuthUser -> Model -> ( Model, Cmd Msg )
 handleMeResponse result model =
     case result of
         Ok user ->
-            ( { model | currentUser = Just user }, Cmd.none )
+            ( { model | currentUser = Just user }
+            , Cmd.map GotServerMsg Api.getGameSummariesFromServer
+            )
 
         Err _ ->
-            ( model, Cmd.none )
+            ( model, Cmd.map GotServerMsg Api.getGameSummariesFromServer )
 
 
 handleGameSummaries : Result Http.Error (List Lobby.GameSummary) -> Model -> ( Model, Cmd Msg )

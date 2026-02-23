@@ -34,6 +34,23 @@ import Subscribers (GameEvent (..), LobbyEvent (..))
 import qualified Subscribers
 import System.Directory (doesFileExist)
 import Types
+    ( NewGameResponse(..),
+      NewGameRequest(NewGameRequest),
+      CardSet,
+      GameSummary,
+      ConcedeError(CEGameNotFound, CENotAuthenticated),
+      MoveError(..),
+      JoinError(JENotAuthenticated, JEGameNotFound),
+      JoinGameResponse(..),
+      GameWithNames(gameWhiteName),
+      Game(..),
+      AuthUser(..),
+      OidcUserId(..),
+      GameId,
+      MoveNotation,
+      Color(..),
+      addMoveToGame,
+      gameToGameWithNames )
 import WaiAppStatic.Types (MaxAge (..), ssMaxAge)
 
 -- | Application environment with DB and subscriber store
@@ -76,8 +93,8 @@ timed label val = do
 requireAuth :: Maybe OidcUserId -> Maybe T.Text -> Either e AuthUser -> Either e AuthUser
 requireAuth maybeUserId maybeName _ =
   case (maybeUserId, maybeName) of
-    (Just uid, Just name) -> Right (AuthUser uid name)
-    (Just uid, Nothing) -> Right (AuthUser uid (let OidcUserId t = uid in t))
+    (Just uid, Just name) -> Right (AuthUser { authUserId = uid, authUserName = name })
+    (Just uid, Nothing) -> Right (AuthUser { authUserId = uid, authUserName = let OidcUserId t = uid in t })
     _ -> Left undefined -- will be handled per-endpoint
 
 -- | Build the complete server: typed API routes + static file serving
@@ -116,8 +133,8 @@ handlers env =
 
 -- | Extract AuthUser from headers or return an error
 extractAuth :: Maybe OidcUserId -> Maybe T.Text -> Maybe AuthUser
-extractAuth (Just uid) (Just name) = Just (AuthUser uid name)
-extractAuth (Just uid) Nothing = Just (AuthUser uid (let OidcUserId t = uid in t))
+extractAuth (Just uid) (Just name) = Just (AuthUser { authUserId = uid, authUserName = name })
+extractAuth (Just uid) Nothing = Just (AuthUser { authUserId = uid, authUserName = let OidcUserId t = uid in t })
 extractAuth _ _ = Nothing
 
 newGame :: Maybe OidcUserId -> Maybe T.Text -> NewGameRequest -> AppM (Either JoinError NewGameResponse)
@@ -286,28 +303,32 @@ newMove gameId maybeUserId maybeName move = runExceptT $ do
       store = appSubscribers env
       userId = authUserId user
 
-  -- Get game and validate player
-  game <- noteE MEGameNotFound =<< liftIO (Database.getGameById db gameId)
-  let isInGame = player_white game == Just userId || player_black game == Just userId
-  unless isInGame $ do
-    liftIO $ putStrLn "Move rejected: player not in game"
-    throwE MENotYourTurn
-
-  -- Validate move
-  let historyMoves = move : map fst (history game)
-  finalState <- case Onitama.replayGame (cards game) historyMoves of
-    Nothing -> do
-      liftIO $ putStrLn "Move rejected: invalid move"
-      throwE MEInvalidMove
-    Just gs -> return gs
-  let maybeWinner = Onitama.gsWinner finalState
-
-  -- Apply move
+  -- Atomically validate and apply the move (prevents TOCTOU race conditions)
   now <- liftIO getCurrentTime
-  success <- liftIO $ Database.updateGame db gameId (Types.addMoveToGame move now maybeWinner)
-  unless success $ throwE MEGameNotFound
+  result <- liftIO $ Database.atomicUpdateGame db gameId $ \game ->
+        let isInGame = player_white game == Just userId || player_black game == Just userId
+        in if not isInGame
+           then Left MENotYourTurn
+           else let historyMoves = move : map fst (history game)
+                in case Onitama.replayGame (cards game) historyMoves of
+                     Nothing -> Left MEInvalidMove
+                     Just finalState ->
+                       let maybeWinner = Onitama.gsWinner finalState
+                       in Right (Types.addMoveToGame move now maybeWinner game, maybeWinner)
+
+  maybeWinner <- case result of
+    Nothing -> throwE MEGameNotFound
+    Just (Left err) -> do
+      liftIO $ putStrLn $ case err of
+        MENotYourTurn -> "Move rejected: player not in game"
+        MEInvalidMove -> "Move rejected: invalid move"
+        _ -> "Move rejected"
+      throwE err
+    Just (Right w) -> do
+      liftIO $ putStrLn "Move accepted"
+      return w
+
   liftIO $ do
-    putStrLn "Move accepted"
     Subscribers.broadcastGame store gameId (MoveEvent move now maybeWinner)
     Subscribers.broadcastLobby store LobbyChanged
 

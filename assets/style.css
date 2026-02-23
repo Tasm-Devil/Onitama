@@ -408,6 +408,7 @@ body {
     min-height: 0;
     margin: 8px;
     user-select: none;
+    touch-action: none;
   }
 }
 

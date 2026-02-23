@@ -69,11 +69,11 @@ view game =
         , Svg.g [ SvgA.transform <| "translate(0, " ++ (String.fromInt <| gridsize + 5) ++ ")" ]
             [ Svg.g [ SvgA.class "grid-lines" ] <|
                 -- the grid is drawn here
-                List.map (Game.Cell.draw NormalCell UserClickedOnCell) grid
+                List.map (Game.Cell.draw NormalCell UserPressedOnCell UserReleasedOnCell) grid
                     ++ (case game.state of
                             FigureSelected ( u, v ) ->
                                 -- draw the highlighted cells for next possible moves
-                                List.append [ Game.Cell.draw MoveToCell UserClickedOnCell ( u, v ) ]
+                                List.append [ Game.Cell.draw MoveToCell UserPressedOnCell UserReleasedOnCell ( u, v ) ]
                                     ((List.Extra.unique ((Tuple.first game.myCards).moves ++ (Tuple.second game.myCards).moves)
                                         |> List.map (\( x, y ) -> ( x + u, y + v ))
                                         |> List.filter (\move -> grid |> List.member move)
@@ -84,7 +84,7 @@ view game =
                                                     |> List.member move
                                             )
                                      )
-                                        |> List.map (Game.Cell.draw SelectedCell UserClickedOnCell)
+                                        |> List.map (Game.Cell.draw SelectedCell UserPressedOnCell UserReleasedOnCell)
                                     )
 
                             _ ->
@@ -102,8 +102,8 @@ view game =
                                             , Tuple.second hm.from + Tuple.second hm.move
                                             )
                                 in
-                                [ Game.Cell.draw MoveToCell UserClickedOnCell from
-                                , Game.Cell.draw SelectedCell UserClickedOnCell to
+                                [ Game.Cell.draw MoveToCell UserPressedOnCell UserReleasedOnCell from
+                                , Game.Cell.draw SelectedCell UserPressedOnCell UserReleasedOnCell to
                                 ]
 
                             Nothing ->
@@ -144,7 +144,8 @@ view game =
 
 type Msg
     = UserChoseOneCard Card
-    | UserClickedOnCell ( Int, Int )
+    | UserPressedOnCell ( Int, Int )
+    | UserReleasedOnCell ( Int, Int )
     | NewGameMove GameMove
     | HoverMove (Maybe GameMove)
 
@@ -160,7 +161,7 @@ update msg game =
                 _ ->
                     game
 
-        UserClickedOnCell ( x, y ) ->
+        UserPressedOnCell ( x, y ) ->
             case game.state of
                 WaitingForOpponent ->
                     game
@@ -174,6 +175,18 @@ update msg game =
 
                     else
                         game
+
+        UserReleasedOnCell ( x, y ) ->
+            case game.state of
+                FigureSelected ( u, v ) ->
+                    if ( x, y ) /= ( u, v ) && not game.spectating && game.myColor == game.nextColor then
+                        handleClick ( x, y ) game
+
+                    else
+                        game
+
+                _ ->
+                    game
 
         NewGameMove gm ->
             { game | state = MoveDone gm }

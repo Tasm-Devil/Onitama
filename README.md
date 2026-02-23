@@ -149,6 +149,7 @@ Together they enable fearless refactoring: the compilers catch structural errors
 - [x] Sensei's Path expansion cards (optional at game creation)
 - [x] GitHub OAuth via oauth2-proxy
 - [x] App header with user avatar, game status, and logout
+- [x] Drag-to-move support (desktop & mobile via pointer events)
 - [ ] Make a howto play
 - [ ] Move playback showing GameState
 - [ ] Choose different AI depths

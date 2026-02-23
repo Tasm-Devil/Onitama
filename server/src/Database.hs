@@ -22,6 +22,18 @@ import Data.Time.Clock (NominalDiffTime, UTCTime, addUTCTime, getCurrentTime)
 import GHC.Generics (Generic)
 import System.Directory (doesFileExist)
 import Types
+    ( GameStatus(Completed, WaitingForPlayers, InProgress),
+      GameSummary,
+      JoinError(JEGameFull, JEGameNotFound),
+      JoinGameResponse(..),
+      GameWithNames,
+      Game(winner, player_white_name, player_black_name, lastActivity,
+           player_white, player_black),
+      OidcUserId,
+      GameId,
+      Color(..),
+      gameToSummary,
+      gameToGameWithNames )
 
 -- Cleanup configuration: timeout durations in hours
 data CleanupConfig = CleanupConfig
@@ -244,6 +256,26 @@ updateGame (DB dataVar _ _ hasChangedVar _) gameId updateFn =
           state {dbGames = Map.insert gameId (updateFn game) games}
         writeTVar hasChangedVar True
         return True
+
+-- | Atomically validate and update a game in a single STM transaction.
+-- Prevents TOCTOU race conditions by combining read + validate + write.
+-- Returns Nothing if game not found, Just (Left err) if validation fails,
+-- Just (Right result) if update succeeds.
+atomicUpdateGame :: DB -> GameId -> (Game -> Either e (Game, a)) -> IO (Maybe (Either e a))
+atomicUpdateGame (DB dataVar _ _ hasChangedVar _) gameId validateAndModify =
+  atomically $ do
+    state <- readTVar dataVar
+    let games = dbGames state
+    case Map.lookup gameId games of
+      Nothing -> return Nothing
+      Just game ->
+        case validateAndModify game of
+          Left err -> return (Just (Left err))
+          Right (newGame, result) -> do
+            writeTVar dataVar $
+              state {dbGames = Map.insert gameId newGame games}
+            writeTVar hasChangedVar True
+            return (Just (Right result))
 
 -- Get a game with player names for client display (pure projection)
 getGameWithNames :: DB -> GameId -> IO (Maybe GameWithNames)
