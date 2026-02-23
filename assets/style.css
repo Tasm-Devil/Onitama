@@ -82,8 +82,8 @@ body {
   small {
     font-size: 0.9em;
   }
+
   background: radial-gradient(ellipse at center, var(--bg-surface) 0%, var(--bg) 70%);
-  background-attachment: fixed;
   color: var(--text);
 
   h1 {
@@ -272,111 +272,11 @@ body {
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
       background: var(--btn-bg);
       transition: background-color 0.2s;
-      width: 9rem;
+      width: 4.5rem;
 
       &:hover {
         background: var(--bg-hover);
         box-shadow: none;
-      }
-    }
-
-    .action-group {
-      display: inline-flex;
-      border-radius: 5px;
-      overflow: hidden;
-      border: 1px solid var(--btn-border);
-
-      .join-game {
-        border: none;
-        border-radius: 0;
-        width: 4.5rem;
-        box-shadow: none;
-
-        &+.join-game {
-          border-left: 1px solid var(--btn-border);
-        }
-      }
-    }
-  }
-}
-
-/* ── Landing Screen ── */
-
-.landing-screen {
-  display: flex;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-  justify-content: center;
-  flex-direction: column;
-
-  #name-form {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-
-    .card-set-toggle {
-      margin-top: 1rem;
-      color: var(--text-muted);
-    }
-
-    .cancel-button {
-      margin-top: 1rem;
-      padding: .5rem 1.5rem;
-      border: 1px solid var(--input-border);
-      border-radius: 5px;
-      background-color: var(--btn-bg);
-      color: var(--text);
-      cursor: pointer;
-      font: inherit;
-      transition: background-color 0.2s;
-
-      &:hover {
-        background-color: var(--bg-hover);
-      }
-
-      &:active {
-        transform: scale(0.97);
-      }
-    }
-
-    .privacy-notice {
-      margin-top: 2rem;
-      max-width: 320px;
-      display: block;
-      line-height: 1.5;
-      color: var(--text-muted);
-    }
-
-    .name-line {
-      margin-top: 20px;
-      display: block;
-      border-radius: 5px;
-      overflow: hidden;
-      border: 1px solid var(--input-border);
-
-      #name {
-        background-color: var(--input-bg);
-      }
-
-      input {
-        border: none;
-        padding: .5rem;
-        border-left: 1px solid var(--input-border);
-        background-color: var(--btn-bg);
-        color: var(--text);
-        cursor: pointer;
-        font: inherit;
-        transition: background-color 0.2s;
-
-        &:hover {
-          background-color: var(--bg-hover);
-        }
-
-        &[type="submit"]:active {
-          transform: scale(0.97);
-        }
       }
     }
   }
@@ -443,7 +343,7 @@ body {
 
 /* ── Footer ── */
 
-.game-footer {
+.footer {
   text-align: center;
   padding: 8px 0;
   font-size: 0.85em;

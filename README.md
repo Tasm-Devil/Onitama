@@ -101,6 +101,19 @@ server --dev-user alice      # Dev mode with custom user name
 
 See `onitama-server.example.yaml` for all options.
 
+### Dev Mode (Two-Player Testing)
+
+`make server-start` runs the server with `--dev`, which injects auth headers automatically when they're missing. Every browser request is authenticated as the default user (`"dev"`).
+
+To test two-player games locally, use a header-injection browser extension like [ModHeader](https://modheader.com/):
+
+1. **Tab 1** — browse normally (no extension rules needed). You'll be user `"dev"`.
+2. **Tab 2** — use ModHeader to set:
+   - `X-Forwarded-User: player2`
+   - `X-Forwarded-Preferred-Username: Player 2`
+
+The server identifies players by the `X-Forwarded-User` header value, so the two tabs are seen as different users. No incognito window needed.
+
 ---
 
 ## Docker
@@ -135,6 +148,7 @@ Together they enable fearless refactoring: the compilers catch structural errors
 - [x] AI opponent (minmax 5-ply)
 - [x] Sensei's Path expansion cards (optional at game creation)
 - [x] GitHub OAuth via oauth2-proxy
+- [ ] User identity label + logout button in UI
 - [ ] Make a howto play
 - [ ] Move playback showing GameState
 - [ ] Choose different AI depths

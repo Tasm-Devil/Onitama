@@ -719,7 +719,7 @@ view model =
 
 viewFooter : Html Msg
 viewFooter =
-    Html.footer [ HtmlA.class "game-footer" ]
+    Html.footer [ HtmlA.class "footer" ]
         [ Html.a
             [ HtmlA.href "https://pegasus.de/Onitama/51855G"
             , HtmlA.target "_blank"
@@ -727,7 +727,7 @@ viewFooter =
             , HtmlA.class "game-title"
             ]
             [ Html.text "Onitama" ]
-        , Html.span [ HtmlA.class "separator" ] [ Html.text "\u{2022}" ]
+        , Html.span [ HtmlA.class "separator" ] [ Html.text "•" ]
         , Html.text "Made with "
         , Html.a
             [ HtmlA.href "https://elm-lang.org"
@@ -742,7 +742,7 @@ viewFooter =
             , HtmlA.rel "noopener noreferrer"
             ]
             [ Html.i [ HtmlA.class "nf nf-dev-haskell tech-icon" ] [] ]
-        , Html.span [ HtmlA.class "separator" ] [ Html.text "\u{2022}" ]
+        , Html.span [ HtmlA.class "separator" ] [ Html.text "•" ]
         , Html.text "View source on "
         , Html.a
             [ HtmlA.href "https://github.com/Tasm-Devil/Onitama"

@@ -36,7 +36,7 @@ instance FromJSON CleanupConfig
 instance ToJSON CleanupConfig
 
 -- Pure data stored in JSON (games only)
-data DBData = DBData
+newtype DBData = DBData
   { dbGames :: Map GameId Game
   }
   deriving (Generic)
