@@ -41,16 +41,21 @@ type alias Game =
 
 {-| GameMove
 
-    - The from field is the start position and is always seen from the perspective of the grid. Bottom left cell is (0,0) for white and black.
-    - The move field is independent from the player color. See it from the perspectiv of a non rotated card
+    - `Step from move`: `from` is the start position and is always seen from the perspective of the grid. Bottom left cell is (0,0) for white and black.
+      `move` is independent from the player color. See it from the perspectiv of a non rotated card
+    - `Pass`: the player has no legal step and only exchanges the card with the common card.
 
 -}
 type alias GameMove =
     { color : Color
     , card : Card
-    , from : ( Int, Int )
-    , move : ( Int, Int )
+    , action : MoveAction
     }
+
+
+type MoveAction
+    = Step ( Int, Int ) ( Int, Int )
+    | Pass
 
 
 type LogEntry
@@ -90,23 +95,23 @@ view game =
                             _ ->
                                 []
                        )
-                    ++ (case game.hoveredMove of
-                            Just hm ->
+                    ++ (case game.hoveredMove |> Maybe.map .action of
+                            Just (Step hmFrom hmMove) ->
                                 let
                                     from =
-                                        adjustPerspective game.myColor hm.from
+                                        adjustPerspective game.myColor hmFrom
 
                                     to =
                                         adjustPerspective game.myColor
-                                            ( Tuple.first hm.from + Tuple.first hm.move
-                                            , Tuple.second hm.from + Tuple.second hm.move
+                                            ( Tuple.first hmFrom + Tuple.first hmMove
+                                            , Tuple.second hmFrom + Tuple.second hmMove
                                             )
                                 in
                                 [ Game.Cell.draw MoveToCell UserPressedOnCell UserReleasedOnCell from
                                 , Game.Cell.draw SelectedCell UserPressedOnCell UserReleasedOnCell to
                                 ]
 
-                            Nothing ->
+                            _ ->
                                 []
                        )
             , Svg.g [ SvgA.class "pieces" ]
@@ -134,8 +139,72 @@ view game =
                 )
             ]
             (drawCardPrompt game.myCards UserChoseOneCard)
+        , Svg.g
+            [ SvgA.class "card-prompt pass-prompt"
+            , SvgA.display
+                (if canPass game then
+                    "block"
+
+                 else
+                    "none"
+                )
+            ]
+            (drawCardPrompt game.myCards UserPassedWithCard
+                ++ [ Svg.text_
+                        [ SvgA.class "pass-prompt-caption"
+                        , SvgA.textAnchor "middle"
+                        , SvgA.x "74.5"
+                        , SvgA.y "56"
+                        , SvgA.fontSize "6"
+                        ]
+                        [ Svg.text "No legal move: choose a card to pass" ]
+                   ]
+            )
         ]
     ]
+
+
+{-| True if it is my turn but none of my figures can move with either card.
+In that case the rules require me to pass one of my cards without moving.
+-}
+mustPass : Game -> Bool
+mustPass game =
+    let
+        myPositions =
+            figurePositions game.myFigures
+
+        cardMoves =
+            (Tuple.first game.myCards).moves ++ (Tuple.second game.myCards).moves
+
+        canStep ( u, v ) =
+            cardMoves
+                |> List.any
+                    (\( x, y ) ->
+                        let
+                            to =
+                                ( u + x, v + y )
+                        in
+                        List.member to grid && not (List.member to myPositions)
+                    )
+    in
+    not game.spectating
+        && (game.myColor == game.nextColor)
+        && not (List.any canStep myPositions)
+
+
+{-| The pass prompt is shown while I still have to decide which card to pass.
+-}
+canPass : Game -> Bool
+canPass game =
+    case game.state of
+        Thinking ->
+            mustPass game
+
+        FigureSelected _ ->
+            mustPass game
+
+        _ ->
+            False
 
 
 
@@ -144,6 +213,7 @@ view game =
 
 type Msg
     = UserChoseOneCard Card
+    | UserPassedWithCard Card
     | UserPressedOnCell ( Int, Int )
     | UserReleasedOnCell ( Int, Int )
     | NewGameMove GameMove
@@ -156,10 +226,17 @@ update msg game =
         UserChoseOneCard card ->
             case game.state of
                 ChosingCard ( from, move ) ->
-                    { game | state = MoveDone { color = game.myColor, card = card, from = from, move = move } }
+                    { game | state = MoveDone { color = game.myColor, card = card, action = Step from move } }
 
                 _ ->
                     game
+
+        UserPassedWithCard card ->
+            if canPass game then
+                { game | state = MoveDone { color = game.myColor, card = card, action = Pass } }
+
+            else
+                game
 
         UserPressedOnCell ( x, y ) ->
             case game.state of
@@ -237,10 +314,10 @@ handleClick ( x, y ) game =
                         { game | state = ChosingCard ( ( u, v ), move ) }
 
                     ( True, False ) ->
-                        { game | state = MoveDone { color = game.myColor, card = Tuple.first game.myCards, from = ( u, v ), move = move } }
+                        { game | state = MoveDone { color = game.myColor, card = Tuple.first game.myCards, action = Step ( u, v ) move } }
 
                     ( False, True ) ->
-                        { game | state = MoveDone { color = game.myColor, card = Tuple.second game.myCards, from = ( u, v ), move = move } }
+                        { game | state = MoveDone { color = game.myColor, card = Tuple.second game.myCards, action = Step ( u, v ) move } }
 
                     ( False, False ) ->
                         game
@@ -270,19 +347,13 @@ transformGameMove g =
 
 
 rotateGameMove : GameMove -> GameMove
-rotateGameMove { color, from, move, card } =
-    let
-        ( move_x, move_y ) =
-            move
+rotateGameMove gameMove =
+    case gameMove.action of
+        Step ( from_x, from_y ) ( move_x, move_y ) ->
+            { gameMove | action = Step ( 4 - from_x, 4 - from_y ) ( negate move_x, negate move_y ) }
 
-        ( from_x, from_y ) =
-            from
-    in
-    { color = color
-    , from = ( 4 - from_x, 4 - from_y )
-    , move = ( negate move_x, negate move_y )
-    , card = card
-    }
+        Pass ->
+            gameMove
 
 
 execGameMove : Game -> Game
@@ -330,61 +401,69 @@ execGameMove game =
     -> If all testes pass, then move my figure to the new pos and swap the cards
        Eat opponents figures if they are on `from + move`
     -> Do nothing if one test fails (all or nothing)
+    A `Pass` only swaps the card (the server has already checked that it is legal).
 
 -}
 moveFigures : GameMove -> Game -> Game
-moveFigures { color, from, move, card } game =
+moveFigures { color, action, card } game =
     let
-        ( from_x, from_y ) =
-            from
-
-        ( move_x, move_y ) =
-            move
-
-        to =
-            ( from_x + move_x, from_y + move_y )
-
-        myNewFigures =
-            game.myFigures
-                |> List.map
-                    (\f ->
-                        if f.pos == ( from_x, from_y ) then
-                            -- move figure from from to newposition
-                            { f | pos = to }
-
-                        else
-                            f
-                    )
-
-        opNewFigures =
-            game.opFigures
-                |> List.filter
-                    (\f -> f.pos /= to)
-
         ( myFirstCard, mySecondCard ) =
             ( Tuple.first game.myCards, Tuple.second game.myCards )
+
+        swapCards g =
+            { g
+                | commonCard = card
+                , myCards =
+                    if myFirstCard == card then
+                        ( game.commonCard, mySecondCard )
+
+                    else
+                        ( myFirstCard, game.commonCard )
+                , nextColor = invert color
+                , state = Thinking
+            }
+
+        hasCard =
+            myFirstCard == card || mySecondCard == card
     in
-    if
-        List.member from (figurePositions game.myFigures)
-            && List.member to grid
-            && (myFirstCard == card || mySecondCard == card)
-    then
-        { game
-            | myFigures = myNewFigures
-            , opFigures = opNewFigures
-            , commonCard = card
-            , myCards =
-                if Tuple.first game.myCards == card then
-                    ( game.commonCard, mySecondCard )
+    case action of
+        Pass ->
+            if hasCard then
+                swapCards game
 
-                else
-                    ( myFirstCard, game.commonCard )
-            , nextColor = invert color
-            , state = Thinking
-        }
+            else
+                game
 
-    else
-        game
+        Step from ( move_x, move_y ) ->
+            let
+                ( from_x, from_y ) =
+                    from
+
+                to =
+                    ( from_x + move_x, from_y + move_y )
+
+                myNewFigures =
+                    game.myFigures
+                        |> List.map
+                            (\f ->
+                                if f.pos == from then
+                                    -- move figure from from to newposition
+                                    { f | pos = to }
+
+                                else
+                                    f
+                            )
+
+                opNewFigures =
+                    game.opFigures
+                        |> List.filter
+                            (\f -> f.pos /= to)
+            in
+            if List.member from (figurePositions game.myFigures) && List.member to grid && hasCard then
+                swapCards { game | myFigures = myNewFigures, opFigures = opNewFigures }
+
+            else
+                game
 
 
 flipFigures : Game -> Game
@@ -455,27 +534,34 @@ viewLogEntry entry =
 viewGameMove : GameMove -> Html Msg
 viewGameMove gameMove =
     let
-        ( from_x, from_y ) =
-            ( 1 + Tuple.first gameMove.from, 1 + Tuple.second gameMove.from )
-
-        ( move_x, move_y ) =
-            gameMove.move
-
-        ( to_x, to_y ) =
-            ( from_x + move_x, from_y + move_y )
-
-        ( from_x_char, to_x_char ) =
-            ( Char.fromCode (96 + from_x), Char.fromCode (96 + to_x) )
-
-        from =
-            String.fromChar from_x_char ++ String.fromInt from_y
-
-        to =
-            String.fromChar to_x_char ++ String.fromInt to_y
+        colorStr =
+            Game.Figure.colorToString gameMove.color
     in
-    Html.li
-        [ HtmlA.class "log-message"
-        , Html.Events.onMouseEnter (HoverMove (Just gameMove))
-        , Html.Events.onMouseLeave (HoverMove Nothing)
-        ]
-        [ Html.text (Game.Figure.colorToString gameMove.color ++ " moved from " ++ from ++ " to " ++ to ++ ", playing " ++ gameMove.card.name ++ ".") ]
+    case gameMove.action of
+        Pass ->
+            Html.li [ HtmlA.class "log-message" ]
+                [ Html.text (colorStr ++ " had no legal move and passed, playing " ++ gameMove.card.name ++ ".") ]
+
+        Step ( fx, fy ) ( move_x, move_y ) ->
+            let
+                ( from_x, from_y ) =
+                    ( 1 + fx, 1 + fy )
+
+                ( to_x, to_y ) =
+                    ( from_x + move_x, from_y + move_y )
+
+                ( from_x_char, to_x_char ) =
+                    ( Char.fromCode (96 + from_x), Char.fromCode (96 + to_x) )
+
+                from =
+                    String.fromChar from_x_char ++ String.fromInt from_y
+
+                to =
+                    String.fromChar to_x_char ++ String.fromInt to_y
+            in
+            Html.li
+                [ HtmlA.class "log-message"
+                , Html.Events.onMouseEnter (HoverMove (Just gameMove))
+                , Html.Events.onMouseLeave (HoverMove Nothing)
+                ]
+                [ Html.text (colorStr ++ " moved from " ++ from ++ " to " ++ to ++ ", playing " ++ gameMove.card.name ++ ".") ]

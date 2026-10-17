@@ -28,7 +28,7 @@ encodeCardSet cardSet =
 
 
 -- MOVE STRING CONVERSION
--- Format: "<color>:<from><to>:<card>" e.g., "w:c1c3:tiger"
+-- Format: "<color>:<from><to>:<card>" e.g., "w:c1c3:tiger", or "<color>:pass:<card>" when passing
 
 
 posToChess : ( Int, Int ) -> String
@@ -65,7 +65,7 @@ chessToPos str =
 
 
 gameMoveToString : Game.GameMove -> String
-gameMoveToString { color, card, from, move } =
+gameMoveToString { color, card, action } =
     let
         colorStr =
             case color of
@@ -75,19 +75,18 @@ gameMoveToString { color, card, from, move } =
                 Black ->
                     "b"
 
-        fromStr =
-            posToChess from
+        actionStr =
+            case action of
+                Game.Step from move ->
+                    posToChess from ++ posToChess ( Tuple.first from + Tuple.first move, Tuple.second from + Tuple.second move )
 
-        toPos =
-            ( Tuple.first from + Tuple.first move, Tuple.second from + Tuple.second move )
-
-        toStr =
-            posToChess toPos
+                Game.Pass ->
+                    "pass"
 
         cardStr =
             String.toLower card.name
     in
-    colorStr ++ ":" ++ fromStr ++ toStr ++ ":" ++ cardStr
+    colorStr ++ ":" ++ actionStr ++ ":" ++ cardStr
 
 
 stringToGameMove : String -> Maybe Game.GameMove
@@ -106,16 +105,15 @@ stringToGameMove str =
                         _ ->
                             Nothing
 
-                maybeFromTo =
-                    if String.length positions == 4 then
-                        let
-                            fromStr =
-                                String.left 2 positions
+                maybeAction =
+                    if positions == "pass" then
+                        Just Game.Pass
 
-                            toStr =
-                                String.right 2 positions
-                        in
-                        Maybe.map2 Tuple.pair (chessToPos fromStr) (chessToPos toStr)
+                    else if String.length positions == 4 then
+                        Maybe.map2
+                            (\from to -> Game.Step from ( Tuple.first to - Tuple.first from, Tuple.second to - Tuple.second from ))
+                            (chessToPos (String.left 2 positions))
+                            (chessToPos (String.right 2 positions))
 
                     else
                         Nothing
@@ -123,16 +121,7 @@ stringToGameMove str =
                 card =
                     cardByName (capitalizeWords cardStr)
             in
-            case ( maybeColor, maybeFromTo ) of
-                ( Just color, Just ( from, to ) ) ->
-                    let
-                        move =
-                            ( Tuple.first to - Tuple.first from, Tuple.second to - Tuple.second from )
-                    in
-                    Just { color = color, card = card, from = from, move = move }
-
-                _ ->
-                    Nothing
+            Maybe.map2 (\color action -> { color = color, card = card, action = action }) maybeColor maybeAction
 
         _ ->
             Nothing

@@ -19,9 +19,10 @@ make build          # Build both client (debug) and server
 make release        # Build optimized production version
 make server-start   # Build and run server on port 8080
 make clean          # Remove build artifacts
+make test           # Server test suite (hspec, server/test/Spec.hs)
+make demo-pass      # Server on :8080 with a prepared game where White must pass (server/test/fixtures/must-pass.json)
+make ai-match ARGS="--white-depth 3 --black-depth 5 --games 20"  # AI vs AI matches (server/bench/AiMatch.hs)
 ```
-
-**Note:** `make test` exists but the test suite is commented out (no active tests).
 
 ## Project Structure
 
@@ -101,6 +102,8 @@ The server validates all moves against Onitama rules before accepting them:
 - Moves are validated by replaying the full history then checking the new move
 - Win detection (king capture / temple reached) sets the `winner` field on the server
 - Invalid moves return `MEInvalidMove`, completed games return `MEGameOver`
+- Move notation: `w:c1c3:tiger`, or `w:pass:tiger` when the player has no legal move (Onitama rule: the card is still exchanged). A pass is rejected while any normal move exists
+- AI log lines are prefixed with `[AI] game <id>:`; stdout is line-buffered so they also show up in Docker logs
 
 ### Real-time Updates (SSE)
 
@@ -174,7 +177,7 @@ curl -N localhost:8080/1/onitama/games/1/stream
 ## Docker
 
 ```bash
-make docker        # Build release + Docker image + save tar
+make docker        # Build client + Docker image (server is compiled inside) + save tar
 make docker-start  # Build + run on http://localhost:8080
 ```
 

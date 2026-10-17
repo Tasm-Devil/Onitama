@@ -75,6 +75,21 @@ executables:
     - base
     - onitama
 
+  ai-match:
+    main:                AiMatch.hs
+    source-dirs:         server/bench
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - base
+    - onitama
+    - random
+    - time
+    - deepseq
+    - optparse-applicative
+
 tests:
   onitama-test:
     main:                Spec.hs
@@ -88,5 +103,10 @@ tests:
     - onitama
     - hspec
     - hspec-wai
-    - hspec-wai-json
+    - wai-extra
+    - http-types
     - aeson
+    - bytestring
+    - containers
+    - random
+    - servant-server

@@ -30,6 +30,29 @@ make server-start # Run on http://localhost:8080
 
 ---
 
+## Testing
+
+```bash
+make test         # Server test suite
+make demo-pass    # Demo game in which you must pass, http://localhost:8080/1
+make ai-match     # Let two AI search depths play against each other
+```
+
+**`make test`** runs the hspec suite in `server/test/Spec.hs`. It covers move notation, rule enforcement and win detection, positions without a legal move, the minimax search and an end-to-end HTTP game against the AI.
+
+**`make demo-pass`** starts the server with a prepared game from `server/test/fixtures/must-pass.json`. You play White as the dev user, and none of your pieces can move, so the board offers your two cards to pass with. The server works on a temporary copy, so every run starts from the same position. Stop your normal server first, because both use port 8080.
+
+**`make ai-match`** pits two minimax depths against each other and prints wins and search times per move. Games are reproducible through their seed.
+
+```bash
+make ai-match ARGS="--white-depth 3 --black-depth 5 --games 20 --cards mixed"
+stack exec -- ai-match --help
+```
+
+AI log lines on the server start with `[AI] game <id>:`, for example `[AI] game 1: plays b:c2c4:kirin`.
+
+---
+
 ## Architecture
 
 ```
@@ -72,6 +95,8 @@ Base: `http://localhost:8080/1/onitama`
 | GET | `/{gameId}` | - | Serves `index.html` (client-side routing) |
 
 Authenticated endpoints use `X-Forwarded-User` and `X-Forwarded-Preferred-Username` headers (set by oauth2-proxy, or dev middleware).
+
+`MoveNotation` is `<color>:<from><to>:<card>`, for example `w:c1c3:tiger`. A player without any legal move must still exchange a card, written as `<color>:pass:<card>`, for example `b:pass:fox`. The server rejects a pass while a normal move exists.
 
 ### SSE Streams
 
@@ -119,9 +144,11 @@ The server identifies players by the `X-Forwarded-User` header value, so the two
 ## Docker
 
 ```bash
-make docker        # Build release + Docker image + save tar
+make docker        # Build client + Docker image (server is compiled inside) + save tar
 make docker-start  # Build + run on http://localhost:8080
 ```
+
+The server binary is compiled inside the image (multi-stage `Dockerfile`), so it does not depend on the glibc version of the build machine. The first build compiles all Haskell dependencies and takes a while; later builds reuse the cached dependency layer.
 
 Deployment uses oauth2-proxy for GitHub OAuth + Nginx Proxy Manager as reverse proxy. See `.env.example` for required secrets and `docker-compose.yml` for the full stack.
 
@@ -150,6 +177,8 @@ Together they enable fearless refactoring: the compilers catch structural errors
 - [x] GitHub OAuth via oauth2-proxy
 - [x] App header with user avatar, game status, and logout
 - [x] Drag-to-move support (desktop & mobile via pointer events)
+- [x] Passing when no legal move exists (official rule, also for the AI)
+- [x] Server test suite, AI-vs-AI match tool and pass demo
 - [ ] Make a howto play
 - [ ] Move playback showing GameState
 - [ ] Choose different AI depths

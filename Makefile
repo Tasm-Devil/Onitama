@@ -25,16 +25,32 @@ server-start: build
 server-start-config: build
 	stack exec -- server --config 'onitama-server.yaml'
 
-test:
+# Server test suite (rules, pass rule, minimax, HTTP API against the AI)
+test: test-server
+
+test-server:
 	stack test
-	(cd client ; make run-tests)
-	(cd client ; make debug)
+
+# Start a server with a prepared game in which White (you) has no legal move
+# and must pass. Open http://localhost:8080/1
+# The server works on a temporary copy, so every run starts from the same position.
+demo-pass: build
+	@db=$$(mktemp --suffix=.json) && cp server/test/fixtures/must-pass.json $$db && \
+	echo "Demo: open http://localhost:8080/1" && \
+	stack exec -- server --dev --no-cleanup --database $$db
+
+# Let two AI depths play against each other, e.g.
+#   make ai-match ARGS="--white-depth 3 --black-depth 5 --games 20 --cards mixed"
+#   stack exec -- ai-match --help
+ai-match: server-build
+	stack exec -- ai-match $(ARGS)
 
 clean:
 	rm -rf .stack-work
 	(cd client ; make clean)
 
-docker: release
+# The server is compiled inside the image (see Dockerfile), only the client is built here.
+docker: client-release
 	docker build -t onitama .
 	docker save onitama:latest > onitama.tar
 
@@ -45,4 +61,4 @@ deploy: docker
 	rsync --partial --progress onitama.tar deneaux.de:~
 	ssh deneaux.de 'docker load < ~/onitama.tar && rm ~/onitama.tar'
 
-.PHONY: all build release client-build client-release setup server-build server-start test clean docker docker-start deploy
+.PHONY: all build release client-build client-release setup server-build server-start test test-server ai-match demo-pass clean docker docker-start deploy

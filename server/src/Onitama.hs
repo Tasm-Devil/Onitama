@@ -4,16 +4,20 @@
 
 module Onitama
   ( give5Cards,
+    dealCards,
     GameState (..),
     Piece (..),
     PieceKind (..),
     Move (..),
+    MoveAction (..),
     applyMove,
     initGameState,
     cardMoves,
     inBounds,
     legalMoves,
     formatMove,
+    parseMove,
+    stepMoves,
     oppositeColor,
     replayGame,
   )
@@ -25,11 +29,11 @@ import GHC.Generics (Generic)
 import Data.Bifunctor (bimap, first, second)
 import Data.Char (isAlpha, isDigit, toLower, toUpper)
 import Data.Foldable (foldrM)
-import Data.List (find)
+import Data.List (find, nub)
 import qualified Data.Map.Strict as Map
-import Data.Maybe (isNothing)
+import Data.Maybe (isJust, isNothing)
 import Types (Card, CardSet (..), Color (..), MoveNotation)
-import System.Random (newStdGen)
+import System.Random (StdGen, newStdGen)
 import System.Random.Shuffle (shuffle')
 
 data PieceKind = King | Pawn deriving (Eq, Show)
@@ -43,10 +47,16 @@ data Piece = Piece
 
 data Move = Move
   { moveColor :: Color,
-    moveFrom :: (Int, Int),
-    moveTo :: (Int, Int),
+    moveAction :: MoveAction,
     moveCard :: String
   }
+  deriving (Eq, Show, Generic, NFData)
+
+-- | What a move does on the board. A 'Pass' is only legal when the player
+-- has no 'Step' at all; the card is still exchanged with the common card.
+data MoveAction
+  = Step (Int, Int) (Int, Int) -- ^ from, to
+  | Pass
   deriving (Eq, Show, Generic, NFData)
 
 data GameState = GameState
@@ -115,7 +125,7 @@ cardStartPlayer :: String -> Color
 cardStartPlayer name =
   maybe White (\(_, _, c) -> c) $ find (\(n, _, _) -> n == map toLower name) cardDefs
 
--- | Parse a move string like "w:c1c3:tiger" into a Move
+-- | Parse a move string like "w:c1c3:tiger" (or "w:pass:tiger") into a Move
 parseMove :: MoveNotation -> Maybe Move
 parseMove str =
   case splitOn ':' str of
@@ -124,11 +134,14 @@ parseMove str =
         "w" -> Just White
         "b" -> Just Black
         _ -> Nothing
-      guard (length positions == 4)
-      let (fromStr, toStr) = splitAt 2 positions
-      from <- chessToPos fromStr
-      to <- chessToPos toStr
-      Just $ Move {moveColor = color, moveFrom = from, moveTo = to, moveCard = map toLower cardStr}
+      action <-
+        if positions == "pass"
+          then Just Pass
+          else do
+            guard (length positions == 4)
+            let (fromStr, toStr) = splitAt 2 positions
+            Step <$> chessToPos fromStr <*> chessToPos toStr
+      Just $ Move {moveColor = color, moveAction = action, moveCard = map toLower cardStr}
     _ -> Nothing
 
 splitOn :: Char -> String -> [String]
@@ -193,35 +206,38 @@ applyMove pm gs = do
   guard (moveColor pm == gsNextColor gs)
 
   let board = gsBoard gs
-      from = moveFrom pm
-      to = moveTo pm
       cardName = moveCard pm
       color = moveColor pm
-
-  piece <- find (\p -> piecePos p == from) board
-  guard (pieceColor piece == color)
-  guard (inBounds to)
-  guard (not $ any (\p -> piecePos p == to && pieceColor p == color) board)
-
-  -- For Black, negate the vector (cards show moves from White's perspective)
-  let delta = bimap (subtract $ fst from) (subtract $ snd from) to
-      effectiveVector = case color of
-        White -> delta
-        Black -> bimap negate negate delta
-
-  moves <- Map.lookup cardName cardMoves
-  guard (effectiveVector `elem` moves)
-
-  let playerCards = case color of
+      playerCards = case color of
         White -> gsWhiteCards gs
         Black -> gsBlackCards gs
   guard (cardName == fst playerCards || cardName == snd playerCards)
 
-  let newBoard =
+  newBoard <- case moveAction pm of
+    Pass -> do
+      -- Passing is only allowed when no piece can move with either card.
+      guard (null (stepMoves gs))
+      Just board
+    Step from to -> do
+      piece <- find (\p -> piecePos p == from) board
+      guard (pieceColor piece == color)
+      guard (inBounds to)
+      guard (not $ any (\p -> piecePos p == to && pieceColor p == color) board)
+
+      -- For Black, negate the vector (cards show moves from White's perspective)
+      let delta = bimap (subtract $ fst from) (subtract $ snd from) to
+          effectiveVector = case color of
+            White -> delta
+            Black -> bimap negate negate delta
+
+      moves <- Map.lookup cardName cardMoves
+      guard (effectiveVector `elem` moves)
+
+      Just $
         map (\p -> if piecePos p == from then p {piecePos = to} else p) $
           filter (\p -> not (piecePos p == to && pieceColor p /= color)) board
 
-      common = gsCommonCard gs
+  let common = gsCommonCard gs
       newPlayerCards =
         if cardName == fst playerCards
           then first (const common) playerCards
@@ -262,10 +278,13 @@ validCards cardSet = [titleCase name | (name, _, _) <- defs]
 
 -- | Deal 5 random cards from the given card set.
 give5Cards :: CardSet -> IO [Card]
-give5Cards cardSet = do
+give5Cards cardSet = dealCards cardSet <$> newStdGen
+
+-- | Deal 5 cards using the given generator (deterministic for a fixed seed).
+dealCards :: CardSet -> StdGen -> [Card]
+dealCards cardSet rng =
   let pool = validCards cardSet
-  rng <- newStdGen
-  return . take 5 . shuffle' pool (length pool) $ rng
+   in take 5 (shuffle' pool (length pool) rng)
 
 -- | Flip White ↔ Black.
 oppositeColor :: Color -> Color
@@ -276,20 +295,35 @@ oppositeColor Black = White
 posToChess :: (Int, Int) -> String
 posToChess (x, y) = [toEnum (fromEnum 'a' + x), toEnum (fromEnum '1' + y)]
 
--- | Serialize a Move to notation like "w:c1c3:tiger".
+-- | Serialize a Move to notation like "w:c1c3:tiger" or "w:pass:tiger".
 formatMove :: Move -> MoveNotation
 formatMove pm =
   let colorStr = case moveColor pm of White -> "w"; Black -> "b"
-   in colorStr ++ ":" ++ posToChess (moveFrom pm) ++ posToChess (moveTo pm) ++ ":" ++ moveCard pm
+      actionStr = case moveAction pm of
+        Step from to -> posToChess from ++ posToChess to
+        Pass -> "pass"
+   in colorStr ++ ":" ++ actionStr ++ ":" ++ moveCard pm
 
 -- | Replay a full game from initial cards and move history. Returns Nothing if any move is invalid.
 replayGame :: [Card] -> [MoveNotation] -> Maybe GameState
 replayGame cs moves = mapM parseMove moves >>= foldrM applyMove (initGameState cs)
 
 -- | Generate all legal moves for the current player.
+-- If no piece can move, the only legal moves are passes with either card.
 legalMoves :: GameState -> [Move]
-legalMoves gs =
-  [ Move {moveColor = color, moveFrom = from, moveTo = to, moveCard = cardName}
+legalMoves gs
+  | isJust (gsWinner gs) = []
+  | null steps = [Move {moveColor = color, moveAction = Pass, moveCard = c} | c <- nub [c1, c2]]
+  | otherwise = steps
+  where
+    steps = stepMoves gs
+    color = gsNextColor gs
+    (c1, c2) = case color of White -> gsWhiteCards gs; Black -> gsBlackCards gs
+
+-- | All moves that actually move a piece for the current player.
+stepMoves :: GameState -> [Move]
+stepMoves gs =
+  [ Move {moveColor = color, moveAction = Step from to, moveCard = cardName}
     | let color = gsNextColor gs,
       let board = gsBoard gs,
       let friendlyPositions = [piecePos p | p <- board, pieceColor p == color],

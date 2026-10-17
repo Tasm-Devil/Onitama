@@ -17,6 +17,7 @@ import Network.Wai.Middleware.Cors
 import Network.Wai.Middleware.RequestLogger (logStdoutDev)
 import Options (CleanupOptions (..), ServerOptions (..), parseOptions)
 import System.Exit (exitSuccess)
+import System.IO (BufferMode (LineBuffering), hSetBuffering, stderr, stdout)
 
 policy :: CorsResourcePolicy
 policy =
@@ -41,6 +42,11 @@ devAuthMiddleware defaultUser app req respond =
 
 main :: IO ()
 main = do
+  -- Flush every log line immediately. Without this, GHC block-buffers stdout
+  -- when it is not a terminal (Docker, pipes, log files) and log lines appear
+  -- late or not at all.
+  hSetBuffering stdout LineBuffering
+  hSetBuffering stderr LineBuffering
   -- Parse command-line options
   opts <- parseOptions
 

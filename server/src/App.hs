@@ -234,17 +234,21 @@ newAIGame user cardSet = runExceptT $ do
 -- | Apply AI opening move if possible, otherwise return game unchanged.
 applyAIOpening :: Database.DB -> GameId -> Int -> Onitama.GameState -> Game -> ExceptT JoinError AppM Game
 applyAIOpening db gameId depth gs currentGame = do
-  maybePm <- liftIO $ timed "AI opening" (Minimax.bestMove depth gs)
+  maybePm <- liftIO $ timed ("[AI] game " ++ show gameId ++ ": opening search") (Minimax.bestMove depth gs)
   case maybePm of
-    Nothing -> return currentGame
+    Nothing -> do
+      liftIO $ putStrLn $ "[AI] game " ++ show gameId ++ ": opening aborted: search returned no move"
+      return currentGame
     Just pm -> do
       let moveStr = Onitama.formatMove pm
       case Onitama.replayGame (cards currentGame) [moveStr] of
-        Nothing -> return currentGame
+        Nothing -> do
+          liftIO $ putStrLn $ "[AI] game " ++ show gameId ++ ": opening aborted: chosen move is invalid: " ++ moveStr
+          return currentGame
         Just finalState -> do
           aiNow <- liftIO getCurrentTime
           _ <- liftIO $ Database.updateGame db gameId (Types.addMoveToGame moveStr aiNow (Onitama.gsWinner finalState))
-          liftIO $ putStrLn $ "AI made opening move: " ++ moveStr
+          liftIO $ putStrLn $ "[AI] game " ++ show gameId ++ ": plays opening " ++ moveStr
           noteE JEGameNotFound =<< liftIO (Database.getGameById db gameId)
 
 getGameSummaries :: AppM [GameSummary]
@@ -362,24 +366,30 @@ triggerAIMove gameId = void $ runMaybeT $ do
   env <- lift ask
   let db = appDB env
       store = appSubscribers env
+      -- Abort the AI turn, but leave a trace in the log instead of failing silently.
+      orFail :: String -> Maybe a -> MaybeT AppM a
+      orFail reason = maybe (logFail reason >> MaybeT (return Nothing)) return
+      logFail reason = liftIO $ putStrLn $ "[AI] game " ++ show gameId ++ ": move aborted: " ++ reason
 
-  game <- MaybeT $ liftIO $ Database.getGameById db gameId
+  game <- orFail "game not found" =<< liftIO (Database.getGameById db gameId)
+  -- Not an AI game: nothing to do, no log needed.
   depth <- MaybeT $ return $ aiDifficulty game
-  gs <- MaybeT $ return $ Onitama.replayGame (cards game) (map fst $ history game)
+  gs <- orFail "could not replay move history" $ Onitama.replayGame (cards game) (map fst $ history game)
   guard $ isNothing (Onitama.gsWinner gs)
   guard $ Onitama.gsNextColor gs == Black
-  maybePm <- liftIO $ timed "AI move" (Minimax.bestMove depth gs)
-  pm <- MaybeT $ return maybePm
+  maybePm <- liftIO $ timed ("[AI] game " ++ show gameId ++ ": search") (Minimax.bestMove depth gs)
+  pm <- orFail "search returned no move" maybePm
 
   let moveStr = Onitama.formatMove pm
       historyMoves = moveStr : map fst (history game)
-  finalState <- MaybeT $ return $ Onitama.replayGame (cards game) historyMoves
+  finalState <- orFail ("chosen move is invalid: " ++ moveStr) $ Onitama.replayGame (cards game) historyMoves
 
   now <- liftIO getCurrentTime
   success <- liftIO $ Database.updateGame db gameId (Types.addMoveToGame moveStr now (Onitama.gsWinner finalState))
+  unless success $ logFail "database update failed"
   guard success
   liftIO $ do
-    putStrLn $ "AI move: " ++ moveStr
+    putStrLn $ "[AI] game " ++ show gameId ++ ": plays " ++ moveStr
     Subscribers.broadcastGame store gameId (MoveEvent moveStr now (Onitama.gsWinner finalState))
     Subscribers.broadcastLobby store LobbyChanged
 

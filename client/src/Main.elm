@@ -791,22 +791,33 @@ viewHeaderLeft maybeUser menuOpen =
 viewHeaderCenter : Page -> Html Msg
 viewHeaderCenter page =
     Html.div [ HtmlA.class "header-center" ]
-        [ Html.span [ HtmlA.class "header-status" ]
-            (case page of
-                GamePage _ game _ ->
-                    [ Html.text (gameStatusText game) ]
+        (case page of
+            GamePage _ game _ ->
+                let
+                    ( text, kind ) =
+                        gameStatus game
+                in
+                [ Html.span [ HtmlA.class ("header-status " ++ kind) ] [ Html.text text ] ]
 
-                AwaitingGame _ _ ->
-                    [ Html.text "Joining game..." ]
+            AwaitingGame _ _ ->
+                [ Html.span [ HtmlA.class "header-status status-waiting" ] [ Html.text "Joining game..." ] ]
 
-                _ ->
-                    []
-            )
-        ]
+            _ ->
+                []
+        )
 
 
-gameStatusText : Game -> String
-gameStatusText game =
+{-| Status text for the header, plus a CSS class that colors it:
+
+    - status-turn: it is my turn
+    - status-attention: I have no legal move and must pass
+    - status-waiting: waiting for the opponent to join
+    - status-idle: the opponent moves, or I am spectating
+    - status-won / status-lost / status-completed: game over
+
+-}
+gameStatus : Game -> ( String, String )
+gameStatus game =
     let
         colorStr color =
             case color of
@@ -818,10 +829,19 @@ gameStatusText game =
     in
     case game.state of
         WaitingForOpponent ->
-            "Waiting for opponent..."
+            ( "Waiting for opponent...", "status-waiting" )
 
         GameOver winner ->
-            colorStr winner ++ " wins!"
+            ( colorStr winner ++ " wins!"
+            , if game.spectating then
+                "status-completed"
+
+              else if winner == game.myColor then
+                "status-won"
+
+              else
+                "status-lost"
+            )
 
         _ ->
             let
@@ -829,13 +849,16 @@ gameStatusText game =
                     colorStr game.nextColor
             in
             if game.spectating then
-                nextStr ++ " to move"
+                ( nextStr ++ " to move", "status-idle" )
+
+            else if Game.mustPass game then
+                ( nextStr ++ " (you) must pass", "status-attention" )
 
             else if game.nextColor == game.myColor then
-                nextStr ++ " (you) to move"
+                ( nextStr ++ " (you) to move", "status-turn" )
 
             else
-                nextStr ++ " to move"
+                ( nextStr ++ " to move", "status-idle" )
 
 
 viewHeaderRight : Page -> Html Msg

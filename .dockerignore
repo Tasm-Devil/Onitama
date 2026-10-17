@@ -1,0 +1,7 @@
+# Keep the build context small; the server is compiled inside the image.
+.stack-work/
+client/elm-stuff/
+onitama.tar
+gamedb.json
+.env
+.git/

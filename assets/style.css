@@ -23,6 +23,7 @@
   --target-stroke: #5cb840;
   --target-glow: rgba(92, 184, 64, 0.4);
   --overlay-bg: rgba(30, 26, 21, 0.7);
+  --overlay-text: #faf6f0;
   --btn-bg: #faf6f0;
   --btn-border: #a09080;
   --input-bg: #faf6f0;
@@ -61,6 +62,7 @@
     --target-stroke: #6a9a50;
     --target-glow: rgba(106, 154, 80, 0.6);
     --overlay-bg: rgba(10, 8, 5, 0.8);
+    --overlay-text: #e8e0d4;
     --btn-bg: #2a2520;
     --btn-border: #5a4f44;
     --input-bg: #24201b;
@@ -123,11 +125,22 @@ body {
 
 /* ── App Header ── */
 
+@keyframes status-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--status-waiting-bg); }
+  50% { box-shadow: 0 0 0 4px var(--status-waiting-bg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header .header-status.status-attention {
+    animation: none;
+  }
+}
+
 .app-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 12px;
+  margin: 8px;
   flex-shrink: 0;
 
   .header-left {
@@ -138,9 +151,49 @@ body {
     flex: 1;
     text-align: center;
 
+    /* Pill like the lobby status badges; the color shows whose turn it is */
     .header-status {
-      color: var(--text);
+      display: inline-block;
+      padding: 0.25em 0.9em;
+      border-radius: 999px;
+      border: 1px solid transparent;
       font-size: 0.9em;
+      font-weight: 500;
+      white-space: nowrap;
+      color: var(--text-muted);
+      background: var(--status-completed-bg);
+
+      &.status-turn,
+      &.status-won {
+        color: var(--status-active-text);
+        background: var(--status-active-bg);
+        border-color: var(--status-active-text);
+      }
+
+      &.status-waiting {
+        color: var(--status-waiting-text);
+        background: var(--status-waiting-bg);
+      }
+
+      &.status-attention {
+        color: var(--status-waiting-text);
+        background: var(--status-waiting-bg);
+        border-color: var(--status-waiting-text);
+        font-weight: 700;
+        animation: status-pulse 1.6s ease-in-out infinite;
+      }
+
+      &.status-lost {
+        color: var(--danger);
+        background: var(--danger-bg);
+        border-color: var(--danger);
+      }
+
+      &.status-idle,
+      &.status-completed {
+        color: var(--text-muted);
+        background: var(--status-completed-bg);
+      }
     }
   }
 
@@ -243,7 +296,7 @@ body {
     h1 {
       text-align: center;
       letter-spacing: 0.3em;
-      margin: 2rem 0 1rem;
+      margin: 1rem 0;
     }
 
     .lobby-description {
@@ -543,6 +596,14 @@ body {
 
 .card-overlay {
   fill: var(--overlay-bg);
+}
+
+/* Hint above the card choice when the player has no legal move and must pass */
+.pass-prompt-caption {
+  fill: var(--overlay-text);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
 }
 
 /* ── Dark Mode: Black Figures ── */

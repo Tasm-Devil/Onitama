@@ -1,7 +1,6 @@
-module Minimax (bestMove) where
+module Minimax (bestMove, bestMoveWithScore, evaluate, infinity) where
 
-import Data.List (maximumBy)
-import Data.Ord (comparing)
+import Data.List (foldl')
 import Types (Color (..))
 import Onitama
   ( GameState (..),
@@ -12,15 +11,30 @@ import Onitama
     legalMoves,
   )
 
+-- | Bound for the search window. Must be larger than any evaluation but far
+-- away from 'minBound'/'maxBound': @negate minBound == minBound@ for 'Int',
+-- which would silently corrupt the alpha-beta window.
+infinity :: Int
+infinity = 1000000
+
+-- | Best move for the player to move, searching @depth@ plies.
 bestMove :: Int -> GameState -> Maybe Move
-bestMove depth gs
-  | null moves = Nothing
-  | otherwise = Just $ maximumBy (comparing score) moves
+bestMove depth = fmap fst . bestMoveWithScore depth
+
+-- | Best move together with its negamax score from the mover's point of view.
+bestMoveWithScore :: Int -> GameState -> Maybe (Move, Int)
+bestMoveWithScore depth gs = case legalMoves gs of
+  [] -> Nothing
+  (m0 : ms) -> Just $ foldl' step (m0, scoreWithin (-infinity) m0) ms
   where
-    moves = legalMoves gs
-    score pm = case applyMove pm gs of
-      Nothing -> minBound
-      Just gs' -> -negamax (depth - 1) minBound maxBound gs'
+    -- Root alpha-beta: alpha is the best score found so far. A later move only
+    -- replaces the current best if it is strictly better.
+    step (best, alpha) m =
+      let val = scoreWithin alpha m
+       in if val > alpha then (m, val) else (best, alpha)
+    scoreWithin alpha m = case applyMove m gs of
+      Nothing -> -infinity
+      Just gs' -> -negamax (depth - 1) (-infinity) (-alpha) gs'
 
 negamax :: Int -> Int -> Int -> GameState -> Int
 negamax depth alpha beta gs
@@ -37,6 +51,7 @@ negamax depth alpha beta gs
             a' = max a val
          in if a' >= beta then a' else go a' ms
 
+-- | Static evaluation from the point of view of the player to move.
 evaluate :: GameState -> Int
 evaluate gs = case gsWinner gs of
   Just w
