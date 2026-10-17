@@ -25,6 +25,10 @@ services:
       OAUTH2_PROXY_SKIP_AUTH_REGEX: ".*"
 
       # Cookie settings
+      # Own cookie name: the oauth2-proxy in front of Portainer also uses the
+      # default "_oauth2_proxy" for all of deneaux.de, and its cookie would be
+      # read here and fail with "cookie signature not valid".
+      OAUTH2_PROXY_COOKIE_NAME: _onitama_auth
       OAUTH2_PROXY_COOKIE_SECURE: "true"
       OAUTH2_PROXY_COOKIE_SAMESITE: lax
     networks:
